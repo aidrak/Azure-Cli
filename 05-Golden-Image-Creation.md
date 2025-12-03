@@ -228,7 +228,7 @@ Set-Location "C:\Temp\VDOT\Virtual-Desktop-Optimization-Tool-main"
 .\Windows_VDOT.ps1 -Optimizations All -AcceptEULA
 ```
 
-### 9. Entra Kerberos Prerequisites
+### 9. Entra Kerberos & Cloud Login Prerequisites
 
 ```powershell
 # Cloud Kerberos
@@ -242,7 +242,41 @@ New-Item -Path $azurePath -Force | Out-Null
 Set-ItemProperty -Path $azurePath -Name "LoadCredKeyFromProfile" -Value 1 -Type DWord
 ```
 
-### 10. Sysprep
+### 10. Suppress Windows Hello & Getting Started
+
+```powershell
+# Disable Windows Hello setup prompt on first login
+$helloPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
+New-Item -Path $helloPath -Force | Out-Null
+Set-ItemProperty -Path $helloPath -Name "NoStartupApp" -Value 1 -Type DWord
+
+# Disable biometric/PIN prompts
+$bioPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Biometrics"
+New-Item -Path $bioPath -Force | Out-Null
+Set-ItemProperty -Path $bioPath -Name "Enabled" -Value 0 -Type DWord
+
+# Disable "Tips" and "Getting Started" app
+$appPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Tips"
+New-Item -Path $appPath -Force | Out-Null
+Set-ItemProperty -Path $appPath -Name "DisableTipsOnLogon" -Value 1 -Type DWord
+
+# Disable activity history (reduces telemetry)
+$activityPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
+Set-ItemProperty -Path $activityPath -Name "PublishUserActivities" -Value 0 -Type DWord
+
+# Disable cloud content suggestions on lock screen
+$cloudPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent"
+New-Item -Path $cloudPath -Force | Out-Null
+Set-ItemProperty -Path $cloudPath -Name "DisableWindowsConsumerFeatures" -Value 1 -Type DWord
+
+Write-Host "✓ Windows Hello and Getting Started suppressed" -ForegroundColor Green
+
+# Verify registry keys
+Get-ItemProperty -Path $helloPath -Name "NoStartupApp"
+Get-ItemProperty -Path $appPath -Name "DisableTipsOnLogon"
+```
+
+### 11. Sysprep
 
 ```powershell
 # Clean temp
