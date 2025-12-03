@@ -228,6 +228,23 @@ Set-Location "C:\Temp\VDOT\Virtual-Desktop-Optimization-Tool-main"
 .\Windows_VDOT.ps1 -Optimizations All -AcceptEULA
 ```
 
+### 8b. Enable RDP Client Timezone Redirection
+
+```powershell
+# Enable timezone redirection from RDP client to session host
+# This allows the session to use the client's local timezone
+$rdpPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+New-Item -Path $rdpPath -Force | Out-Null
+Set-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection" -Value 1 -Type DWord
+
+Write-Host "✓ RDP timezone redirection enabled" -ForegroundColor Green
+
+# Verify registry setting
+Get-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection"
+```
+
+**Note:** This setting enables the RDP protocol to redirect the client's timezone to the session host. The client's RDP application must also have timezone redirection enabled (default in modern RDP clients like Remote Desktop Connection, Microsoft Remote Desktop app, and Citrix Receiver).
+
 ### 9. Entra Kerberos & Cloud Login Prerequisites
 
 ```powershell
