@@ -22,11 +22,11 @@
 
 ## Automated Configuration
 
-We have provided PowerShell scripts to automate Steps 1, 2, 4, and 5. Step 3 (Conditional Access) must still be performed manually.
+We have provided a PowerShell script to automate Steps 1, 2, 4, and 5. Step 3 (Conditional Access) must still be performed manually.
 
-### 1. Run Configuration Script
+### Run Configuration & Verification
 
-This script enables RDP auth, configures trusted device groups, updates host pool properties, and assigns RBAC roles.
+This script enables RDP auth, configures trusted device groups, updates host pool properties, assigns RBAC roles, and **automatically verifies** the settings at the end.
 
 ```powershell
 .\09-SSO-Configuration.ps1 `
@@ -36,17 +36,7 @@ This script enables RDP auth, configures trusted device groups, updates host poo
     -AvdDevicesPooledSSOGroupName "AVD-Devices-Pooled-SSO"
 ```
 
-### 2. Run Verification Script
-
-Verify that all settings were applied correctly.
-
-```powershell
-.\09-SSO-Configuration.Tests.ps1 `
-    -ResourceGroupName "RG-Azure-VDI-01" `
-    -HostPoolName "Pool-Pooled-Prod" `
-    -AvdUsersGroupName "AVD-Users" `
-    -AvdDevicesPooledSSOGroupName "AVD-Devices-Pooled-SSO"
-```
+To skip the verification step, add the `-SkipVerification` switch.
 
 ---
 

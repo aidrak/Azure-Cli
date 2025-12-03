@@ -1,6 +1,6 @@
 # Automates Microsoft Entra SSO Configuration for Azure Virtual Desktop (AVD)
 #
-# Purpose: Enable passwordless Single Sign-On for Entra-only AVD environment
+# Purpose: Enable passwordless Single Sign-On for Entra-only AVD environment and verify configuration
 #
 # Prerequisites:
 # - Entra ID P1 or P2 licenses
@@ -31,7 +31,10 @@ param (
     [string]$AvdUsersGroupName,
 
     [Parameter(Mandatory=$true)]
-    [string]$AvdDevicesPooledSSOGroupName
+    [string]$AvdDevicesPooledSSOGroupName,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipVerification
 )
 
 $ErrorActionPreference = "Stop"
@@ -234,15 +237,127 @@ function Assign-VirtualMachineUserLoginRole {
     }
 }
 
+# --- Verification Functions ---
+
+function Test-RdpProtocolEnabled {
+    Write-Host "`n[Verification] Verifying RDP Protocol on Windows Cloud Login Service Principal..." -ForegroundColor Yellow
+    try {
+        $WCLsp = Get-MgServicePrincipal -Filter "AppId eq '270efc09-cd0d-444b-a71f-39af4910ec45'" -ErrorAction Stop
+        if (-not $WCLsp) {
+            Write-Host "FAIL: Windows Cloud Login service principal not found." -ForegroundColor Red
+            return
+        }
+
+        $config = Get-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId $WCLsp.Id
+        if ($config -and $config.IsRemoteDesktopProtocolEnabled) {
+            Write-Host "PASS: RDP protocol is enabled." -ForegroundColor Green
+        } else {
+            Write-Host "FAIL: RDP protocol is NOT enabled." -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "FAIL: Error during verification. $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Test-TrustedDeviceGroupConfigured {
+    Write-Host "`n[Verification] Verifying Trusted Device Group Configuration..." -ForegroundColor Yellow
+    try {
+        $WCLsp = Get-MgServicePrincipal -Filter "AppId eq '270efc09-cd0d-444b-a71f-39af4910ec45'" -ErrorAction Stop
+        $deviceGroup = Get-MgGroup -Filter "displayName eq '$AvdDevicesPooledSSOGroupName'" -ErrorAction Stop
+        
+        if (-not $deviceGroup) {
+             Write-Host "FAIL: Device group '$AvdDevicesPooledSSOGroupName' not found." -ForegroundColor Red
+             return
+        }
+
+        $existingGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup -ServicePrincipalId $WCLsp.Id
+        if ($existingGroups -and ($existingGroups.Id -contains $deviceGroup.Id)) {
+            Write-Host "PASS: Device group '$AvdDevicesPooledSSOGroupName' is trusted." -ForegroundColor Green
+        } else {
+            Write-Host "FAIL: Device group '$AvdDevicesPooledSSOGroupName' is NOT in the trusted list." -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "FAIL: Error during verification. $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Test-HostPoolRdpPropertiesForSSO {
+    Write-Host "`n[Verification] Verifying Host Pool RDP Properties..." -ForegroundColor Yellow
+    try {
+        $hostPool = Get-AzWvdHostPool -ResourceGroupName $ResourceGroupName -Name $HostPoolName -ErrorAction Stop
+        
+        $rdpProps = $hostPool.CustomRdpProperty
+        $hasSSO = $rdpProps -match "enablerdsaadauth:i:1"
+        $hasNoUDP = $rdpProps -match "use udp:i:0"
+
+        if ($hasSSO) {
+             Write-Host "PASS: SSO property (enablerdsaadauth:i:1) found." -ForegroundColor Green
+        } else {
+             Write-Host "FAIL: SSO property (enablerdsaadauth:i:1) MISSING." -ForegroundColor Red
+        }
+
+        if ($hasNoUDP) {
+             Write-Host "PASS: UDP disabled property (use udp:i:0) found." -ForegroundColor Green
+        } else {
+             Write-Host "WARN: UDP disabled property (use udp:i:0) missing (optional but recommended)." -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "FAIL: Error verifying host pool. $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Test-VmUserLoginRoleAssigned {
+    Write-Host "`n[Verification] Verifying 'Virtual Machine User Login' RBAC Role..." -ForegroundColor Yellow
+    try {
+        $avdGroup = Get-MgGroup -Filter "displayName eq '$AvdUsersGroupName'" -ErrorAction Stop
+        $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction Stop
+
+        if (-not $avdGroup) {
+            Write-Host "FAIL: User group '$AvdUsersGroupName' not found." -ForegroundColor Red
+            return
+        }
+
+        $assignment = Get-AzRoleAssignment `
+            -ObjectId $avdGroup.Id `
+            -Scope $rg.ResourceId `
+            -RoleDefinitionName "Virtual Machine User Login" -ErrorAction SilentlyContinue
+
+        if ($assignment) {
+            Write-Host "PASS: 'Virtual Machine User Login' role is assigned correctly." -ForegroundColor Green
+        } else {
+            Write-Host "FAIL: 'Virtual Machine User Login' role is NOT assigned to '$AvdUsersGroupName' on resource group '$ResourceGroupName'." -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "FAIL: Error verifying RBAC role. $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
 # --- Main Execution ---
 Write-Host "Starting Azure AVD SSO Configuration Script..." -ForegroundColor Green
 
 Install-RequiredModules
 Connect-AzureServices
+
+# Run Configuration Steps
 Enable-RdpAuthenticationOnServicePrincipal
 Configure-TrustedDeviceGroupsForServicePrincipal
 Update-HostPoolRdpProperties
 Assign-VirtualMachineUserLoginRole
+
+# Run Verification Steps (unless skipped)
+if (-not $SkipVerification) {
+    Write-Host "`n=== Running Automatic Verification ===" -ForegroundColor Cyan
+    Test-RdpProtocolEnabled
+    Test-TrustedDeviceGroupConfigured
+    Test-HostPoolRdpPropertiesForSSO
+    Test-VmUserLoginRoleAssigned
+} else {
+    Write-Host "`nVerification skipped by user." -ForegroundColor Gray
+}
 
 Write-Host "`nAzure AVD SSO Configuration Script Completed." -ForegroundColor Green
 Write-Host "NOTE: Conditional Access policies (Step 3) must be configured manually as detailed in the documentation." -ForegroundColor Yellow
