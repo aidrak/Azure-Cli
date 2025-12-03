@@ -20,68 +20,49 @@
 
 ---
 
-## Step 1: Enable RDP Authentication
+## Automated Configuration
 
-### PowerShell
+We have provided PowerShell scripts to automate Steps 1, 2, 4, and 5. Step 3 (Conditional Access) must still be performed manually.
+
+### 1. Run Configuration Script
+
+This script enables RDP auth, configures trusted device groups, updates host pool properties, and assigns RBAC roles.
 
 ```powershell
-# Install modules if needed
-Install-Module Microsoft.Graph.Authentication -Force
-Install-Module Microsoft.Graph.Applications -Force
+.\09-SSO-Configuration.ps1 `
+    -ResourceGroupName "RG-Azure-VDI-01" `
+    -HostPoolName "Pool-Pooled-Prod" `
+    -AvdUsersGroupName "AVD-Users" `
+    -AvdDevicesPooledSSOGroupName "AVD-Devices-Pooled-SSO"
+```
 
-# Connect
-Connect-MgGraph -Scopes "Application.Read.All","Application-RemoteDesktopConfig.ReadWrite.All"
+### 2. Run Verification Script
 
-# Get Windows Cloud Login service principal
-$WCLspId = (Get-MgServicePrincipal -Filter "AppId eq '270efc09-cd0d-444b-a71f-39af4910ec45'").Id
+Verify that all settings were applied correctly.
 
-# Enable RDP protocol
-Update-MgServicePrincipalRemoteDesktopSecurityConfiguration `
-    -ServicePrincipalId $WCLspId `
-    -IsRemoteDesktopProtocolEnabled
-
-# Verify
-$config = Get-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId $WCLspId
-if ($config.IsRemoteDesktopProtocolEnabled) {
-    Write-Host "✓ RDP protocol enabled" -ForegroundColor Green
-} else {
-    Write-Host "✗ Failed to enable RDP protocol" -ForegroundColor Red
-}
+```powershell
+.\09-SSO-Configuration.Tests.ps1 `
+    -ResourceGroupName "RG-Azure-VDI-01" `
+    -HostPoolName "Pool-Pooled-Prod" `
+    -AvdUsersGroupName "AVD-Users" `
+    -AvdDevicesPooledSSOGroupName "AVD-Devices-Pooled-SSO"
 ```
 
 ---
 
-## Step 2: Configure Trusted Device Groups
+## Step 1: Enable RDP Authentication (Automated)
 
-**Purpose:** Eliminates consent prompts when connecting to session hosts
+The script enables the RDP protocol on the "Windows Cloud Login" service principal (`270efc09-cd0d-444b-a71f-39af4910ec45`).
 
-**Note:** The dynamic device group `AVD-Devices-Pooled-SSO` was already created in Guide 03. This step adds it to the Windows Cloud Login service principal as a trusted device group.
+## Step 2: Configure Trusted Device Groups (Automated)
 
-### Add Group to Service Principal
+The script adds your dynamic device group (`AVD-Devices-Pooled-SSO`) to the trusted list of the Windows Cloud Login service principal. This eliminates consent prompts for users connecting from these devices.
 
-```powershell
-# Get device group (created in Guide 03)
-$deviceGroup = Get-MgGroup -Filter "displayName eq 'AVD-Devices-Pooled-SSO'"
-
-# Create target device group object
-$tdg = New-Object -TypeName Microsoft.Graph.PowerShell.Models.MicrosoftGraphTargetDeviceGroup
-$tdg.Id = $deviceGroup.Id
-$tdg.DisplayName = $deviceGroup.DisplayName
-
-# Add to service principal
-New-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
-    -ServicePrincipalId $WCLspId `
-    -BodyParameter $tdg
-
-Write-Host "✓ Trusted device group configured" -ForegroundColor Green
-Write-Host "  Users will not see consent prompts" -ForegroundColor Gray
-```
-
-**Note:** Max 10 device groups allowed
+**Note:** Max 10 device groups allowed.
 
 ---
 
-## Step 3: Configure Conditional Access
+## Step 3: Configure Conditional Access (Manual)
 
 **Three cloud apps must be configured:**
 
@@ -121,72 +102,17 @@ Write-Host "  Users will not see consent prompts" -ForegroundColor Gray
 
 ---
 
-## Step 4: Verify Host Pool RDP Properties
+## Step 4: Verify Host Pool RDP Properties (Automated)
 
-### Check via Portal
-
-1. Azure Virtual Desktop → Host pools → `Pool-Pooled-Prod`
-2. **RDP Properties** → **Connection information**
-3. **Microsoft Entra single sign-on** should show:
-   - "Connections will use Microsoft Entra authentication to provide single sign-on"
-
-### Check via PowerShell
-
-```powershell
-$hostPool = Get-AzWvdHostPool `
-    -ResourceGroupName "RG-Azure-VDI-01" `
-    -Name "Pool-Pooled-Prod"
-
-$rdpProperties = $hostPool.CustomRdpProperty
-
-# Check for SSO enabled
-if ($rdpProperties -match "enablerdsaadauth:i:1") {
-    Write-Host "✓ SSO enabled in RDP properties" -ForegroundColor Green
-} else {
-    Write-Host "✗ SSO NOT enabled" -ForegroundColor Red
-    Write-Host "  Run this command to fix:" -ForegroundColor Yellow
-    Write-Host "  Update-AzWvdHostPool -ResourceGroupName 'RG-Azure-VDI-01' -Name 'Pool-Pooled-Prod' -CustomRdpProperty 'enablerdsaadauth:i:1;use udp:i:0;'" -ForegroundColor Gray
-}
-
-# Also verify UDP disabled
-if ($rdpProperties -match "use udp:i:0") {
-    Write-Host "✓ UDP disabled (TCP only)" -ForegroundColor Green
-} else {
-    Write-Host "⚠ UDP setting not found" -ForegroundColor Yellow
-}
-```
-
-### Enable SSO if Missing
-
-```powershell
-# If SSO not enabled, add it
-Update-AzWvdHostPool `
-    -ResourceGroupName "RG-Azure-VDI-01" `
-    -Name "Pool-Pooled-Prod" `
-    -CustomRdpProperty "enablerdsaadauth:i:1;use udp:i:0;audiocapturemode:i:1;audiomode:i:0;"
-
-Write-Host "✓ RDP properties updated" -ForegroundColor Green
-```
+The script checks and updates the host pool RDP properties to include:
+- `enablerdsaadauth:i:1` (Enables Entra ID SSO)
+- `use udp:i:0` (Disables UDP, often recommended for troubleshooting/compatibility)
 
 ---
 
-## Step 5: Assign RBAC Roles
+## Step 5: Assign RBAC Roles (Automated)
 
-### Virtual Machine User Login
-
-```powershell
-# Required for SSO to VMs
-$resourceGroup = "RG-Azure-VDI-01"
-$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users'"
-$rg = Get-AzResourceGroup -Name $resourceGroup
-
-New-AzRoleAssignment `
-    -ObjectId $avdGroup.Id `
-    -RoleDefinitionName "Virtual Machine User Login" `
-    -Scope $rg.ResourceId
-
-Write-Host "✓ VM User Login role assigned" -ForegroundColor Green
-```
+The script assigns the **Virtual Machine User Login** role to your AVD users group (`AVD-Users`) on the resource group. This allows users to log in to the VMs.
 
 ---
 
@@ -239,14 +165,7 @@ klist
 
 **Cause:** Missing RBAC assignment
 
-**Solution:**
-```powershell
-# Assign Virtual Machine User Login
-New-AzRoleAssignment `
-    -ObjectId $avdGroup.Id `
-    -RoleDefinitionName "Virtual Machine User Login" `
-    -Scope $rg.ResourceId
-```
+**Solution:** Run the configuration script again to ensure the "Virtual Machine User Login" role is assigned.
 
 ### Issue: "Sign-in method not allowed"
 
@@ -258,64 +177,6 @@ New-AzRoleAssignment `
 ### Issue: Per-user MFA conflicts
 
 **Solution:** Disable per-user MFA, use Conditional Access MFA only
-
----
-
-## Verification Script
-
-```powershell
-Write-Host "=== SSO CONFIGURATION VERIFICATION ===" -ForegroundColor Cyan
-
-# Check 1: Service principal
-Connect-MgGraph -Scopes "Application.Read.All"
-$WCLspId = (Get-MgServicePrincipal -Filter "AppId eq '270efc09-cd0d-444b-a71f-39af4910ec45'").Id
-$config = Get-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId $WCLspId
-
-Write-Host "`n[1] Windows Cloud Login Service Principal..." -ForegroundColor Yellow
-if ($config.IsRemoteDesktopProtocolEnabled) {
-    Write-Host "✓ RDP protocol enabled" -ForegroundColor Green
-} else {
-    Write-Host "✗ RDP protocol NOT enabled" -ForegroundColor Red
-}
-
-# Check 2: Trusted device group
-$deviceGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup -ServicePrincipalId $WCLspId
-Write-Host "`n[2] Trusted Device Groups..." -ForegroundColor Yellow
-if ($deviceGroups) {
-    Write-Host "✓ $($deviceGroups.Count) device group(s) configured" -ForegroundColor Green
-    foreach ($group in $deviceGroups) {
-        Write-Host "  - $($group.DisplayName)" -ForegroundColor Gray
-    }
-} else {
-    Write-Host "⚠ No trusted device groups" -ForegroundColor Yellow
-    Write-Host "  Users will see consent prompts" -ForegroundColor Gray
-}
-
-# Check 3: Host pool RDP properties
-Connect-AzAccount -ErrorAction SilentlyContinue | Out-Null
-$hostPool = Get-AzWvdHostPool -ResourceGroupName "RG-Azure-VDI-01" -Name "Pool-Pooled-Prod"
-
-Write-Host "`n[3] Host Pool RDP Properties..." -ForegroundColor Yellow
-if ($hostPool.CustomRdpProperty -match "enablerdsaadauth:i:1") {
-    Write-Host "✓ SSO enabled (enablerdsaadauth:i:1)" -ForegroundColor Green
-} else {
-    Write-Host "✗ SSO NOT enabled in RDP properties" -ForegroundColor Red
-}
-
-# Check 4: RBAC
-$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users'"
-$rg = Get-AzResourceGroup -Name "RG-Azure-VDI-01"
-$rbac = Get-AzRoleAssignment -ObjectId $avdGroup.Id -Scope $rg.ResourceId -RoleDefinitionName "Virtual Machine User Login"
-
-Write-Host "`n[4] RBAC Assignment..." -ForegroundColor Yellow
-if ($rbac) {
-    Write-Host "✓ Virtual Machine User Login assigned" -ForegroundColor Green
-} else {
-    Write-Host "✗ Missing VM User Login role" -ForegroundColor Red
-}
-
-Write-Host "`n=== VERIFICATION COMPLETE ===" -ForegroundColor Cyan
-```
 
 ---
 
@@ -333,5 +194,5 @@ Write-Host "`n=== VERIFICATION COMPLETE ===" -ForegroundColor Cyan
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** December 2, 2025
+**Document Version:** 1.1
+**Last Updated:** December 3, 2025

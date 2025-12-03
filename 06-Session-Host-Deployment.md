@@ -127,6 +127,63 @@ Write-Host "`nValidation complete. Yellow warnings indicate settings that may ne
 ---
 
 ## Scaling
+```
+
+---
+
+## Post-Deployment Golden Image Validation
+
+Run this validation script on deployed session hosts to verify that all golden image optimizations from Guide 05 persisted through Sysprep and deployment.
+
+### On Session Host (RDP in)
+
+```powershell
+Write-Host "`n=== Session Host Golden Image Validation ===" -ForegroundColor Cyan
+
+# Check 1: Windows Defender FSLogix Exclusions
+$exclusions = Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+if ($exclusions -contains "C:\Program Files\FSLogix") {
+    Write-Host "✓ Defender FSLogix exclusions present" -ForegroundColor Green
+} else {
+    Write-Host "✗ Defender exclusions missing" -ForegroundColor Yellow
+}
+
+# Check 2: System Locale
+$locale = Get-WinSystemLocale
+Write-Host "✓ System locale: $($locale.Name)" -ForegroundColor Green
+
+# Check 3: VSS Disabled
+$vss = Get-Service VSS -ErrorAction SilentlyContinue
+if ($vss.StartType -eq 'Disabled') {
+    Write-Host "✓ VSS disabled (storage optimized)" -ForegroundColor Green
+} else {
+    Write-Host "✗ VSS still enabled" -ForegroundColor Yellow
+}
+
+# Check 4: Windows Search Disabled (VDOT verification)
+$wsearch = Get-Service WSearch -ErrorAction SilentlyContinue
+if ($wsearch.Status -eq 'Stopped' -and $wsearch.StartType -eq 'Disabled') {
+    Write-Host "✓ Windows Search disabled (VDOT applied)" -ForegroundColor Green
+} else {
+    Write-Host "✗ Windows Search enabled" -ForegroundColor Yellow
+}
+
+# Check 5: RDP Timezone Redirection
+$rdpReg = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fEnableTimeZoneRedirection" -ErrorAction SilentlyContinue
+if ($rdpReg.fEnableTimeZoneRedirection -eq 1) {
+    Write-Host "✓ Timezone redirection enabled" -ForegroundColor Green
+} else {
+    Write-Host "✗ Timezone redirection missing" -ForegroundColor Yellow
+}
+
+Write-Host "`nValidation complete. Yellow warnings indicate settings that may need investigation." -ForegroundColor Cyan
+```
+
+**Purpose:** Confirms that Sysprep preserved all golden image optimizations from Guide 05. Yellow warnings indicate settings that may not have persisted and should be investigated before deploying the image fleet-wide.
+
+---
+
+## Scaling
 
 ### Calculate VMs Needed
 
