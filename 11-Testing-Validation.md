@@ -18,12 +18,14 @@ Write-Host "=== AVD VALIDATION SUITE ===" -ForegroundColor Cyan
 
 # Network
 Write-Host "`n[1] FSLogix Storage..." -ForegroundColor Yellow
-$storage = Test-NetConnection -ComputerName fslogix112125.file.core.windows.net -Port 445
+# Replace YOUR_STORAGE_ACCOUNT with your storage account name from Guide 02
+$storageAccountName = "YOUR_STORAGE_ACCOUNT"
+$storage = Test-NetConnection -ComputerName "$storageAccountName.file.core.windows.net" -Port 445
 if ($storage.TcpTestSucceeded) { Write-Host "✓ Reachable" -ForegroundColor Green } else { Write-Host "✗ Failed" -ForegroundColor Red }
 
 # DNS (Private Endpoint)
 Write-Host "`n[2] DNS Resolution..." -ForegroundColor Yellow
-$dns = Resolve-DnsName fslogix112125.file.core.windows.net -Type A
+$dns = Resolve-DnsName "$storageAccountName.file.core.windows.net" -Type A
 $privateIp = $dns | Where-Object { $_.IPAddress -match '^10\.' } | Select-Object -First 1 -ExpandProperty IPAddress
 if ($privateIp) { Write-Host "✓ Private IP: $privateIp" -ForegroundColor Green } else { Write-Host "⚠ Public IP" -ForegroundColor Yellow }
 
@@ -34,7 +36,7 @@ if ($dsreg) { Write-Host "✓ Joined" -ForegroundColor Green } else { Write-Host
 
 # Kerberos
 Write-Host "`n[4] Kerberos..." -ForegroundColor Yellow
-$kerb = klist get "cifs/fslogix112125.file.core.windows.net" 2>&1
+$kerb = klist get "cifs/$storageAccountName.file.core.windows.net" 2>&1
 if ($LASTEXITCODE -eq 0) { Write-Host "✓ Ticket obtained" -ForegroundColor Green } else { Write-Host "✗ Failed" -ForegroundColor Red }
 
 # FSLogix
@@ -69,8 +71,8 @@ Write-Host "`n=== VALIDATION COMPLETE ===" -ForegroundColor Cyan
 # After user logs in, check VHD
 frxcmd.exe list-vhds
 
-# Check storage
-Get-ChildItem "\\fslogix112125.file.core.windows.net\fslogix-profiles" -Filter "*USERNAME*.vhdx"
+# Check storage (replace YOUR_STORAGE_ACCOUNT with your storage account name from Guide 02)
+Get-ChildItem "\\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles" -Filter "*USERNAME*.vhdx"
 ```
 
 ---

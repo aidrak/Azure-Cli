@@ -12,6 +12,14 @@
   Install-Module -Name Az.Network -Force
   ```
 
+**Storage Account Naming (IMPORTANT):**
+- Pattern: `fslogix<random-5-digits>` (e.g., `fslogix37402`, `fslogix12345`)
+- Storage account names must be **globally unique** across all Azure subscriptions
+- 3-24 characters, lowercase letters and numbers only
+- Generate a unique name for your deployment using: `Get-Random -Minimum 10000 -Maximum 99999`
+- **Save your chosen storage account name** - you'll use it in all subsequent guides (04, 05, 06, 07, 08, etc.)
+- Examples: `fslogix52847`, `fslogix18392`, `fslogix74561`
+
 ---
 
 ## Part 1: Create FSLogix Storage Account
@@ -27,9 +35,10 @@
 2. **Basics Tab**
    - Subscription: Select your subscription
    - Resource group: `RG-Azure-VDI-01`
-   - Storage account name: `fslogix112125` 
+   - Storage account name: `YOUR_STORAGE_ACCOUNT` (e.g., `fslogix52847`)
      - ⚠️ Must be globally unique
      - 3-24 characters, lowercase letters and numbers only
+     - Use the storage account name you generated from the Prerequisites section above
    - Region: `Central US` (match your AVD location)
    - Performance: **Premium** ⚠️ CRITICAL for FSLogix
    - Premium account type: **File shares**
@@ -80,7 +89,7 @@
 ⚠️ **CRITICAL STEP** - Without this, Entra-only authentication won't work
 
 1. **Navigate to your storage account**
-   - Go to `fslogix112125` storage account
+   - Go to your storage account (e.g., `fslogix52847` - the name you created in Step 1)
 
 2. **Enable Kerberos**
    - Left menu → **File shares**
@@ -123,7 +132,10 @@ Connect-AzAccount
 # Set variables
 $resourceGroup = "RG-Azure-VDI-01"
 $location = "centralus"
-$storageAccountName = "fslogix112125"  # Must be globally unique
+# IMPORTANT: Replace with your unique storage account name (pattern: fslogix<random-5-digits>)
+$storageAccountName = "fslogix" + (Get-Random -Minimum 10000 -Maximum 99999)
+# Example: fslogix52847 (your number will be different)
+Write-Host "Using storage account: $storageAccountName" -ForegroundColor Yellow
 $fileShareName = "fslogix-profiles"
 $shareQuotaGiB = 5120  # 5 TB
 
@@ -269,7 +281,7 @@ Write-Host "`nNext Step: Create Private Endpoint" -ForegroundColor Cyan
    - Go to Private DNS zone `privatelink.file.core.windows.net`
    - Click **Recordsets**
    - You should see:
-     - Name: `fslogix112125`
+     - Name: Your storage account name (e.g., `fslogix52847`)
      - Type: `A`
      - IP: `10.1.4.x`
 
@@ -284,7 +296,8 @@ Connect-AzAccount
 # Set variables
 $resourceGroup = "RG-Azure-VDI-01"
 $location = "centralus"
-$storageAccountName = "fslogix112125"
+# IMPORTANT: Use the same storage account name you created in Part 1
+$storageAccountName = "YOUR_STORAGE_ACCOUNT"  # Replace with your storage account name (e.g., fslogix52847)
 $vnetName = "vnet-avd-prod"
 $subnetName = "snet-avd-privateendpoints"
 $privateEndpointName = "pe-fslogix-files"
@@ -418,24 +431,25 @@ Write-Host "Will resolve to: $privateIpAddress (private)" -ForegroundColor Green
    - Should show A record for `fslogix112125` pointing to private IP
 
 3. **Test from Session Host (later)**
-   - After deploying session hosts, RDP in and run:
+   - After deploying session hosts, RDP in and run (replace YOUR_STORAGE_ACCOUNT with your storage account name):
    ```powershell
    # Test DNS resolution
-   nslookup fslogix112125.file.core.windows.net
+   nslookup YOUR_STORAGE_ACCOUNT.file.core.windows.net
    # Should return private IP (10.1.4.x), not public IP
-   
+
    # Test connectivity
-   Test-NetConnection -ComputerName fslogix112125.file.core.windows.net -Port 445
-   
+   Test-NetConnection -ComputerName YOUR_STORAGE_ACCOUNT.file.core.windows.net -Port 445
+
    # Test Kerberos ticket
-   klist get cifs/fslogix112125.file.core.windows.net
+   klist get cifs/YOUR_STORAGE_ACCOUNT.file.core.windows.net
    ```
 
 #### Option B: PowerShell Verification Script
 
 ```powershell
 # Run from a VM in the same VNet to test
-$storageAccountName = "fslogix112125"
+# Replace with your storage account name (e.g., fslogix52847)
+$storageAccountName = "YOUR_STORAGE_ACCOUNT"
 $fqdn = "$storageAccountName.file.core.windows.net"
 
 Write-Host "=== TESTING STORAGE CONNECTIVITY ===" -ForegroundColor Cyan
@@ -520,7 +534,7 @@ Write-Host "`n=== TEST COMPLETE ===" -ForegroundColor Cyan
 ```powershell
 Set-AzStorageAccount `
     -ResourceGroupName "RG-Azure-VDI-01" `
-    -Name "fslogix112125" `
+    -Name "YOUR_STORAGE_ACCOUNT" `
     -EnableAzureActiveDirectoryKerberosForFile $true
 ```
 
@@ -545,16 +559,16 @@ Set-AzStorageAccount `
 
 ## Configuration Reference
 
-**Storage Account Name:** `fslogix112125`  
-**File Share Name:** `fslogix-profiles`  
-**UNC Path:** `\\fslogix112125.file.core.windows.net\fslogix-profiles`  
-**Private Endpoint Name:** `pe-fslogix-files`  
-**Private IP Range:** `10.1.4.x`  
+**Storage Account Name:** `YOUR_STORAGE_ACCOUNT` (e.g., `fslogix52847`)
+**File Share Name:** `fslogix-profiles`
+**UNC Path:** `\\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles`
+**Private Endpoint Name:** `pe-fslogix-files`
+**Private IP Range:** `10.1.4.x`
 **DNS Zone:** `privatelink.file.core.windows.net`
 
-**FSLogix Configuration Value (for Intune):**
+**FSLogix Configuration Value (for Intune - use in later guides):**
 ```
-VHDLocations: \\fslogix112125.file.core.windows.net\fslogix-profiles
+VHDLocations: \\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles
 ```
 
 ---

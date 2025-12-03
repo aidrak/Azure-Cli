@@ -4,7 +4,7 @@
 
 **Prerequisites:**
 - Session hosts Entra-joined and Intune-enrolled
-- FSLogix storage: `fslogix37402` (or your storage account name)
+- FSLogix storage: Use the storage account name you created in Guide 02 (pattern: `fslogix<random-5-digits>`, e.g., `fslogix52847`)
 - Entra ID groups created (Guide 03)
 - Device dynamic groups created and populated with session hosts
 
@@ -32,7 +32,7 @@
 | Setting | Value |
 |---------|-------|
 | Enabled | Enabled, Value: `1` |
-| VHD Locations | Enabled, Value: `\\fslogix37402.file.core.windows.net\fslogix-profiles` |
+| VHD Locations | Enabled, Value: `\\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles` (replace YOUR_STORAGE_ACCOUNT with your storage account name from Guide 02, e.g., `fslogix52847`) |
 | Size in MBs | Enabled, Value: `20000` |
 | Is Dynamic (VHD) | Enabled, Value: `1` |
 | Profile Type | Enabled, Select: `Normal Profile` |
@@ -148,11 +148,11 @@ Get-ItemProperty -Path $fslogixPath -Name "Enabled", "VHDLocations", "SizeInMBs"
 Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Name "SelectTransport"
 # Should return: SelectTransport : 1 (TCP only)
 
-# Test FSLogix connectivity
-Test-NetConnection -ComputerName fslogix37402.file.core.windows.net -Port 445
+# Test FSLogix connectivity (replace YOUR_STORAGE_ACCOUNT with your storage account name)
+Test-NetConnection -ComputerName YOUR_STORAGE_ACCOUNT.file.core.windows.net -Port 445
 
 # Test Kerberos
-klist get cifs/fslogix37402.file.core.windows.net
+klist get cifs/YOUR_STORAGE_ACCOUNT.file.core.windows.net
 ```
 
 ### After User Login
@@ -161,8 +161,8 @@ klist get cifs/fslogix37402.file.core.windows.net
 # Check if profile VHD attached
 frxcmd.exe list-vhds
 
-# Check for user's VHD file
-Get-ChildItem "\\fslogix37402.file.core.windows.net\fslogix-profiles" -Filter "*$env:USERNAME*.vhdx"
+# Check for user's VHD file (replace YOUR_STORAGE_ACCOUNT with your storage account name)
+Get-ChildItem "\\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles" -Filter "*$env:USERNAME*.vhdx"
 ```
 
 ### In Active Session
@@ -188,10 +188,11 @@ Get-ChildItem "\\fslogix37402.file.core.windows.net\fslogix-profiles" -Filter "*
 
 ```powershell
 # FSLogix
+# Replace YOUR_STORAGE_ACCOUNT with your storage account name from Guide 02
 $path = "HKLM:\SOFTWARE\FSLogix\Profiles"
 New-Item -Path $path -Force | Out-Null
 Set-ItemProperty -Path $path -Name "Enabled" -Value 1 -Type DWord
-Set-ItemProperty -Path $path -Name "VHDLocations" -Value "\\fslogix37402.file.core.windows.net\fslogix-profiles" -Type MultiString
+Set-ItemProperty -Path $path -Name "VHDLocations" -Value "\\YOUR_STORAGE_ACCOUNT.file.core.windows.net\fslogix-profiles" -Type MultiString
 Set-ItemProperty -Path $path -Name "SizeInMBs" -Value 20000 -Type DWord
 Set-ItemProperty -Path $path -Name "IsDynamic" -Value 1 -Type DWord
 
