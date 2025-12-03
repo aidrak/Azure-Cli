@@ -151,7 +151,70 @@ Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
 - **Excluded Apps:** Groove (OneDrive for Business), Lync (Skype), OneDrive, OneNote, OutlookForWindows
 - **Updates:** Disabled (managed via Windows Update/Intune in deployed environments)
 
-### 7. OS Optimizations
+### 6b. Install Google Chrome
+
+```powershell
+# Install Google Chrome via Chocolatey
+choco install googlechrome -y
+
+# Verify installation
+Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe"
+```
+
+### 7. Configure Default Applications & Desktop Shortcuts
+
+```powershell
+# Set Adobe Reader as default PDF opener
+cmd /c assoc .pdf=AcroExch.Document.DC
+
+# Create public desktop shortcuts
+$publicDesktop = "C:\Users\Public\Desktop"
+$shell = New-Object -ComObject WScript.Shell
+
+# Adobe Acrobat Reader
+$shortcut = $shell.CreateShortcut("$publicDesktop\Adobe Acrobat Reader.lnk")
+$shortcut.TargetPath = "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"
+$shortcut.Description = "Adobe Acrobat Reader DC"
+$shortcut.Save()
+
+# Google Chrome
+$shortcut = $shell.CreateShortcut("$publicDesktop\Google Chrome.lnk")
+$shortcut.TargetPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+$shortcut.Description = "Google Chrome"
+$shortcut.Save()
+
+# Microsoft Outlook
+$shortcut = $shell.CreateShortcut("$publicDesktop\Microsoft Outlook.lnk")
+$shortcut.TargetPath = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+$shortcut.Description = "Microsoft Outlook"
+$shortcut.Save()
+
+# Microsoft Word
+$shortcut = $shell.CreateShortcut("$publicDesktop\Microsoft Word.lnk")
+$shortcut.TargetPath = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+$shortcut.Description = "Microsoft Word"
+$shortcut.Save()
+
+# Microsoft Excel
+$shortcut = $shell.CreateShortcut("$publicDesktop\Microsoft Excel.lnk")
+$shortcut.TargetPath = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+$shortcut.Description = "Microsoft Excel"
+$shortcut.Save()
+
+# Microsoft Access
+$shortcut = $shell.CreateShortcut("$publicDesktop\Microsoft Access.lnk")
+$shortcut.TargetPath = "C:\Program Files\Microsoft Office\root\Office16\MSACCESS.EXE"
+$shortcut.Description = "Microsoft Access"
+$shortcut.Save()
+
+Write-Host "✓ Adobe set as default PDF opener" -ForegroundColor Green
+Write-Host "✓ Public desktop shortcuts created for 6 applications" -ForegroundColor Green
+
+# Verify shortcuts created
+Get-ChildItem "$publicDesktop\*.lnk" | Select-Object Name
+```
+
+### 8. OS Optimizations
 
 ```powershell
 # Download VDOT
@@ -165,7 +228,7 @@ Set-Location "C:\Temp\VDOT\Virtual-Desktop-Optimization-Tool-main"
 .\Windows_VDOT.ps1 -Optimizations All -AcceptEULA
 ```
 
-### 8. Entra Kerberos Prerequisites
+### 9. Entra Kerberos Prerequisites
 
 ```powershell
 # Cloud Kerberos
@@ -179,7 +242,7 @@ New-Item -Path $azurePath -Force | Out-Null
 Set-ItemProperty -Path $azurePath -Name "LoadCredKeyFromProfile" -Value 1 -Type DWord
 ```
 
-### 9. Sysprep
+### 10. Sysprep
 
 ```powershell
 # Clean temp
