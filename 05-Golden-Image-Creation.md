@@ -233,7 +233,7 @@ Set-Location "C:\Temp\VDOT\Virtual-Desktop-Optimization-Tool-main"
 ```powershell
 # Enable timezone redirection from RDP client to session host
 # This allows the session to use the client's local timezone
-$rdpPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+$rdpPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server"
 New-Item -Path $rdpPath -Force | Out-Null
 Set-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection" -Value 1 -Type DWord
 
@@ -243,7 +243,11 @@ Write-Host "✓ RDP timezone redirection enabled" -ForegroundColor Green
 Get-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection"
 ```
 
-**Note:** This setting enables the RDP protocol to redirect the client's timezone to the session host. The client's RDP application must also have timezone redirection enabled (default in modern RDP clients like Remote Desktop Connection, Microsoft Remote Desktop app, and Citrix Receiver).
+**How it works:**
+- Clients connecting to the session host send their timezone information via RDP
+- Session time is calculated as: server base time + client timezone
+- The client's RDP application must have timezone redirection enabled (default in modern RDP clients: Remote Desktop Connection, Microsoft Remote Desktop app, Citrix Receiver)
+- Requires RDP 5.1 or later (all modern clients)
 
 ### 9. Entra Kerberos & Cloud Login Prerequisites
 
