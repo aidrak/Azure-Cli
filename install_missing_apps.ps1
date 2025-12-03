@@ -1,13 +1,13 @@
-Write-Output "--- Retrying App Installation ---"
+Write-Output "--- Retrying App Installation (Ignore Checksums) ---"
 
-# Refresh env vars just in case
+# Refresh env vars
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
 Write-Output "Installing Adobe Reader..."
-choco install adobereader -y --verbose
+choco install adobereader -y --verbose --ignore-checksums
 
 Write-Output "Installing Google Chrome..."
-choco install googlechrome -y --verbose
+choco install googlechrome -y --verbose --ignore-checksums
 
 # Retry Shortcuts
 $publicDesktop = "C:\Users\Public\Desktop"
