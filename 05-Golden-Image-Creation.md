@@ -398,6 +398,11 @@ $helloPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
 New-Item -Path $helloPath -Force | Out-Null
 Set-ItemProperty -Path $helloPath -Name "NoStartupApp" -Value 1 -Type DWord
 
+# Disable OOBE privacy settings experience (Windows 11 modern approach)
+$oobePath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE"
+New-Item -Path $oobePath -Force | Out-Null
+Set-ItemProperty -Path $oobePath -Name "DisablePrivacyExperience" -Value 1 -Type DWord
+
 # Disable biometric/PIN prompts
 $bioPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Biometrics"
 New-Item -Path $bioPath -Force | Out-Null
@@ -421,6 +426,7 @@ Write-Host "✓ Windows Hello and Getting Started suppressed" -ForegroundColor G
 
 # Verify registry keys
 Get-ItemProperty -Path $helloPath -Name "NoStartupApp"
+Get-ItemProperty -Path $oobePath -Name "DisablePrivacyExperience"
 Get-ItemProperty -Path $appPath -Name "DisableTipsOnLogon"
 ```
 
