@@ -12,6 +12,7 @@
 1. FSLogix profile containers
 2. UDP disable (session hosts)
 3. UDP disable (client devices)
+4. Suppress Windows Hello & Getting Started (session hosts)
 
 ---
 
@@ -72,6 +73,65 @@
    - Toggle: **Enabled**
 7. Assign to device group: `AVD-Devices-Clients-Corporate` (created in Guide 03 - for corporate workstations/laptops)
 8. **Review + create**
+
+---
+
+## Part 4: Suppress Windows Hello & Getting Started
+
+### Purpose
+Disable Windows Hello setup prompts and Getting Started tips on first login for all users. This complements the registry settings in the golden image (Guide 05) with Intune-level enforcement.
+
+### Intune Admin Center
+
+1. **Devices** → **Configuration** → **+ Create** → **Settings catalog**
+2. Name: `AVD - Suppress Hello & Getting Started`
+3. **+ Add settings** → Search for each of the following settings:
+
+#### Setting 1: Disable Windows Hello Sign-in Wizard
+- Search: `hello`
+- Path: **User Configuration > Policies > Administrative Templates > Windows Components > Windows Logon Options**
+- Setting: **Disable the Windows Hello sign-in wizard**
+- Configure:
+   - Toggle: **Enabled**
+
+#### Setting 2: Disable Windows Tips
+- Search: `tips`
+- Path: **Computer Configuration > Policies > Administrative Templates > Windows Components > Windows Tips**
+- Setting: **Disable Tips on Logon**
+- Configure:
+   - Toggle: **Enabled**
+
+#### Setting 3: Disable Biometrics Setup
+- Search: `biometric`
+- Path: **Computer Configuration > Policies > Administrative Templates > Windows Components > Biometrics**
+- Setting: **Allow the use of biometric devices**
+- Configure:
+   - Toggle: **Disabled**
+
+#### Setting 4: Disable Cloud Content on Lock Screen
+- Search: `cloud content`
+- Path: **Computer Configuration > Policies > Administrative Templates > Windows Components > Cloud Content**
+- Setting: **Turn off Microsoft consumer experiences**
+- Configure:
+   - Toggle: **Enabled**
+
+#### Setting 5: Disable Getting Started
+- Search: `Getting Started`
+- Path: **Computer Configuration > Policies > Administrative Templates > System > Logon/Logoff**
+- Setting: **Don't display Getting Started page**
+- Configure:
+   - Toggle: **Enabled**
+
+4. **Assignments:** Assign to device group: `AVD-Devices-Pooled-SSO` (created in Guide 03)
+   - Alternative: Create new device group `AVD-Devices-Pooled-FirstLogin` if you want separate targeting
+5. **Review + create**
+
+### Notes
+- These settings enforce the registry configurations already set in the golden image (Guide 05)
+- Intune policy applies at machine level for all users
+- Combined with golden image registry settings = belt-and-suspenders approach
+- Settings sync within 15 minutes of session host Intune enrollment
+- If users somehow reset these, Intune policy will re-apply on next sync
 
 ---
 
@@ -146,3 +206,37 @@ Write-Host "✓ Manual config complete. Restart required."
 ---
 
 **Next:** Assign RBAC roles (Guide 08), then configure SSO (Guide 09)
+
+---
+
+## Verification for Hello & Getting Started Suppression
+
+### On Session Host (after Part 4 policy applies)
+
+```powershell
+# Verify Intune policy applied (wait 15 mins after enrollment)
+dsregcmd /status | Select-String "Intune"
+
+# Check registry keys set by policy
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "NoStartupApp"
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Tips" -Name "DisableTipsOnLogon"
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Biometrics" -Name "Enabled"
+
+# Verify no Hello prompts appear on next login
+# Expected: Clean login without any setup wizards
+```
+
+### After User Login
+
+1. Logon should complete without Hello sign-in wizard
+2. No "Getting Started" tips should appear
+3. No biometric/PIN setup prompts
+4. No cloud content suggestions on lock screen
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Hello wizard still appears | Wait 15-30 mins for policy sync, restart session host |
+| Tips still shown | Verify policy assigned to correct device group, check Intune enrollment |
+| Biometric prompt appears | Ensure Biometrics setting is set to **Disabled** (not Enabled) |
