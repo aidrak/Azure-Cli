@@ -537,9 +537,9 @@ Set-AzStorageAccount `
 1. ✓ Storage account created with Entra Kerberos
 2. ✓ Private endpoint configured
 3. ✓ DNS resolution tested
-4. ⏭ Next: Configure RBAC permissions (Guide 07)
-5. ⏭ Next: Deploy session hosts to test connectivity (Guide 05)
-6. ⏭ Next: Configure Intune FSLogix policies (Guide 06)
+4. ⏭ Next: Create Entra ID groups (Guide 03)
+5. ⏭ Next: Create host pool and workspace (Guide 04)
+6. ⏭ Next: Configure Intune FSLogix policies (Guide 07)
 
 ---
 

@@ -6,6 +6,7 @@
 - Entra ID P1 or P2 licenses
 - Host pool created with `enablerdsaadauth:i:1` in RDP properties
 - Session hosts Entra-joined
+- Device dynamic group `AVD-Devices-Pooled-SSO` created (Guide 03)
 - PowerShell: `Microsoft.Graph` modules
 
 **Overview:** 5-step process:
@@ -54,24 +55,13 @@ if ($config.IsRemoteDesktopProtocolEnabled) {
 
 **Purpose:** Eliminates consent prompts when connecting to session hosts
 
-### Create Dynamic Device Group
-
-1. **Microsoft Entra admin center** → **Groups** → **New group**
-2. Group type: **Security**
-3. Group name: `AVD-SessionHosts-Devices`
-4. Membership type: **Dynamic Device**
-5. **Add dynamic query:**
-   ```
-   (device.displayName -startsWith "avd-pool-")
-   ```
-6. **Save**
-7. Wait 5-10 minutes for group to populate
+**Note:** The dynamic device group `AVD-Devices-Pooled-SSO` was already created in Guide 03. This step adds it to the Windows Cloud Login service principal as a trusted device group.
 
 ### Add Group to Service Principal
 
 ```powershell
-# Get device group
-$deviceGroup = Get-MgGroup -Filter "displayName eq 'AVD-SessionHosts-Devices'"
+# Get device group (created in Guide 03)
+$deviceGroup = Get-MgGroup -Filter "displayName eq 'AVD-Devices-Pooled-SSO'"
 
 # Create target device group object
 $tdg = New-Object -TypeName Microsoft.Graph.PowerShell.Models.MicrosoftGraphTargetDeviceGroup

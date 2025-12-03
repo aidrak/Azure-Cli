@@ -57,17 +57,17 @@ $pilotUsers = @(
     # ... 10-20 users total
 )
 
-# Verify users are in AVD-Users group
+# Verify users are in AVD-Users-Standard group (created in Guide 03)
 Connect-MgGraph -Scopes "Group.ReadWrite.All"
-$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users'"
+$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users-Standard'"
 
 foreach ($user in $pilotUsers) {
     $userObj = Get-MgUser -Filter "userPrincipalName eq '$user'"
     $membership = Get-MgGroupMember -GroupId $avdGroup.Id | Where-Object { $_.Id -eq $userObj.Id }
-    
+
     if (-not $membership) {
         New-MgGroupMember -GroupId $avdGroup.Id -DirectoryObjectId $userObj.Id
-        Write-Host "✓ Added $user to AVD-Users" -ForegroundColor Green
+        Write-Host "✓ Added $user to AVD-Users-Standard" -ForegroundColor Green
     }
 }
 ```
@@ -148,9 +148,9 @@ $currentBatch = $batch1  # Change for each batch
 
 Write-Host "=== BATCH MIGRATION: $($currentBatch.Count) users ===" -ForegroundColor Cyan
 
-# Add users to AVD-Users group
+# Add users to AVD-Users-Standard group
 Connect-MgGraph -Scopes "Group.ReadWrite.All"
-$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users'"
+$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users-Standard'"
 
 foreach ($user in $currentBatch) {
     try {
@@ -306,7 +306,7 @@ echo "Cleanup complete. Orphaned resources deleted."
 
 1. **Stop migration immediately**
 2. **Keep old VMs running**
-3. **Remove affected users from AVD-Users group**
+3. **Remove affected users from AVD-Users-Standard group**
 4. **Users revert to old VMs**
 5. **Investigate and fix issues**
 6. **Retest thoroughly**
@@ -316,7 +316,7 @@ echo "Cleanup complete. Orphaned resources deleted."
 # Emergency: Remove user from AVD
 $userToRevert = "user@contoso.com"
 Connect-MgGraph -Scopes "Group.ReadWrite.All"
-$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users'"
+$avdGroup = Get-MgGroup -Filter "displayName eq 'AVD-Users-Standard'"
 $user = Get-MgUser -Filter "userPrincipalName eq '$userToRevert'"
 
 Remove-MgGroupMemberByRef -GroupId $avdGroup.Id -DirectoryObjectId $user.Id
@@ -345,8 +345,8 @@ Write-Host "✓ $userToRevert removed from AVD. They can use old VM." -Foregroun
 
 ```powershell
 # Final verification
-$avdUsers = Get-MgGroupMember -GroupId (Get-MgGroup -Filter "displayName eq 'AVD-Users'").Id
-Write-Host "Total users in AVD-Users group: $($avdUsers.Count)" -ForegroundColor Cyan
+$avdUsers = Get-MgGroupMember -GroupId (Get-MgGroup -Filter "displayName eq 'AVD-Users-Standard'").Id
+Write-Host "Total users in AVD-Users-Standard group: $($avdUsers.Count)" -ForegroundColor Cyan
 
 if ($avdUsers.Count -ge 400) {
     Write-Host "✓ All 400 users migrated" -ForegroundColor Green

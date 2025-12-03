@@ -239,4 +239,4 @@ Best practice: Update images monthly
 
 ---
 
-**Next:** Deploy session hosts (Guide 05)
+**Next:** Deploy session hosts (Guide 06)
