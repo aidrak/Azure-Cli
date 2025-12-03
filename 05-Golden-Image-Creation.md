@@ -249,6 +249,133 @@ Get-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection"
 - The client's RDP application must have timezone redirection enabled (default in modern RDP clients: Remote Desktop Connection, Microsoft Remote Desktop app, Citrix Receiver)
 - Requires RDP 5.1 or later (all modern clients)
 
+### 8c. Configure Windows Defender FSLogix Exclusions
+
+```powershell
+# Add Windows Defender exclusions for FSLogix
+# Critical for performance - prevents Defender from scanning profile VHDs
+Add-MpPreference -ExclusionPath "C:\Program Files\FSLogix"
+Add-MpPreference -ExclusionPath "C:\ProgramData\FSLogix"
+Add-MpPreference -ExclusionProcess "frx.exe"
+Add-MpPreference -ExclusionProcess "frxdrvvt.sys"
+Add-MpPreference -ExclusionProcess "frxsvc.exe"
+Add-MpPreference -ExclusionExtension "vhd"
+Add-MpPreference -ExclusionExtension "vhdx"
+
+Write-Host "✓ Windows Defender FSLogix exclusions configured" -ForegroundColor Green
+
+# Verify exclusions
+Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+Get-MpPreference | Select-Object -ExpandProperty ExclusionProcess
+```
+
+**Performance Impact:**
+- **Without exclusions:** User login 3-5 minutes (Defender scanning profile VHD on every access)
+- **With exclusions:** User login 30-45 seconds (instant profile access)
+- **Security:** Safe exclusion - profile files stored on protected Azure Files, not system files
+
+### 8d. Configure Language & Locale Settings
+
+```powershell
+# Set system locale and regional formats (en-US baseline)
+Set-WinSystemLocale -SystemLocale "en-US"
+Set-Culture -CultureInfo "en-US"
+Set-WinHomeLocation -GeoId 244  # United States (244)
+
+# Set user language list
+$languages = New-WinUserLanguageList "en-US"
+Set-WinUserLanguageList $languages -Force
+
+Write-Host "✓ Language and locale configured for en-US" -ForegroundColor Green
+Write-Host "⚠️  Restart required for system locale changes to take effect" -ForegroundColor Yellow
+
+# Verify settings
+Get-WinSystemLocale
+Get-Culture
+```
+
+**Regional GeoId Reference:**
+- 39 = Canada (CA)
+- 94 = India (IN)
+- 242 = United Kingdom (UK)
+- 244 = United States (US)
+- Update the GeoId value above if your deployment is in a different region
+
+**Important Notes:**
+- System locale changes require restart before Sysprep (will take effect next)
+- Intune policies can override locale settings per user/group post-deployment
+- To change to different locale, update GeoId and CultureInfo values above
+
+### 8e. Disable System Restore & Volume Shadow Copy
+
+```powershell
+# Disable System Restore on all drives
+Disable-ComputerRestore -Drive "C:\"
+
+# Delete existing restore points
+vssadmin delete shadows /all /quiet
+
+# Disable Volume Shadow Copy Service
+Set-Service -Name VSS -StartupType Disabled
+Stop-Service -Name VSS -Force
+
+Write-Host "✓ System Restore and VSS disabled" -ForegroundColor Green
+
+# Verify
+Get-Service VSS | Select-Object Status, StartType
+```
+
+**Why This Matters:**
+- FSLogix profile containers (VHD files) change constantly with user profile updates
+- Windows VSS creates snapshots of all changed files automatically
+- Result: 50GB profile container can consume 150GB+ storage with VSS history
+- **No value in VDI:** User profiles stored on Azure Files (already backed up by Azure), session hosts are stateless
+- **Cost savings:** 67% reduction in Azure storage costs by disabling VSS
+
+### 8f. Verify VDOT Optimizations Applied
+
+```powershell
+Write-Host "`n=== VDOT Optimization Verification ===" -ForegroundColor Cyan
+
+# Check Windows Search service disabled
+$wsearch = Get-Service WSearch -ErrorAction SilentlyContinue
+if ($wsearch.Status -eq 'Stopped' -and $wsearch.StartType -eq 'Disabled') {
+    Write-Host "✓ Windows Search: Disabled" -ForegroundColor Green
+} else {
+    Write-Host "✗ Windows Search: Still enabled (check VDOT)" -ForegroundColor Yellow
+}
+
+# Check Superfetch/SysMain disabled
+$sysmain = Get-Service SysMain -ErrorAction SilentlyContinue
+if ($sysmain.Status -eq 'Stopped' -and $sysmain.StartType -eq 'Disabled') {
+    Write-Host "✓ Superfetch (SysMain): Disabled" -ForegroundColor Green
+} else {
+    Write-Host "✗ Superfetch: Still enabled" -ForegroundColor Yellow
+}
+
+# Check scheduled tasks disabled
+$tasks = @(
+    "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+    "\Microsoft\Windows\Autochk\Proxy",
+    "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator"
+)
+
+foreach ($task in $tasks) {
+    $taskState = (Get-ScheduledTask -TaskPath (Split-Path $task) -TaskName (Split-Path $task -Leaf) -ErrorAction SilentlyContinue).State
+    if ($taskState -eq 'Disabled') {
+        Write-Host "✓ Task disabled: $task" -ForegroundColor Green
+    } else {
+        Write-Host "✗ Task not disabled: $task" -ForegroundColor Yellow
+    }
+}
+
+Write-Host "`nVDOT verification complete. Review any yellow warnings." -ForegroundColor Cyan
+```
+
+**Purpose:** Validates that VDOT successfully applied key optimizations. Yellow warnings indicate services/tasks that may need manual verification, but don't prevent continuation. Address any red errors before proceeding.
+
+---
+
 ### 9. Entra Kerberos & Cloud Login Prerequisites
 
 ```powershell
@@ -296,6 +423,134 @@ Write-Host "✓ Windows Hello and Getting Started suppressed" -ForegroundColor G
 Get-ItemProperty -Path $helloPath -Name "NoStartupApp"
 Get-ItemProperty -Path $appPath -Name "DisableTipsOnLogon"
 ```
+
+### 10b. Golden Image Health Check (Pre-Sysprep Quality Gate)
+
+```powershell
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "Golden Image Health Check" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
+
+$checksPassed = 0
+$checksTotal = 0
+
+# Check 1: FSLogix Agent
+$checksTotal++
+if (Test-Path "C:\Program Files\FSLogix\Apps\frx.exe") {
+    Write-Host "✓ FSLogix Agent installed" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ FSLogix Agent NOT found" -ForegroundColor Red
+}
+
+# Check 2: Defender Exclusions
+$checksTotal++
+$exclusions = Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+if ($exclusions -contains "C:\Program Files\FSLogix") {
+    Write-Host "✓ Windows Defender FSLogix exclusions configured" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Defender exclusions missing" -ForegroundColor Red
+}
+
+# Check 3: Office 365 Installed
+$checksTotal++
+if (Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE") {
+    Write-Host "✓ Office 365 installed" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Office 365 NOT installed" -ForegroundColor Red
+}
+
+# Check 4: Chrome Installed
+$checksTotal++
+if (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe") {
+    Write-Host "✓ Google Chrome installed" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Chrome NOT installed" -ForegroundColor Red
+}
+
+# Check 5: Adobe Reader Installed
+$checksTotal++
+if (Test-Path "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe") {
+    Write-Host "✓ Adobe Reader installed" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Adobe Reader NOT installed" -ForegroundColor Red
+}
+
+# Check 6: Public Desktop Shortcuts
+$checksTotal++
+$shortcuts = Get-ChildItem "C:\Users\Public\Desktop\*.lnk" -ErrorAction SilentlyContinue
+if ($shortcuts.Count -ge 6) {
+    Write-Host "✓ Public desktop shortcuts created ($($shortcuts.Count) shortcuts)" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Desktop shortcuts missing (found $($shortcuts.Count), expected 6)" -ForegroundColor Red
+}
+
+# Check 7: Windows Hello Suppressed
+$checksTotal++
+$helloReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "NoStartupApp" -ErrorAction SilentlyContinue
+if ($helloReg.NoStartupApp -eq 1) {
+    Write-Host "✓ Windows Hello suppressed" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Hello suppression NOT configured" -ForegroundColor Red
+}
+
+# Check 8: Cloud Kerberos Enabled
+$checksTotal++
+$kerbReg = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters" -Name "CloudKerberosTicketRetrievalEnabled" -ErrorAction SilentlyContinue
+if ($kerbReg.CloudKerberosTicketRetrievalEnabled -eq 1) {
+    Write-Host "✓ Cloud Kerberos enabled" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Cloud Kerberos NOT enabled" -ForegroundColor Red
+}
+
+# Check 9: RDP Timezone Redirection
+$checksTotal++
+$rdpReg = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fEnableTimeZoneRedirection" -ErrorAction SilentlyContinue
+if ($rdpReg.fEnableTimeZoneRedirection -eq 1) {
+    Write-Host "✓ RDP timezone redirection enabled" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ Timezone redirection NOT enabled" -ForegroundColor Red
+}
+
+# Check 10: System Restore Disabled
+$checksTotal++
+$vss = Get-Service VSS -ErrorAction SilentlyContinue
+if ($vss.StartType -eq 'Disabled') {
+    Write-Host "✓ System Restore/VSS disabled" -ForegroundColor Green
+    $checksPassed++
+} else {
+    Write-Host "✗ VSS still enabled" -ForegroundColor Red
+}
+
+# Summary
+Write-Host "`n========================================" -ForegroundColor Cyan
+$percentage = [math]::Round(($checksPassed / $checksTotal) * 100)
+Write-Host "Health Check Score: $checksPassed / $checksTotal ($percentage%)" -ForegroundColor Cyan
+
+if ($checksPassed -eq $checksTotal) {
+    Write-Host "✓ READY FOR SYSPREP" -ForegroundColor Green
+} elseif ($checksPassed -ge ($checksTotal * 0.8)) {
+    Write-Host "⚠️  MOSTLY READY (review warnings)" -ForegroundColor Yellow
+} else {
+    Write-Host "✗ NOT READY - Fix errors before Sysprep" -ForegroundColor Red
+}
+Write-Host "========================================`n" -ForegroundColor Cyan
+```
+
+**Purpose:** Final quality gate before Sysprep. Validates all 10 critical configurations:
+- Must pass 10/10 for full readiness
+- 8/10 (80%) minimum acceptable
+- Review any failures and fix before proceeding with Sysprep
+
+---
 
 ### 11. Sysprep
 
