@@ -26,7 +26,7 @@ Set-WinUserLanguageList $languages -Force
 Write-Host "✓ Language and locale configured" -ForegroundColor Green
 
 # --- 8e. Disable System Restore & Volume Shadow Copy ---
-Write-Host "Disabling System Restore & VSS..."
+Write-Host "Disabling System Restore and VSS..."
 Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
 vssadmin delete shadows /all /quiet
 Set-Service -Name VSS -StartupType Disabled
