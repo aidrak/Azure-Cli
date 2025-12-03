@@ -9,11 +9,10 @@ LOCATION="centralus"
 echo "Creating Temporary VM for Golden Image..."
 
 # Create VM with D4s_v6 and Gen2 settings
-# Note: Using win11-23h2-avd as a stable base. 
 az vm create \
   --resource-group $RESOURCE_GROUP \
   --name $VM_NAME \
-  --image "MicrosoftWindowsDesktop:windows-11:win11-23h2-avd:latest" \
+  --image "MicrosoftWindowsDesktop:windows-11:win11-25h2-avd:latest" \
   --size "Standard_D4s_v6" \
   --admin-username "entra-admin" \
   --admin-password "ComplexP@ss123!" \
@@ -26,4 +25,3 @@ az vm create \
   --location $LOCATION
 
 echo "VM Creation initiated."
-
