@@ -150,8 +150,20 @@ Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
 ### 7. Configure Default Applications & Desktop Shortcuts
 
 ```powershell
-# Set Adobe Reader as default PDF opener
-cmd /c assoc .pdf=AcroExch.Document.DC
+# Set Adobe Reader as default PDF opener for NEW users (DISM method)
+$xmlPath = "C:\Temp\AdobeDefaults.xml"
+$xmlContent = @"
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+  <Association Identifier=".pdf" ProgId="AcroExch.Document.DC" ApplicationName="Adobe Acrobat Reader DC" />
+  <Association Identifier=".pdfxml" ProgId="AcroExch.Document.DC" ApplicationName="Adobe Acrobat Reader DC" />
+  <Association Identifier=".acrobatsecuritysettings" ProgId="AcroExch.Document.DC" ApplicationName="Adobe Acrobat Reader DC" />
+  <Association Identifier=".fdf" ProgId="AcroExch.Document.DC" ApplicationName="Adobe Acrobat Reader DC" />
+  <Association Identifier=".xfdf" ProgId="AcroExch.Document.DC" ApplicationName="Adobe Acrobat Reader DC" />
+</DefaultAssociations>
+"@
+$xmlContent | Out-File -FilePath $xmlPath -Encoding UTF8
+Dism.exe /Online /Import-DefaultAppAssociations:$xmlPath
 
 # Create public desktop shortcuts
 $publicDesktop = "C:\Users\Public\Desktop"
@@ -168,7 +180,11 @@ function Create-Shortcut {
     }
 }
 
-Create-Shortcut "$publicDesktop\Adobe Acrobat Reader.lnk" "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe" "Adobe Reader"
+# Check both 32-bit and 64-bit paths for Adobe
+$adobePath = "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+if (!(Test-Path $adobePath)) { $adobePath = "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe" }
+
+Create-Shortcut "$publicDesktop\Adobe Acrobat Reader.lnk" $adobePath "Adobe Reader"
 Create-Shortcut "$publicDesktop\Google Chrome.lnk" "C:\Program Files\Google\Chrome\Application\chrome.exe" "Google Chrome"
 Create-Shortcut "$publicDesktop\Microsoft Outlook.lnk" "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE" "Outlook"
 Create-Shortcut "$publicDesktop\Microsoft Word.lnk" "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE" "Word"
