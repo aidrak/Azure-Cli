@@ -72,11 +72,86 @@ Test-Path "C:\Program Files\FSLogix\Apps\frx.exe"
 
 ⚠️ **Do NOT configure FSLogix settings** - Intune will do this
 
-### 4. Install Applications
+### 4. Install Chocolatey Package Manager
 
-Install M365, browsers, line-of-business apps as needed.
+```powershell
+# Install Chocolatey package manager
+Set-ExecutionPolicy Bypass -Scope Process -Force
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-### 5. OS Optimizations
+# Verify installation
+choco --version
+
+# Close and reopen PowerShell for path updates
+```
+
+### 5. Install Adobe Acrobat Reader DC
+
+```powershell
+# Install Adobe Acrobat Reader DC via Chocolatey
+choco install adobereader -y
+
+# Verify installation
+Test-Path "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+# or
+Test-Path "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"
+```
+
+### 6. Install Microsoft Office 365
+
+```powershell
+# Download Office Deployment Tool
+New-Item -Path "C:\Temp\Office" -ItemType Directory -Force
+Invoke-WebRequest `
+  -Uri "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_17328-20162.exe" `
+  -OutFile "C:\Temp\Office\ODT.exe"
+
+# Extract Office Deployment Tool
+Start-Process -FilePath "C:\Temp\Office\ODT.exe" -ArgumentList "/quiet /extract:C:\Temp\Office" -Wait
+
+# Create configuration file
+$configXml = @"
+<Configuration ID="d473a46c-9126-4f5a-99d8-af03586a67bc">
+  <Add OfficeClientEdition="64" Channel="Current">
+    <Product ID="O365ProPlusEEANoTeamsRetail">
+      <Language ID="en-us" />
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="Lync" />
+      <ExcludeApp ID="OneDrive" />
+      <ExcludeApp ID="OneNote" />
+      <ExcludeApp ID="OutlookForWindows" />
+    </Product>
+  </Add>
+  <Property Name="SharedComputerLicensing" Value="1" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
+  <Property Name="DeviceBasedLicensing" Value="0" />
+  <Property Name="SCLCacheOverride" Value="0" />
+  <Updates Enabled="FALSE" />
+  <RemoveMSI />
+  <Display Level="None" AcceptEULA="TRUE" />
+</Configuration>
+"@
+
+$configXml | Out-File -FilePath "C:\Temp\Office\Configuration.xml" -Encoding UTF8
+
+# Install Office 365
+Set-Location "C:\Temp\Office"
+.\setup.exe /configure Configuration.xml
+
+# Wait for installation (may take 10-20 minutes)
+# Verify installation
+Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+```
+
+**Configuration Notes:**
+- **SharedComputerLicensing=1:** Required for AVD multi-user environments (allows multiple users to activate Office on shared VMs)
+- **Product:** O365ProPlusEEANoTeamsRetail = Office 365 without Teams
+- **Channel:** Current = Monthly Enterprise Channel (latest features)
+- **Excluded Apps:** Groove (OneDrive for Business), Lync (Skype), OneDrive, OneNote, OutlookForWindows
+- **Updates:** Disabled (managed via Windows Update/Intune in deployed environments)
+
+### 7. OS Optimizations
 
 ```powershell
 # Download VDOT
@@ -90,7 +165,7 @@ Set-Location "C:\Temp\VDOT\Virtual-Desktop-Optimization-Tool-main"
 .\Windows_VDOT.ps1 -Optimizations All -AcceptEULA
 ```
 
-### 6. Entra Kerberos Prerequisites
+### 8. Entra Kerberos Prerequisites
 
 ```powershell
 # Cloud Kerberos
@@ -104,7 +179,7 @@ New-Item -Path $azurePath -Force | Out-Null
 Set-ItemProperty -Path $azurePath -Name "LoadCredKeyFromProfile" -Value 1 -Type DWord
 ```
 
-### 7. Sysprep
+### 9. Sysprep
 
 ```powershell
 # Clean temp
