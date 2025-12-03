@@ -28,7 +28,7 @@
 
 ### Option A: Azure Portal
 
-1. Storage account `fslogix37402` → File shares → `fslogix-profiles`
+1. Storage account `YOUR_STORAGE_ACCOUNT` (from Guide 02, e.g., `fslogix52847`) → File shares → `fslogix-profiles`
 2. Access control (IAM) → Add role assignment
 3. Role: `Storage File Data SMB Share Contributor`
 4. Members: `AVD-Users-Standard` group → Review + assign
@@ -39,7 +39,7 @@
 
 ### Option A: Azure Portal
 
-1. Storage account `fslogix37402` → File shares → `fslogix-profiles`
+1. Storage account `YOUR_STORAGE_ACCOUNT` (from Guide 02, e.g., `fslogix52847`) → File shares → `fslogix-profiles`
 2. Access control (IAM) → Add role assignment
 3. Role: `Storage File Data SMB Share Elevated Contributor` (elevated - can manage all profiles)
 4. Members: `AVD-Users-Admins` group → Review + assign
@@ -51,7 +51,8 @@ Connect-AzAccount
 Connect-MgGraph -Scopes "Group.Read.All"
 
 $resourceGroup = "RG-Azure-VDI-01"
-$storageAccountName = "fslogix37402"
+# Replace with your storage account name from Guide 02 (e.g., fslogix52847)
+$storageAccountName = "YOUR_STORAGE_ACCOUNT"
 $fileShareName = "fslogix-profiles"
 
 $storageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $storageAccountName
