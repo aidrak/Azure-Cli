@@ -110,4 +110,4 @@ Required: (400 / 12) * 1.2 = 40 VMs
 
 ---
 
-**Next:** Configure autoscaling (Guide 09), test user login (Guide 10)
+**Next:** Configure Intune policies (Guide 07), then RBAC (Guide 08)

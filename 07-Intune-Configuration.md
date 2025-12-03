@@ -4,7 +4,9 @@
 
 **Prerequisites:**
 - Session hosts Entra-joined and Intune-enrolled
-- FSLogix storage: `fslogix112125`
+- FSLogix storage: `fslogix37402` (or your storage account name)
+- Entra ID groups created (Guide 03)
+- Device dynamic groups created and populated with session hosts
 
 **Configuring:**
 1. FSLogix profile containers
@@ -29,13 +31,13 @@
 | Setting | Value |
 |---------|-------|
 | Enabled | Enabled, Value: `1` |
-| VHD Locations | Enabled, Value: `\\fslogix112125.file.core.windows.net\fslogix-profiles` |
+| VHD Locations | Enabled, Value: `\\fslogix37402.file.core.windows.net\fslogix-profiles` |
 | Size in MBs | Enabled, Value: `20000` |
 | Is Dynamic (VHD) | Enabled, Value: `1` |
 | Profile Type | Enabled, Select: `Normal Profile` |
 | VHDX Sector Size | Enabled, Value: `4096` |
 
-7. **Assignments:** Assign to session host **device group**
+7. **Assignments:** Assign to device group: `AVD-Devices-Pooled-FSLogix` (created in Guide 03)
 8. **Review + create**
 
 ---
@@ -52,7 +54,7 @@
 6. Configure:
    - Toggle: **Enabled**
    - Dropdown: **Use only TCP**
-7. Assign to session host device group
+7. Assign to device group: `AVD-Devices-Pooled-Network` (created in Guide 03)
 8. **Review + create**
 
 ---
@@ -68,7 +70,7 @@
 5. Check: **Turn Off UDP On Client**
 6. Configure:
    - Toggle: **Enabled**
-7. Assign to user device groups (corporate laptops/workstations)
+7. Assign to device group: `AVD-Devices-Clients-Corporate` (created in Guide 03 - for corporate workstations/laptops)
 8. **Review + create**
 
 ---
@@ -87,10 +89,10 @@ Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Se
 # Should return: SelectTransport : 1 (TCP only)
 
 # Test FSLogix connectivity
-Test-NetConnection -ComputerName fslogix112125.file.core.windows.net -Port 445
+Test-NetConnection -ComputerName fslogix37402.file.core.windows.net -Port 445
 
 # Test Kerberos
-klist get cifs/fslogix112125.file.core.windows.net
+klist get cifs/fslogix37402.file.core.windows.net
 ```
 
 ### After User Login
@@ -100,7 +102,7 @@ klist get cifs/fslogix112125.file.core.windows.net
 frxcmd.exe list-vhds
 
 # Check for user's VHD file
-Get-ChildItem "\\fslogix112125.file.core.windows.net\fslogix-profiles" -Filter "*$env:USERNAME*.vhdx"
+Get-ChildItem "\\fslogix37402.file.core.windows.net\fslogix-profiles" -Filter "*$env:USERNAME*.vhdx"
 ```
 
 ### In Active Session
@@ -129,7 +131,7 @@ Get-ChildItem "\\fslogix112125.file.core.windows.net\fslogix-profiles" -Filter "
 $path = "HKLM:\SOFTWARE\FSLogix\Profiles"
 New-Item -Path $path -Force | Out-Null
 Set-ItemProperty -Path $path -Name "Enabled" -Value 1 -Type DWord
-Set-ItemProperty -Path $path -Name "VHDLocations" -Value "\\fslogix112125.file.core.windows.net\fslogix-profiles" -Type MultiString
+Set-ItemProperty -Path $path -Name "VHDLocations" -Value "\\fslogix37402.file.core.windows.net\fslogix-profiles" -Type MultiString
 Set-ItemProperty -Path $path -Name "SizeInMBs" -Value 20000 -Type DWord
 Set-ItemProperty -Path $path -Name "IsDynamic" -Value 1 -Type DWord
 
@@ -143,4 +145,4 @@ Write-Host "✓ Manual config complete. Restart required."
 
 ---
 
-**Next:** Configure SSO (Guide 08) or test user login (Guide 10)
+**Next:** Assign RBAC roles (Guide 08), then configure SSO (Guide 09)

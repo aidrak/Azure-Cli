@@ -228,4 +228,4 @@ az network vnet peering list --resource-group RG-Azure-VDI-01 --vnet-name vnet-a
 
 ---
 
-**Next:** Create FSLogix storage with private endpoint (Guide 02)
+**Next:** Create Entra ID groups (Guide 03), then FSLogix storage (Guide 02)
