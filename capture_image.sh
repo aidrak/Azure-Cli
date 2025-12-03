@@ -1,7 +1,7 @@
 #!/bin/bash
 
 RESOURCE_GROUP="RG-Azure-VDI-01"
-VM_NAME="avd-gold-pool"
+VM_NAME="avd-gold-pool-v2"
 GALLERY_NAME="AVD_Image_Gallery"
 IMAGE_DEF_NAME="Win11-AVD-Pooled"
 VERSION="1.0.0"
