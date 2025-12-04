@@ -1,0 +1,89 @@
+# ==============================================================================
+# Operation: System Preparation
+# ==============================================================================
+operation:
+  id: "golden-image-system-prep"
+  name: "System Preparation"
+  description: "Disable BitLocker and create temporary directory"
+
+  # Duration expectations
+  duration:
+    expected: 60   # 1 minute
+    timeout: 120   # 2 minutes (fail-fast if exceeds)
+    type: "FAST"   # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires: []  # First operation, no prerequisites
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "directory_exists"
+        path: "C:\\Temp"
+        description: "Temp directory created"
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "az-vm-run-command"
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@modules/05-golden-image/operations/01-system-prep.ps1" \
+        --output json > artifacts/outputs/golden-image-system-prep.json
+
+  # PowerShell script (can be inline or external file)
+  powershell:
+    file: "01-system-prep.ps1"
+    content: |
+      # ==============================================================================
+      # System Preparation for Golden Image
+      # ==============================================================================
+
+      Write-Host "[START] System preparation: $(Get-Date -Format 'HH:mm:ss')"
+
+      try {
+          # Step 1: Disable BitLocker
+          Write-Host "[PROGRESS] Step 1/2: Disabling BitLocker..."
+
+          try {
+              Disable-BitLocker -MountPoint "C:" -ErrorAction SilentlyContinue | Out-Null
+              Write-Host "[PROGRESS] BitLocker disabled"
+          }
+          catch {
+              Write-Host "[PROGRESS] BitLocker already disabled or not present"
+          }
+
+          # Step 2: Create temporary directory
+          Write-Host "[PROGRESS] Step 2/2: Creating temporary directory..."
+
+          $tempPath = "C:\Temp"
+          if (!(Test-Path $tempPath)) {
+              New-Item -Path $tempPath -ItemType Directory -Force | Out-Null
+              Write-Host "[PROGRESS] Temporary directory created: $tempPath"
+          }
+          else {
+              Write-Host "[PROGRESS] Temporary directory already exists"
+          }
+
+          # Validation
+          Write-Host "[VALIDATE] Checking temp directory..."
+          if (-not (Test-Path "C:\Temp")) {
+              Write-Host "[ERROR] Temp directory not found"
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] System preparation complete"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

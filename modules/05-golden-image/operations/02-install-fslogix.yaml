@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "golden-image-create-vm"
+    - operation: "golden-image-system-prep"
       status: "completed"
 
   # Validation checks (run after operation completes)
@@ -41,7 +41,7 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/03-install-fslogix.ps1" \
+        --scripts "@modules/05-golden-image/operations/02-install-fslogix.ps1" \
         --output json > artifacts/outputs/golden-image-install-fslogix.json
 
   # PowerShell script (can be inline or external file)
