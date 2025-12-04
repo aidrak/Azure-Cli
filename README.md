@@ -1,51 +1,97 @@
-# Azure Virtual Desktop (AVD) Deployment Guide
+# Azure Virtual Desktop (AVD) Deployment Template
 
 ## Overview
 
-This repository contains a collection of scripts and step-by-step guides to deploy a complete Azure Virtual Desktop (AVD) environment. The process covers everything from initial network and storage setup to session host deployment, Intune configuration, and final testing.
+This repository contains a complete, AI-friendly task-centric template for deploying a production-ready Azure Virtual Desktop (AVD) environment. The template supports both full automation and individual task execution across 12 deployment steps.
+
+**Key Features:**
+- **Task-Centric Architecture**: Modular, reusable tasks that can be run individually or chained
+- **AI-Optimized**: Designed to prevent script proliferation and guide AI assistants effectively
+- **Configuration-Driven**: Single source of truth for all deployment values
+- **Multiple Execution Modes**: Interactive, automated, resume-from-failure, or single-step
+- **Complete Automation**: From networking and storage through session hosts, Intune, and testing
+- **Comprehensive Documentation**: For both AI assistants and human operators
+
+## Quick Start
+
+### Automated Full Deployment
+```bash
+# Run entire 12-step pipeline in automated mode
+./orchestrate.sh --automated
+```
+
+### Interactive Deployment (Prompt per step)
+```bash
+# Run with prompts before each step
+./orchestrate.sh
+```
+
+### Resume from Failure
+```bash
+# Continue from where the last failure occurred
+./orchestrate.sh --resume
+```
+
+### Run Single Step
+```bash
+# Run only step 05 (golden image)
+./orchestrate.sh --step 05-golden-image
+
+# Or run individual task
+cd 05-golden-image
+./tasks/01-create-vm.sh
+```
 
 ## Prerequisites
 
 Before you begin, ensure you have the following:
 
-- An active Azure Subscription.
-- A user account with 'Owner' or 'Contributor' and 'User Access Administrator' roles on the subscription.
-- Azure CLI installed and configured.
-- PowerShell with the Az module installed.
-- You are logged into your Azure account via `az login`.
+- An active Azure Subscription
+- A user account with 'Owner' or 'Contributor' and 'User Access Administrator' roles on the subscription
+- Azure CLI installed and configured (version 2.30+)
+- PowerShell Core or Windows PowerShell 5.1+
+- You are logged into your Azure account via `az login`
+- Sufficient quota in your Azure subscription for VMs, storage, and networking resources
 
 ## Configuration
 
-### Quick Start
+### Setup Configuration
 
-1. **Copy the example configuration file:**
+1. **Configure centralized settings:**
    ```bash
-   # For Bash scripts (01-Networking-Setup.sh)
+   # Copy and edit the global configuration
    cp config/avd-config.example.sh config/avd-config.sh
-
-   # For PowerShell scripts (02-12)
-   cp config/avd-config.example.ps1 config/avd-config.ps1
+   vi config/avd-config.sh
    ```
 
-2. **Edit configuration with your values:**
+   Update these required values:
+   - `SUBSCRIPTION_ID` - Your Azure subscription ID
+   - `TENANT_ID` - Your Entra ID tenant ID
+   - `RESOURCE_GROUP_NAME` - Resource group name (e.g., RG-Azure-VDI-01)
+   - `LOCATION` - Azure region (e.g., centralus)
+
+2. **Configure individual steps (optional overrides):**
    ```bash
-   # Edit with your favorite editor
-   nano config/avd-config.sh
-   # or
-   code config/avd-config.ps1
+   # Each step can have its own config.env for step-specific settings
+   vi 05-golden-image/config.env
    ```
 
-3. **Required configuration values to update:**
-   - `AVD_SUBSCRIPTION_ID` / `SubscriptionId` - Your Azure subscription ID
-   - `AVD_TENANT_ID` / `TenantId` - Your Entra ID tenant ID
-   - `AVD_RESOURCE_GROUP` / `ResourceGroup` - Resource group name (default: RG-Azure-VDI-01)
-   - `AVD_LOCATION` / `Location` - Azure region (default: centralus)
+   Step-specific configurations override centralized settings for that step only.
 
-4. **Validate your configuration:**
-   ```powershell
-   # PowerShell validation
-   .\common\validate-config.ps1 -ConfigFile ".\config\avd-config.ps1"
+3. **Validate configuration:**
+   ```bash
+   # The orchestrator will validate prerequisites automatically
+   ./orchestrate.sh --help
    ```
+
+### Configuration Hierarchy
+
+Configuration values are loaded in this order (first match wins):
+
+1. Environment variables (highest priority)
+2. Step-specific `config.env` (e.g., `05-golden-image/config.env`)
+3. Centralized `config/avd-config.sh` (global defaults)
+4. Script-level defaults (lowest priority)
 
 ### Configuration File Structure
 
@@ -91,25 +137,88 @@ Config file loads first, CLI parameters override values:
 - **Validate before deployment** - Run `validate-config.ps1` to catch errors early
 - **Environment-specific configs** - Create separate configs: `avd-config-dev.sh`, `avd-config-prod.sh`
 
+## Directory Structure
+
+```
+azure-cli/
+├── orchestrate.sh                    # Master orchestration script
+├── config/
+│   └── avd-config.sh                # Centralized configuration (create from example)
+├── common/
+│   ├── functions/                   # Reusable function libraries
+│   ├── templates/                   # Task and config templates
+│   └── docs/                        # Reference documentation
+│
+├── 01-networking/
+│   ├── config.env                   # Networking configuration
+│   ├── tasks/                       # Individual task scripts
+│   ├── commands/                    # Azure CLI command references
+│   └── README.md                    # Step documentation
+│
+├── 02-storage/
+├── 03-entra-group/
+├── 04-host-pool-workspace/
+├── 05-golden-image/
+├── 06-session-host-deployment/
+├── 07-intune/
+├── 08-rbac/
+├── 09-sso/
+├── 10-autoscaling/
+├── 11-testing/
+└── 12-cleanup-migration/
+```
+
+Each step (01-12) follows the same structure:
+- **tasks/** - Modular, individually executable task scripts
+- **commands/** - Pre-built Azure CLI command references
+- **config.env** - Step-specific configuration settings
+- **README.md** - Quick start and documentation
+
 ## Deployment Approach
 
-This repository supports **two deployment methods**:
+This repository supports **three deployment patterns**:
 
-### 1. Automated Deployment (Recommended)
+### 1. Full Automated Pipeline (Recommended)
 
-Each step includes PowerShell or Bash automation scripts that:
-- Follow infrastructure-as-code best practices
-- Include error handling and idempotency checks
-- Provide detailed console output with progress indicators
-- Verify operations completed successfully
+```bash
+./orchestrate.sh --automated
+```
 
-**When to use:** Production deployments, repeatable processes, consistent results across environments.
+The orchestrator runs all 12 steps sequentially with:
+- Automatic prerequisite validation
+- Error detection and stop-on-failure
+- State tracking for resume capability
+- Detailed logging to artifacts/
 
-### 2. Manual Deployment
+**When to use:** Production deployments, repeatable processes, full automation.
 
-Each step also includes detailed manual instructions for Azure Portal, Azure CLI, and PowerShell.
+### 2. Interactive Deployment (Prompt per step)
 
-**When to use:** Learning the platform, troubleshooting, customizing individual resources.
+```bash
+./orchestrate.sh
+```
+
+Execute with confirmation prompts before each step:
+- Review configuration before each step
+- Option to skip steps
+- Resume capability on errors
+
+**When to use:** Learning the system, testing individual steps, manual oversight.
+
+### 3. Individual Task Execution
+
+```bash
+cd 05-golden-image
+./tasks/01-create-vm.sh
+./tasks/02-validate-vm.sh
+```
+
+Run specific tasks as needed:
+- Completely independent execution
+- Full control over order and parameters
+- Use for troubleshooting or custom workflows
+
+**When to use:** Debugging, custom deployments, integration with other tools.
 
 ## Script Conventions
 
@@ -200,6 +309,17 @@ Follow the steps below in order. Each step corresponds to a directory containing
     *   **Automation:** `12-VM-Cleanup.ps1` (PowerShell)
     *   [View Details](./12-cleanup-migration/12-VM-Cleanup-Migration.md)
 
+## Function Libraries
+
+The `common/functions/` directory contains reusable libraries for all task scripts:
+
+- **logging-functions.sh** - Unified logging with color-coded output, file management, and operation tracking
+- **config-functions.sh** - Configuration loading, validation, and environment variable handling
+- **azure-functions.sh** - Azure CLI wrappers with retry logic and error handling
+- **string-functions.sh** - String manipulation, JSON handling, security utilities
+
+All task scripts automatically source these libraries. Reference: [Function Libraries Guide](./common/functions/FUNCTIONS-GUIDE.md)
+
 ## Shared Utilities
 
 The `common/` directory contains reusable scripts and utilities for debugging, validation, and recovery:
@@ -262,3 +382,19 @@ pwsh 11-Testing-Validation.ps1
 
 ### Option 3: Manual Deployment
 Start with Step 1 and proceed sequentially. Navigate into each directory and follow the instructions within the markdown file. Each directory contains an `XX-*.md` file with detailed manual instructions.
+
+## For AI Assistants (Gemini, Claude Code, etc.)
+
+This template is specifically designed for AI assistant usage. If you're an AI assistant helping with AVD deployment:
+
+1. **Start here:** Read [AI-INTERACTION-GUIDE.md](./AI-INTERACTION-GUIDE.md) for comprehensive guidance on using this template
+2. **Key Principles:**
+   - Use existing task templates; don't create new scripts
+   - All configuration goes in `config.env` files, never hardcoded
+   - Source and use function libraries instead of rewriting functionality
+   - Follow established task patterns from `common/templates/task-template.sh`
+3. **Function Libraries:** Before writing new code, check `common/functions/` for reusable functionality
+4. **Command References:** Pre-built Azure CLI commands available in `commands/` subdirectories
+5. **State Tracking:** The orchestrator maintains state in `artifacts/` for debugging and recovery
+
+See [AI-INTERACTION-GUIDE.md](./AI-INTERACTION-GUIDE.md) for detailed best practices, common task examples, and troubleshooting.
