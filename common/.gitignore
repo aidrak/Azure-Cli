@@ -1,0 +1,17 @@
+# Generated during execution
+artifacts/
+logs/
+*.log
+*.json
+state/
+cache/
+
+# Local overrides
+local/
+.local/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
