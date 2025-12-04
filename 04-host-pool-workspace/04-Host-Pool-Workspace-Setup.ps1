@@ -37,26 +37,42 @@
 # - This script is idempotent - safe to run multiple times
 # - Expected runtime: 2-3 minutes
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$Location,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$WorkspaceName = "AVD-Workspace-Prod",
+    [string]$Location = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Location } else { "centralus" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$HostPoolName = "Pool-Pooled-Prod",
+    [string]$WorkspaceName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Workspace.WorkspaceName } else { "AVD-Workspace-Prod" }),
 
     [Parameter(Mandatory=$false)]
-    [int]$MaxSessionLimit = 12,
+    [string]$HostPoolName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.HostPoolName } else { "Pool-Pooled-Prod" }),
+
+    [Parameter(Mandatory=$false)]
+    [int]$MaxSessionLimit = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.MaxSessionLimit } else { 12 }),
 
     [Parameter(Mandatory=$false)]
     [ValidateSet("BreadthFirst", "DepthFirst")]
-    [string]$LoadBalancerType = "BreadthFirst",
+    [string]$LoadBalancerType = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.LoadBalancerType } else { "BreadthFirst" }),
 
     [Parameter(Mandatory=$false)]
     [switch]$EnableValidationEnvironment

@@ -19,19 +19,35 @@
 # .\09-SSO-Configuration.ps1 -ResourceGroupName "YourAVDRG" -HostPoolName "YourAVDHostPool" `
 #   -AvdUsersGroupName "AVD-Users" -AvdDevicesPooledSSOGroupName "AVD-Devices-Pooled-SSO"
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
-    [Parameter(Mandatory=$true)]
-    [string]$HostPoolName,
+    [Parameter(Mandatory=$false)]
+    [string]$HostPoolName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.HostPoolName } else { "Pool-Pooled-Prod" }),
 
-    [Parameter(Mandatory=$true)]
-    [string]$AvdUsersGroupName,
+    [Parameter(Mandatory=$false)]
+    [string]$AvdUsersGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.StandardUsersGroupName } else { "AVD-Users-Standard" }),
 
-    [Parameter(Mandatory=$true)]
-    [string]$AvdDevicesPooledSSOGroupName,
+    [Parameter(Mandatory=$false)]
+    [string]$AvdDevicesPooledSSOGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.DeviceDynamicGroupName } else { "AVD-Devices-Pooled-SSO" }),
 
     [Parameter(Mandatory=$false)]
     [switch]$SkipVerification

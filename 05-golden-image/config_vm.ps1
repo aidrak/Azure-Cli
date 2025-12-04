@@ -22,7 +22,7 @@ try {
     Disable-BitLocker -MountPoint "C:" -ErrorAction SilentlyContinue
 }
 catch {
-    Write-Error "Failed during pre-configuration. See log for details."
+    Write-Error "CRITICAL: Script failed during Pre-configuration. Exception: $($_.Exception.ToString())"
     exit 1
 }
 
@@ -39,7 +39,7 @@ try {
     Write-Host "FSLogix installed successfully."
 }
 catch {
-    Write-Error "Failed to install FSLogix. See log for details."
+    Write-Error "CRITICAL: Script failed during FSLogix installation. Exception: $($_.Exception.ToString())"
     exit 1
 }
 
@@ -56,11 +56,11 @@ try {
 
     Write-Host "Installing applications via Chocolatey..."
     choco install adobereader -y --no-progress
-    choco install googlechrome -y --no-progress
+    choco install googlechrome -y --no-progress --ignore-checksums
     Write-Host "Base applications installed."
 }
 catch {
-    Write-Error "Failed to install Chocolatey or applications. See log for details."
+    Write-Error "CRITICAL: Script failed during Chocolatey/application installation. Exception: $($_.Exception.ToString())"
     exit 1
 }
 
@@ -100,7 +100,7 @@ try {
     Write-Host "Microsoft 365 Apps installed successfully."
 }
 catch {
-    Write-Error "Failed to install Microsoft 365 Apps. See log for details."
+    Write-Error "CRITICAL: Script failed during Microsoft 365 Apps installation. Exception: $($_.Exception.ToString())"
     exit 1
 }
 
@@ -116,7 +116,7 @@ try {
     Write-Host "VDOT optimizations applied."
 }
 catch {
-    Write-Error "Failed during Virtual Desktop Optimization. See log for details."
+    Write-Error "CRITICAL: Script failed during Virtual Desktop Optimization. Exception: $($_.Exception.ToString())"
     exit 1
 }
 
@@ -141,7 +141,7 @@ try {
     Write-Host "Registry settings applied successfully."
 }
 catch {
-    Write-Error "Failed to apply registry settings. See log for details."
+    Write-Error "CRITICAL: Script failed during registry settings application. Exception: $($_.Exception.ToString())"
     exit 1
 }
 

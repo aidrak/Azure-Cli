@@ -19,19 +19,35 @@
 # - ScalingPlanName: Scaling plan name (default: ScalingPlan-Pooled-Prod)
 # - TimeZone: Timezone for schedules (default: Central Standard Time)
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$HostPoolName,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$ScalingPlanName = "ScalingPlan-Pooled-Prod",
+    [string]$HostPoolName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.HostPoolName } else { "Pool-Pooled-Prod" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$TimeZone = "Central Standard Time"
+    [string]$ScalingPlanName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Autoscaling.ScalingPlanName } else { "ScalingPlan-Pooled-Prod" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$TimeZone = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Autoscaling.TimeZone } else { "Central Standard Time" })
 )
 
 $ErrorActionPreference = "Stop"

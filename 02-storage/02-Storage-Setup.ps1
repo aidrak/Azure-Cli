@@ -28,26 +28,43 @@
 # - Storage account name must be globally unique (auto-generated if not provided)
 # - Premium Files SKU is required for Entra authentication
 # - Expected runtime: 3-5 minutes
+# - Configuration file (config/avd-config.ps1) is loaded automatically if present
+
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
 
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$Location,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$StorageAccountName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$VNetName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$PrivateEndpointSubnetName,
+    [string]$Location = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Location } else { "centralus" }),
 
     [Parameter(Mandatory=$false)]
-    [int]$FileShareQuotaGB = 1024
+    [string]$StorageAccountName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.AccountName } else { "" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$VNetName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Network.VNetName } else { "vnet-avd-prod" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$PrivateEndpointSubnetName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Network.Subnets.PrivateEndpoints.Name } else { "subnet-private-endpoints" }),
+
+    [Parameter(Mandatory=$false)]
+    [int]$FileShareQuotaGB = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.FileShareQuotaGB } else { 1024 })
 )
 
 $ErrorActionPreference = "Stop"

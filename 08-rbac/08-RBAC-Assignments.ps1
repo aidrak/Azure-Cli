@@ -20,25 +20,41 @@
 #   -StorageAccountName "fslogix37402" -FileShareName "fslogix-profiles" `
 #   -ApplicationGroupName "AG-Desktop-Pooled"
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$StorageAccountName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$FileShareName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$ApplicationGroupName,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$StandardUsersGroupName = "AVD-Users-Standard",
+    [string]$StorageAccountName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.StorageAccountName } else { "" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$AdminUsersGroupName = "AVD-Users-Admins",
+    [string]$FileShareName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.FileShareName } else { "fslogix-profiles" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$ApplicationGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ApplicationGroup.ApplicationGroupName } else { "AG-Desktop-Pooled" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$StandardUsersGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.StandardUsersGroupName } else { "AVD-Users-Standard" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$AdminUsersGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.AdminUsersGroupName } else { "AVD-Users-Admins" }),
 
     [Parameter(Mandatory=$false)]
     [switch]$IncludePowerManagement

@@ -14,6 +14,83 @@ Before you begin, ensure you have the following:
 - PowerShell with the Az module installed.
 - You are logged into your Azure account via `az login`.
 
+## Configuration
+
+### Quick Start
+
+1. **Copy the example configuration file:**
+   ```bash
+   # For Bash scripts (01-Networking-Setup.sh)
+   cp config/avd-config.example.sh config/avd-config.sh
+
+   # For PowerShell scripts (02-12)
+   cp config/avd-config.example.ps1 config/avd-config.ps1
+   ```
+
+2. **Edit configuration with your values:**
+   ```bash
+   # Edit with your favorite editor
+   nano config/avd-config.sh
+   # or
+   code config/avd-config.ps1
+   ```
+
+3. **Required configuration values to update:**
+   - `AVD_SUBSCRIPTION_ID` / `SubscriptionId` - Your Azure subscription ID
+   - `AVD_TENANT_ID` / `TenantId` - Your Entra ID tenant ID
+   - `AVD_RESOURCE_GROUP` / `ResourceGroup` - Resource group name (default: RG-Azure-VDI-01)
+   - `AVD_LOCATION` / `Location` - Azure region (default: centralus)
+
+4. **Validate your configuration:**
+   ```powershell
+   # PowerShell validation
+   .\common\validate-config.ps1 -ConfigFile ".\config\avd-config.ps1"
+   ```
+
+### Configuration File Structure
+
+The configuration files organize settings by deployment step:
+
+- **Global Settings** - Subscription, tenant, location, resource group, environment (prod/dev/test)
+- **Networking** (Step 01) - VNet name, subnets, IP ranges, NSG names
+- **Storage** (Step 02) - Storage account, file share name and quota
+- **Entra Groups** (Step 03) - User and device group names
+- **Host Pool** (Step 04) - Workspace, host pool, app group names
+- **Golden Image** (Step 05) - Image gallery, VM size
+- **Session Hosts** (Step 06) - VM prefix, size, count
+- **Autoscaling** (Step 10) - Scaling plan name, timezone, schedules
+
+### Using Configuration Files
+
+**Option 1: Automatic loading (recommended)**
+Scripts check for `./config/avd-config.sh` (Bash) or `../config/avd-config.ps1` (PowerShell) by default:
+```bash
+./01-Networking-Setup.sh
+```
+
+**Option 2: Custom config file location**
+```bash
+CONFIG_FILE="/path/to/my-config.sh" ./01-Networking-Setup.sh
+# OR PowerShell
+$env:AVD_CONFIG_FILE = "C:\path\to\my-config.ps1"
+.\02-Storage-Setup.ps1
+```
+
+**Option 3: Override with parameters**
+Config file loads first, CLI parameters override values:
+```bash
+./01-Networking-Setup.sh --location "eastus"
+# OR PowerShell
+.\02-Storage-Setup.ps1 -Location "eastus"
+```
+
+### Configuration Best Practices
+
+- **Never commit config files** - `avd-config.sh` and `avd-config.ps1` are in `.gitignore`
+- **Use example files** - Copy and customize from `avd-config.example.sh` and `avd-config.example.ps1`
+- **Validate before deployment** - Run `validate-config.ps1` to catch errors early
+- **Environment-specific configs** - Create separate configs: `avd-config-dev.sh`, `avd-config-prod.sh`
+
 ## Deployment Approach
 
 This repository supports **two deployment methods**:

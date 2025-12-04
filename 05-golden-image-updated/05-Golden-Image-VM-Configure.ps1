@@ -76,7 +76,7 @@ function Disable-BitLocker {
         Write-LogSuccess "BitLocker disabled"
     }
     catch {
-        Write-LogWarning "BitLocker already disabled or error: $_"
+        Write-LogWarning "BitLocker already disabled or error: $_ "
     }
 }
 
@@ -149,7 +149,7 @@ function Install-FslogixAgent {
         Write-LogSuccess "FSLogix agent installed"
     }
     catch {
-        Write-LogError "Failed to install FSLogix: $_"
+        Write-LogError "Failed to install FSLogix: $_ "
         throw
     }
 }
@@ -181,7 +181,7 @@ function Install-GoogleChrome {
         Write-LogSuccess "Google Chrome installed"
     }
     catch {
-        Write-LogError "Failed to install Chrome: $_"
+        Write-LogError "Failed to install Chrome: $_ "
         throw
     }
 }
@@ -209,7 +209,7 @@ function Install-AdobeReader {
         Write-LogSuccess "Adobe Reader installed"
     }
     catch {
-        Write-LogError "Failed to install Adobe Reader: $_"
+        Write-LogError "Failed to install Adobe Reader: $_ "
         throw
     }
 }
@@ -274,7 +274,7 @@ function Install-Office365 {
         Write-LogSuccess "Office 365 installed"
     }
     catch {
-        Write-LogError "Failed to install Office: $_"
+        Write-LogError "Failed to install Office: $_ "
         throw
     }
 }
@@ -310,7 +310,7 @@ function Set-DefaultApplications {
         Write-LogSuccess "Default applications configured"
     }
     catch {
-        Write-LogWarning "Could not set all defaults: $_"
+        Write-LogWarning "Could not set all defaults: $_ "
     }
 }
 
@@ -351,7 +351,7 @@ function Create-PublicDesktopShortcuts {
         Write-LogSuccess "Desktop shortcuts created"
     }
     catch {
-        Write-LogError "Failed to create shortcuts: $_"
+        Write-LogError "Failed to create shortcuts: $_ "
         throw
     }
 }
@@ -389,7 +389,7 @@ function Run-VdotOptimizations {
         Write-LogSuccess "VDOT optimizations completed"
     }
     catch {
-        Write-LogError "Failed to run VDOT: $_"
+        Write-LogError "Failed to run VDOT: $_ "
         throw
     }
 }
@@ -479,7 +479,7 @@ function Configure-DefaultUserProfile {
         Write-LogSuccess "Default User profile configured"
     }
     catch {
-        Write-LogError "Failed to configure Default User profile: $_"
+        Write-LogError "Failed to configure Default User profile: $_ "
         throw
     }
 }
@@ -501,38 +501,47 @@ function Clean-TemporaryFiles {
 # ============================================================================
 # Main Execution
 # ============================================================================
+# function main {
+#     Write-Host ""
+#     Write-LogSection "AVD Golden Image VM Configuration"
 
-function main {
-    Write-Host ""
-    Write-LogSection "AVD Golden Image VM Configuration"
+#     Disable-BitLocker
+#     Create-TempDirectory
+#     Install-WindowsUpdates
+#     Install-FslogixAgent
+#     Install-GoogleChrome
+#     Install-AdobeReader
+#     Install-Office365
+#     Set-DefaultApplications
+#     Create-PublicDesktopShortcuts
+#     Run-VdotOptimizations
+#     Configure-RegistryForAvd
+#     Configure-DefaultUserProfile
+#     Clean-TemporaryFiles
 
-    Disable-BitLocker
-    Create-TempDirectory
-    Install-WindowsUpdates
-    Install-FslogixAgent
-    Install-GoogleChrome
-    Install-AdobeReader
-    Install-Office365
-    Set-DefaultApplications
-    Create-PublicDesktopShortcuts
-    Run-VdotOptimizations
-    Configure-RegistryForAvd
-    Configure-DefaultUserProfile
-    Clean-TemporaryFiles
+#     Write-Host ""
+#     Write-LogSuccess "VM Configuration Complete!"
+#     Write-Host ""
+#     Write-LogWarning "IMPORTANT NEXT STEPS:"
+#     Write-Host "  1. Review the installed applications and settings"
+#     Write-Host "  2. Perform any final manual tweaks needed"
+#     Write-Host "  3. Test application functionality"
+#     Write-Host "  4. Close all applications"
+#     Write-Host "  5. Run the sysprep script: .\05-Golden-Image-Sysprep.ps1 (if available)"
+#     Write-Host "  6. Or follow manual steps to run sysprep and capture the image"
+#     Write-Host ""
+#     Write-LogInfo "DO NOT USE THIS VM FOR PRODUCTION - it is a template only"
+#     Write-Host ""
+# }
 
-    Write-Host ""
-    Write-LogSuccess "VM Configuration Complete!"
-    Write-Host ""
-    Write-LogWarning "IMPORTANT NEXT STEPS:"
-    Write-Host "  1. Review the installed applications and settings"
-    Write-Host "  2. Perform any final manual tweaks needed"
-    Write-Host "  3. Test application functionality"
-    Write-Host "  4. Close all applications"
-    Write-Host "  5. Run the sysprep script: .\05-Golden-Image-Sysprep.ps1 (if available)"
-    Write-Host "  6. Or follow manual steps to run sysprep and capture the image"
-    Write-Host ""
-    Write-LogInfo "DO NOT USE THIS VM FOR PRODUCTION - it is a template only"
-    Write-Host ""
-}
+# main
 
-main
+# Manually calling the remaining functions to complete configuration
+Disable-BitLocker
+Create-TempDirectory
+Set-DefaultApplications
+Create-PublicDesktopShortcuts
+Run-VdotOptimizations
+Configure-RegistryForAvd
+Configure-DefaultUserProfile
+Clean-TemporaryFiles

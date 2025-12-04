@@ -49,13 +49,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration with defaults
-RESOURCE_GROUP="${RESOURCE_GROUP:-RG-Azure-VDI-01}"
-VM_NAME="${VM_NAME:-avd-gold-pool}"
-GALLERY_NAME="${GALLERY_NAME:-AVD_Image_Gallery}"
-IMAGE_DEF_NAME="${IMAGE_DEF_NAME:-Win11-AVD-Pooled}"
-IMAGE_VERSION="${IMAGE_VERSION:-1.0.0}"
-LOCATION="${LOCATION:-centralus}"
+# Source configuration variables
+source "$(dirname "$0")/config.env"
+
+# Generate a dynamic image version
+IMAGE_VERSION=$(date +'%Y.%m%d.%H%M')
+
 
 # Image configuration
 IMAGE_PUBLISHER="YourCompany"
@@ -198,20 +197,20 @@ deallocate_and_generalize_vm() {
 create_compute_gallery() {
     log_section "Creating/Verifying Compute Gallery"
 
-    log_info "Checking if gallery '$GALLERY_NAME' exists"
-    if az sig show -g "$RESOURCE_GROUP" --gallery-name "$GALLERY_NAME" &> /dev/null; then
-        log_warning "Compute Gallery '$GALLERY_NAME' already exists"
+    log_info "Checking if gallery '$IMAGE_GALLERY_NAME' exists"
+    if az sig show -g "$RESOURCE_GROUP" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
+        log_warning "Compute Gallery '$IMAGE_GALLERY_NAME' already exists"
         return 0
     fi
 
-    log_info "Creating Compute Gallery '$GALLERY_NAME'"
+    log_info "Creating Compute Gallery '$IMAGE_GALLERY_NAME'"
     az sig create \
         -g "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
         --location "$LOCATION" \
         --output none
 
-    log_success "Compute Gallery '$GALLERY_NAME' created"
+    log_success "Compute Gallery '$IMAGE_GALLERY_NAME' created"
 }
 
 # ============================================================================
@@ -221,20 +220,20 @@ create_compute_gallery() {
 create_image_definition() {
     log_section "Creating/Verifying Image Definition"
 
-    log_info "Checking if image definition '$IMAGE_DEF_NAME' exists"
+    log_info "Checking if image definition '$IMAGE_DEFINITION_NAME' exists"
     if az sig image-definition show \
         -g "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
-        --gallery-image-definition "$IMAGE_DEF_NAME" &> /dev/null; then
-        log_warning "Image definition '$IMAGE_DEF_NAME' already exists"
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" &> /dev/null; then
+        log_warning "Image definition '$IMAGE_DEFINITION_NAME' already exists"
         return 0
     fi
 
-    log_info "Creating image definition '$IMAGE_DEF_NAME'"
+    log_info "Creating image definition '$IMAGE_DEFINITION_NAME'"
     az sig image-definition create \
         -g "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
-        --gallery-image-definition "$IMAGE_DEF_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --publisher "$IMAGE_PUBLISHER" \
         --offer "$IMAGE_OFFER" \
         --sku "$IMAGE_SKU" \
@@ -245,7 +244,7 @@ create_image_definition() {
         --location "$LOCATION" \
         --output none
 
-    log_success "Image definition '$IMAGE_DEF_NAME' created"
+    log_success "Image definition '$IMAGE_DEFINITION_NAME' created"
 }
 
 # ============================================================================
@@ -272,8 +271,8 @@ create_image_version() {
     log_info "Creating image version '$IMAGE_VERSION' from VM '$VM_NAME'"
     az sig image-version create \
         -g "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
-        --gallery-image-definition "$IMAGE_DEF_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --gallery-image-version "$IMAGE_VERSION" \
         --managed-image "$VM_ID" \
         --location "$LOCATION" \
@@ -309,8 +308,8 @@ verify_image_capture() {
     log_info "Verifying image version exists"
     if az sig image-version show \
         -g "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
-        --gallery-image-definition "$IMAGE_DEF_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --gallery-image-version "$IMAGE_VERSION" &> /dev/null; then
         log_success "Image version verified"
     else
@@ -343,8 +342,8 @@ main() {
     log_info "Summary:"
     echo "  Resource Group: $RESOURCE_GROUP"
     echo "  VM Name: $VM_NAME"
-    echo "  Gallery: $GALLERY_NAME"
-    echo "  Image Definition: $IMAGE_DEF_NAME"
+    echo "  Gallery: $IMAGE_GALLERY_NAME"
+    echo "  Image Definition: $IMAGE_DEFINITION_NAME"
     echo "  Image Version: $IMAGE_VERSION"
     echo "  Image ID: /subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Compute/galleries/${GALLERY_NAME}/images/${IMAGE_DEF_NAME}/versions/${IMAGE_VERSION}"
     echo ""
