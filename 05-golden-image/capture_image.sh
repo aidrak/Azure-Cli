@@ -1,90 +1,334 @@
 #!/bin/bash
 
-# This script captures the temporary VM as a new version in the Azure Compute Gallery.
-# It assumes the VM has already been deallocated and generalized.
+# Automates Golden Image Capture for Azure Virtual Desktop (AVD)
+#
+# Purpose: Runs sysprep on the golden image VM, then captures it as a reusable
+# image version in Azure Compute Gallery.
+#
+# Prerequisites:
+# - Golden image VM must be fully configured and running
+# - VM must be in resource group and accessible
+# - Azure Compute Gallery will be created if it doesn't exist
+# - Required permissions: Compute Gallery Contributor, VM Contributor
+# - VM must be accessible via Azure CLI (not via RDP)
+#
+# Permissions Required:
+# - Microsoft.Compute/galleries/write
+# - Microsoft.Compute/galleries/images/write
+# - Microsoft.Compute/galleries/images/versions/write
+# - Microsoft.Compute/virtualMachines/write
+#
+# Usage:
+# chmod +x ./capture_image.sh
+# ./capture_image.sh
+#
+# Notes:
+# - This script is idempotent for gallery/definition creation
+# - Image versions are always created fresh with new timestamps
+# - Expected runtime: 10-30 minutes
+# - The VM will be deallocated and generalized
+# - After capture, the temporary VM can be deleted
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e
 
-echo "--- Preparing to Capture Image ---"
+# Color codes for output (ASCII only)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# --- Variable Validation ---
-if [ -z "$RESOURCE_GROUP_NAME" ] || [ -z "$LOCATION" ] || [ -z "$VM_NAME" ] || [ -z "$IMAGE_GALLERY_NAME" ] || [ -z "$GOLDEN_IMAGE_NAME" ]; then
-    echo "ERROR: One or more required environment variables are not set."
-    echo "Please ensure config.env is sourced and all variables are defined."
+# Source configuration variables
+source "$(dirname "$0")/config.env"
+
+# Generate a dynamic image version
+IMAGE_VERSION=$(date +'%Y.%m%d.%H%M')
+
+# Image configuration - these were in the original script
+IMAGE_PUBLISHER="YourCompany"
+IMAGE_OFFER="AVD"
+IMAGE_SKU="Win11-Pooled-FSLogix"
+
+# ============================================================================
+# Helper Functions (ASCII only)
+# ============================================================================
+
+log_section() {
+    echo -e "\n${BLUE}=== $1 ===${NC}"
+}
+
+log_success() {
+    echo -e "${GREEN}[v] $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}[x] $1${NC}"
     exit 1
-fi
+}
 
-# Generate a version number based on the current date and time
-IMAGE_VERSION=$(date -u +"%Y.%m%d.%H%M")
+log_warning() {
+    echo -e "${YELLOW}[!] $1${NC}"
+}
 
-echo "Configuration:"
-echo "  Resource Group: $RESOURCE_GROUP_NAME"
-echo "  Location: $LOCATION"
-echo "  VM Name: $VM_NAME"
-echo "  Gallery Name: $IMAGE_GALLERY_NAME"
-echo "  Image Definition: $GOLDEN_IMAGE_NAME"
-echo "  New Image Version: $IMAGE_VERSION"
-echo "----------------------------------------"
+log_info() {
+    echo -e "${YELLOW}[i] $1${NC}"
+}
 
-# --- Create Azure Compute Gallery if it doesn't exist ---
-echo "Checking for existing Azure Compute Gallery '$IMAGE_GALLERY_NAME'..."
-if ! az sig show --resource-group "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
-  echo "Gallery not found. Creating it..."
-  az sig create \
-    --resource-group "$RESOURCE_GROUP_NAME" \
-    --gallery-name "$IMAGE_GALLERY_NAME" \
-    --location "$LOCATION"
-  echo "Gallery '$IMAGE_GALLERY_NAME' created."
-else
-  echo "Gallery already exists."
-fi
+# ============================================================================
+# Validation Functions
+# ============================================================================
 
-# --- Create Image Definition if it doesn't exist ---
-echo "Checking for existing Image Definition '$GOLDEN_IMAGE_NAME'..."
-if ! az sig image-definition show --resource-group "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" --gallery-image-definition "$GOLDEN_IMAGE_NAME" &> /dev/null; then
-  echo "Image Definition not found. Creating it..."
-  az sig image-definition create \
-    --resource-group "$RESOURCE_GROUP_NAME" \
-    --gallery-name "$IMAGE_GALLERY_NAME" \
-    --gallery-image-definition "$GOLDEN_IMAGE_NAME" \
-    --publisher "Custom" \
-    --offer "AVD" \
-    --sku "Win11-FSLogix" \
-    --os-type "Windows" \
-    --os-state "Generalized" \
-    --hyper-v-generation "V2" \
-    --features SecurityType=TrustedLaunch \
-    --location "$LOCATION"
-  echo "Image Definition created."
-else
-  echo "Image Definition already exists."
-fi
+validate_prerequisites() {
+    log_section "Validating Capture Prerequisites"
 
-# --- Get VM ID ---
-echo "Fetching VM ID for '$VM_NAME'..."
-VM_ID=$(az vm get-instance-view -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" --query id -o tsv)
-if [ -z "$VM_ID" ]; then
-    echo "ERROR: Failed to get VM ID for '$VM_NAME'."
-    exit 1
-fi
-echo "VM ID: $VM_ID"
+    if ! command -v az &> /dev/null; then
+        log_error "Azure CLI is not installed"
+    fi
+    log_success "Azure CLI installed"
 
-# --- Create Image Version ---
-echo "Creating new image version '$IMAGE_VERSION'..."
-az sig image-version create \
-  --resource-group "$RESOURCE_GROUP_NAME" \
-  --gallery-name "$IMAGE_GALLERY_NAME" \
-  --gallery-image-definition "$GOLDEN_IMAGE_NAME" \
-  --gallery-image-version "$IMAGE_VERSION" \
-  --virtual-machine "$VM_ID" \
-  --location "$LOCATION"
+    if ! az account show &> /dev/null; then
+        log_error "Not logged into Azure. Run 'az login' first"
+    fi
+    log_success "Logged into Azure"
 
-echo "Successfully started image version creation."
-echo "The process will continue in the background. You can monitor progress in the Azure portal."
+    if ! az group exists -n "$RESOURCE_GROUP_NAME" | grep -q true; then
+        log_error "Resource group '$RESOURCE_GROUP_NAME' does not exist"
+    fi
+    log_success "Resource group '$RESOURCE_GROUP_NAME' exists"
 
-# --- Cleanup ---
-echo "Removing the temporary VM resource '$VM_NAME'..."
-az vm delete --resource-group "$RESOURCE_GROUP_NAME" --name "$VM_NAME" --yes
-echo "Temporary VM deleted."
+    if ! az vm show -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" &> /dev/null; then
+        log_error "VM '$VM_NAME' not found"
+    fi
+    log_success "VM '$VM_NAME' exists"
+}
 
-echo "--- Image Capture Process Complete ---"
+# ============================================================================
+# Sysprep Preparation
+# ============================================================================
+
+run_sysprep_on_vm() {
+    log_section "Running Sysprep on VM"
+
+    log_warning "This will generalize the VM for image capture"
+    log_info "Confirming VM name: $VM_NAME"
+
+    log_info "Starting sysprep process on VM (this may take 5-10 minutes)"
+    az vm run-command invoke \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --name "$VM_NAME" \
+        --command-id RunPowerShellScript \
+        --scripts "C:\\Windows\\System32\\Sysprep\\sysprep.exe /oobe /generalize /shutdown /quiet" \
+        --output none || log_warning "Sysprep command may have failed to issue. Continuing with caution."
+
+    log_info "Waiting for VM to shutdown after sysprep (30 seconds)..."
+    sleep 30
+
+    log_info "Waiting for VM to be deallocated..."
+    for i in {1..120}; do # 10 minutes timeout
+        VM_STATE=$(az vm get-instance-view -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" --query "instanceView.statuses[?starts_with(code, 'PowerState')].displayStatus" -o tsv)
+
+        if [[ "$VM_STATE" == "VM deallocated" ]] || [[ "$VM_STATE" == "VM stopped" ]]; then
+            log_success "VM is deallocated"
+            break
+        fi
+
+        if [[ $i -eq 120 ]]; then
+            log_warning "VM did not deallocate automatically after sysprep."
+        fi
+
+        sleep 5
+    done
+
+    log_success "Sysprep process initiated (VM should be deallocated)"
+}
+
+# ============================================================================
+# VM Deallocation and Generalization
+# ============================================================================
+
+deallocate_and_generalize_vm() {
+    log_section "Deallocating and Generalizing VM"
+
+    log_info "Deallocating VM '$VM_NAME'"
+    az vm deallocate \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --name "$VM_NAME" \
+        --output none
+
+    log_success "VM deallocated"
+
+    log_info "Generalizing VM '$VM_NAME'"
+    az vm generalize \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --name "$VM_NAME" \
+        --output none
+
+    log_success "VM generalized"
+}
+
+# ============================================================================
+# Compute Gallery Creation
+# ============================================================================
+
+create_compute_gallery() {
+    log_section "Creating/Verifying Compute Gallery"
+
+    log_info "Checking if gallery '$IMAGE_GALLERY_NAME' exists"
+    if az sig show -g "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
+        log_warning "Compute Gallery '$IMAGE_GALLERY_NAME' already exists"
+        return 0
+    fi
+
+    log_info "Creating Compute Gallery '$IMAGE_GALLERY_NAME'"
+    az sig create \
+        -g "$RESOURCE_GROUP_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --location "$LOCATION" \
+        --output none
+
+    log_success "Compute Gallery '$IMAGE_GALLERY_NAME' created"
+}
+
+# ============================================================================
+# Image Definition Creation
+# ============================================================================
+
+create_image_definition() {
+    log_section "Creating/Verifying Image Definition"
+
+    log_info "Checking if image definition '$IMAGE_DEFINITION_NAME' exists"
+    if az sig image-definition show \
+        -g "$RESOURCE_GROUP_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" &> /dev/null; then
+        log_warning "Image definition '$IMAGE_DEFINITION_NAME' already exists"
+        return 0
+    fi
+
+    log_info "Creating image definition '$IMAGE_DEFINITION_NAME'"
+    az sig image-definition create \
+        -g "$RESOURCE_GROUP_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
+        --publisher "$IMAGE_PUBLISHER" \
+        --offer "$IMAGE_OFFER" \
+        --sku "$IMAGE_SKU" \
+        --os-type Windows \
+        --os-state Generalized \
+        --hyper-v-generation V2 \
+        --features SecurityType=TrustedLaunch \
+        --location "$LOCATION" \
+        --output none
+
+    log_success "Image definition '$IMAGE_DEFINITION_NAME' created"
+}
+
+# ============================================================================
+# Image Version Creation
+# ============================================================================
+
+create_image_version() {
+    log_section "Creating Image Version"
+
+    # Get VM ID
+    VM_ID=$(az vm show \
+        -g "$RESOURCE_GROUP_NAME" \
+        -n "$VM_NAME" \
+        --query id \
+        -o tsv)
+
+    if [[ -z "$VM_ID" ]]; then
+        log_error "Could not retrieve VM ID"
+    fi
+
+    log_info "Retrieved VM ID: $VM_ID"
+
+    log_info "Creating image version '$IMAGE_VERSION' from VM '$VM_NAME'"
+    az sig image-version create \
+        -g "$RESOURCE_GROUP_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
+        --gallery-image-version "$IMAGE_VERSION" \
+        --managed-image "$VM_ID" \
+        --location "$LOCATION" \
+        --output none
+
+    log_success "Image version '$IMAGE_VERSION' created"
+}
+
+# ============================================================================
+# Cleanup
+# ============================================================================
+
+cleanup_resources() {
+    log_section "Cleanup Options"
+
+    log_warning "The temporary VM can now be deleted to save costs"
+    log_info "To delete the VM and associated resources, run:"
+    echo ""
+    echo "  az vm delete -g $RESOURCE_GROUP_NAME -n $VM_NAME --yes"
+    echo "  az network nic delete -g $RESOURCE_GROUP_NAME -n \"${VM_NAME}VMNic\""
+    echo "  az network public-ip delete -g $RESOURCE_GROUP_NAME -n \"${VM_NAME}PublicIP\""
+    echo "  DISK_ID=$(az disk list -g $RESOURCE_GROUP_NAME --query \"[?starts_with(name, '$VM_NAME')].id\" -o tsv)"
+    echo "  if [ -n \"$DISK_ID\" ]; then"
+    echo "      az disk delete --ids \"$DISK_ID\" --yes"
+    echo "  fi"
+    echo ""
+}
+
+# ============================================================================
+# Verification
+# ============================================================================
+
+verify_image_capture() {
+    log_section "Verifying Image Capture"
+
+    log_info "Verifying image version exists"
+    if az sig image-version show \
+        -g "$RESOURCE_GROUP_NAME" \
+        --gallery-name "$IMAGE_GALLERY_NAME" \
+        --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
+        --gallery-image-version "$IMAGE_VERSION" &> /dev/null; then
+        log_success "Image version verified"
+    else
+        log_error "Image version not found"
+    fi
+
+    log_success "Image capture verified"
+}
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+main() {
+    log_section "AVD Golden Image Capture"
+
+    validate_prerequisites
+    run_sysprep_on_vm
+    deallocate_and_generalize_vm
+    create_compute_gallery
+    create_image_definition
+    create_image_version
+    verify_image_capture
+    cleanup_resources
+
+    echo ""
+    log_success "Image Capture Complete!"
+    echo ""
+    log_info "Summary:"
+    echo "  Resource Group: $RESOURCE_GROUP_NAME"
+    echo "  VM Name: $VM_NAME"
+    echo "  Gallery: $IMAGE_GALLERY_NAME"
+    echo "  Image Definition: $IMAGE_DEFINITION_NAME"
+    echo "  Image Version: $IMAGE_VERSION"
+    echo "  Image ID: /subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.Compute/galleries/${IMAGE_GALLERY_NAME}/images/${IMAGE_DEFINITION_NAME}/versions/${IMAGE_VERSION}"
+    echo ""
+    log_info "Next steps:"
+    echo "  1. Delete the temporary VM to save costs (see cleanup options above)"
+    echo "  2. Deploy session hosts using this image (Step 06)"
+    echo "  3. Assign users to the host pool (Step 08)"
+    echo ""
+}
+
+main "$@"

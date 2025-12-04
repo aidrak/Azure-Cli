@@ -15,6 +15,61 @@
 
 ---
 
+## Automated Deployment (Recommended)
+
+### Using Automation Scripts
+
+This guide provides three automation scripts for creating a golden image:
+
+1. **`05-Golden-Image-VM-Create.sh`** - Creates the temporary VM (run from Azure CLI)
+2. **`05-Golden-Image-VM-Configure.ps1`** - Configures the VM with all apps (run inside VM via RDP)
+3. **`05-Golden-Image-Capture.sh`** - Captures and generalizes the image (run from Azure CLI)
+
+#### Quick Start
+
+```bash
+# Step 1: From your workstation, create the VM
+chmod +x ./05-Golden-Image-VM-Create.sh
+./05-Golden-Image-VM-Create.sh
+# This will output the public IP address
+
+# Step 2: RDP into the VM and run configuration
+# Connect to the VM using the public IP
+# Open PowerShell as Administrator and run:
+.\05-Golden-Image-VM-Configure.ps1
+# This will take 20-40 minutes and may require reboots
+
+# Step 3: After configuration completes, run capture from your workstation
+chmod +x ./05-Golden-Image-Capture.sh
+./05-Golden-Image-Capture.sh
+# This will sysprep, generalize, and capture the image
+```
+
+**What the scripts do:**
+
+| Script | Runs Where | Purpose | Time |
+|--------|------------|---------|------|
+| VM-Create.sh | Workstation (Azure CLI) | Creates temporary VM with public IP | 5-10 min |
+| VM-Configure.ps1 | Inside VM (RDP) | Installs all applications and optimizations | 20-40 min |
+| Capture.sh | Workstation (Azure CLI) | Syspreps, generalizes, and captures image | 10-30 min |
+
+**Verification Checklist:**
+
+After running the scripts, verify:
+- [ ] VM was created successfully
+- [ ] Configuration script completed without errors
+- [ ] All applications installed (Chrome, Adobe Reader, Office)
+- [ ] Image captured in Compute Gallery
+- [ ] Image version available for session host deployment
+
+---
+
+## Manual Deployment (Alternative)
+
+If you prefer manual deployment or need to troubleshoot, follow the step-by-step instructions below:
+
+---
+
 ## Step 0: Determine Image Type
 
 **❓ Which type of golden image are you creating?**

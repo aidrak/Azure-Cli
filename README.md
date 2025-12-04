@@ -225,6 +225,13 @@ The `common/` directory contains reusable scripts and utilities for debugging, v
   - Helps with VM recovery after failed generalization
   - **Usage:** Use when VM recovery is needed after golden image capture failure
 
+**Reference Documentation:**
+- **`azure-cli-reference.md`** - Comprehensive Azure CLI command reference for AVD deployments
+  - Complete list of relevant `az` commands organized by resource type
+  - Includes networking, storage, VMs, AVD, RBAC, monitoring, and more
+  - Provides command syntax, parameters, and usage examples
+  - **Usage:** AI assistants and developers can reference this when building or modifying infrastructure
+
 ## Quick Start
 
 ### Option 1: Quick Validation Only

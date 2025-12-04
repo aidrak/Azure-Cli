@@ -106,14 +106,14 @@ validate_prerequisites() {
     log_success "Logged into Azure"
 
     # Check if resource group exists
-    if ! az group exists -n "$RESOURCE_GROUP" | grep -q true; then
-        log_error "Resource group '$RESOURCE_GROUP' does not exist"
+    if ! az group exists -n "$RESOURCE_GROUP_NAME" | grep -q true; then
+        log_error "Resource group '$RESOURCE_GROUP_NAME' does not exist"
         exit 1
     fi
-    log_success "Resource group '$RESOURCE_GROUP' exists"
+    log_success "Resource group '$RESOURCE_GROUP_NAME' exists"
 
     # Check if VM exists
-    if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" &> /dev/null; then
+    if ! az vm show -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" &> /dev/null; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
@@ -131,17 +131,13 @@ run_sysprep_on_vm() {
     log_info "Confirming VM name: $VM_NAME"
 
     log_info "Starting sysprep process on VM (this may take 5-10 minutes)"
-    try {
-        # Run sysprep via az vm run-command
-        az vm run-command invoke \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$VM_NAME" \
-            --command-id RunPowerShellScript \
-            --scripts "C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown /quiet" \
-            --output none
-    } catch {
-        log_warning "Sysprep command may still be running in background"
-    }
+    az vm run-command invoke \
+        --resource-group "$RESOURCE_GROUP_NAME_NAME" \
+        --name "$VM_NAME" \
+        --command-id RunPowerShellScript \
+        --scripts "C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown /quiet" \
+        --output none || log_warning "Sysprep command may have failed to issue. Continuing with caution."
+
 
     log_info "Waiting for VM to shutdown after sysprep (30 seconds)..."
     sleep 30
@@ -149,7 +145,7 @@ run_sysprep_on_vm() {
     # Wait for VM to stop
     log_info "Waiting for VM to be deallocated..."
     for i in {1..120}; do
-        VM_STATE=$(az vm get-instance-view -g "$RESOURCE_GROUP" -n "$VM_NAME" --query "instanceView.statuses[?starts_with(code, 'PowerState')].displayStatus" -o tsv)
+        VM_STATE=$(az vm get-instance-view -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" --query "instanceView.statuses[?starts_with(code, 'PowerState')].displayStatus" -o tsv)
 
         if [[ "$VM_STATE" == "VM deallocated" ]] || [[ "$VM_STATE" == "VM stopped" ]]; then
             log_success "VM is deallocated"
@@ -175,7 +171,7 @@ deallocate_and_generalize_vm() {
 
     log_info "Deallocating VM '$VM_NAME'"
     az vm deallocate \
-        --resource-group "$RESOURCE_GROUP" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
         --name "$VM_NAME" \
         --output none
 
@@ -183,7 +179,7 @@ deallocate_and_generalize_vm() {
 
     log_info "Generalizing VM '$VM_NAME'"
     az vm generalize \
-        --resource-group "$RESOURCE_GROUP" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
         --name "$VM_NAME" \
         --output none
 
@@ -198,14 +194,14 @@ create_compute_gallery() {
     log_section "Creating/Verifying Compute Gallery"
 
     log_info "Checking if gallery '$IMAGE_GALLERY_NAME' exists"
-    if az sig show -g "$RESOURCE_GROUP" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
+    if az sig show -g "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
         log_warning "Compute Gallery '$IMAGE_GALLERY_NAME' already exists"
         return 0
     fi
 
     log_info "Creating Compute Gallery '$IMAGE_GALLERY_NAME'"
     az sig create \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         --gallery-name "$IMAGE_GALLERY_NAME" \
         --location "$LOCATION" \
         --output none
@@ -222,7 +218,7 @@ create_image_definition() {
 
     log_info "Checking if image definition '$IMAGE_DEFINITION_NAME' exists"
     if az sig image-definition show \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         --gallery-name "$IMAGE_GALLERY_NAME" \
         --gallery-image-definition "$IMAGE_DEFINITION_NAME" &> /dev/null; then
         log_warning "Image definition '$IMAGE_DEFINITION_NAME' already exists"
@@ -231,7 +227,7 @@ create_image_definition() {
 
     log_info "Creating image definition '$IMAGE_DEFINITION_NAME'"
     az sig image-definition create \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         --gallery-name "$IMAGE_GALLERY_NAME" \
         --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --publisher "$IMAGE_PUBLISHER" \
@@ -256,7 +252,7 @@ create_image_version() {
 
     # Get VM ID
     VM_ID=$(az vm show \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         -n "$VM_NAME" \
         --query id \
         -o tsv)
@@ -270,7 +266,7 @@ create_image_version() {
 
     log_info "Creating image version '$IMAGE_VERSION' from VM '$VM_NAME'"
     az sig image-version create \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         --gallery-name "$IMAGE_GALLERY_NAME" \
         --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --gallery-image-version "$IMAGE_VERSION" \
@@ -291,10 +287,10 @@ cleanup_resources() {
     log_warning "The temporary VM can now be deleted to save costs"
     log_info "To delete the VM and associated resources, run:"
     echo ""
-    echo "  az vm delete -g $RESOURCE_GROUP -n $VM_NAME --yes"
-    echo "  az network nic delete -g $RESOURCE_GROUP -n \"${VM_NAME}VMNic\""
-    echo "  az network public-ip delete -g $RESOURCE_GROUP -n \"${VM_NAME}PublicIP\""
-    echo "  az disk delete -g $RESOURCE_GROUP -n \"${VM_NAME}_OsDisk_*\" --yes"
+    echo "  az vm delete -g $RESOURCE_GROUP_NAME -n $VM_NAME --yes"
+    echo "  az network nic delete -g $RESOURCE_GROUP_NAME -n \"${VM_NAME}VMNic\""
+    echo "  az network public-ip delete -g $RESOURCE_GROUP_NAME -n \"${VM_NAME}PublicIP\""
+    echo "  az disk delete -g $RESOURCE_GROUP_NAME -n \"${VM_NAME}_OsDisk_*\" --yes"
     echo ""
 }
 
@@ -307,7 +303,7 @@ verify_image_capture() {
 
     log_info "Verifying image version exists"
     if az sig image-version show \
-        -g "$RESOURCE_GROUP" \
+        -g "$RESOURCE_GROUP_NAME" \
         --gallery-name "$IMAGE_GALLERY_NAME" \
         --gallery-image-definition "$IMAGE_DEFINITION_NAME" \
         --gallery-image-version "$IMAGE_VERSION" &> /dev/null; then
@@ -340,12 +336,12 @@ main() {
     log_success "Image Capture Complete!"
     echo ""
     log_info "Summary:"
-    echo "  Resource Group: $RESOURCE_GROUP"
+    echo "  Resource Group: $RESOURCE_GROUP_NAME"
     echo "  VM Name: $VM_NAME"
     echo "  Gallery: $IMAGE_GALLERY_NAME"
     echo "  Image Definition: $IMAGE_DEFINITION_NAME"
     echo "  Image Version: $IMAGE_VERSION"
-    echo "  Image ID: /subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Compute/galleries/${GALLERY_NAME}/images/${IMAGE_DEF_NAME}/versions/${IMAGE_VERSION}"
+    echo "  Image ID: /subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.Compute/galleries/${IMAGE_GALLERY_NAME}/images/${IMAGE_DEFINITION_NAME}/versions/${IMAGE_VERSION}"
     echo ""
     log_info "Next steps:"
     echo "  1. Delete the temporary VM to save costs (see cleanup options above)"
