@@ -1,0 +1,120 @@
+# ==============================================================================
+# Module: Golden Image Creation
+# ==============================================================================
+module:
+  id: "05-golden-image"
+  name: "Golden Image Creation"
+  description: "Create and configure a golden image VM for Azure Virtual Desktop"
+
+  # Module-level configuration
+  config:
+    temp_vm_prefix: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    location: "{{AZURE_LOCATION}}"
+
+  # Operations in this module (executed in order)
+  operations:
+    - id: "01-system-prep"
+      name: "System Preparation"
+      description: "Disable BitLocker, create temp directory"
+      duration: 60  # 1 minute
+      type: "FAST"
+
+    - id: "02-install-fslogix"
+      name: "Install FSLogix"
+      description: "Download and install FSLogix agent"
+      duration: 180  # 3 minutes
+      type: "FAST"
+
+    - id: "03-install-chrome"
+      name: "Install Google Chrome"
+      description: "Download and install Chrome Enterprise"
+      duration: 180  # 3 minutes
+      type: "FAST"
+
+    - id: "04-install-adobe"
+      name: "Install Adobe Reader"
+      description: "Download and install Adobe Acrobat Reader DC"
+      duration: 300  # 5 minutes
+      type: "FAST"
+
+    - id: "05-install-office"
+      name: "Install Office 365"
+      description: "Download and install Office 365 with ODT"
+      duration: 1800  # 30 minutes
+      type: "WAIT"
+
+    - id: "06-configure-defaults"
+      name: "Configure Default Applications"
+      description: "Set default apps and create desktop shortcuts"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "07-run-vdot"
+      name: "Run VDOT Optimizations"
+      description: "Download and run Virtual Desktop Optimization Tool"
+      duration: 300  # 5 minutes
+      type: "FAST"
+
+    - id: "08-registry-avd"
+      name: "Configure AVD Registry"
+      description: "Configure RDP, FSLogix exclusions, OOBE settings"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "09-configure-default-profile"
+      name: "Configure Default User Profile"
+      description: "Configure default user profile for FSLogix"
+      duration: 60  # 1 minute
+      type: "FAST"
+
+    - id: "10-cleanup-temp"
+      name: "Cleanup Temporary Files"
+      description: "Remove temporary files and caches"
+      duration: 60  # 1 minute
+      type: "FAST"
+
+    - id: "11-validate-all"
+      name: "Validate All Installations"
+      description: "Validate all software installations and configurations"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+  # Module-level validation (run after all operations complete)
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files\\FSLogix\\Apps\\frx.exe"
+        description: "FSLogix installed"
+
+      - type: "file_exists"
+        path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        description: "Chrome installed"
+
+      - type: "file_exists"
+        path: "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe"
+        description: "Adobe Reader installed"
+        alternative_path: "C:\\Program Files (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe"
+
+      - type: "file_exists"
+        path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
+        description: "Office 365 installed"
+
+      - type: "registry_key"
+        path: "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server"
+        description: "RDP registry configured"
+
+  # Expected total duration
+  total_duration:
+    expected: 2580  # 43 minutes (sum of all operations)
+    timeout: 5160   # 86 minutes (2x expected)
+
+  # Module state file
+  state_file: "modules/05-golden-image/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"
+    scripts: "artifacts/scripts/"

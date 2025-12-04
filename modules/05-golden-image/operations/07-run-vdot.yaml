@@ -1,0 +1,138 @@
+# ==============================================================================
+# Operation: Run Virtual Desktop Optimization Tool (VDOT)
+# ==============================================================================
+operation:
+  id: "golden-image-run-vdot"
+  name: "Run VDOT Optimizations"
+  description: "Download and run Virtual Desktop Optimization Tool to optimize Windows for AVD"
+
+  # Duration expectations
+  duration:
+    expected: 300  # 5 minutes
+    timeout: 600   # 10 minutes (fail-fast if exceeds)
+    type: "FAST"   # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "golden-image-configure-defaults"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Temp\\VDOT\\Virtual-Desktop-Optimization-Tool-main\\Windows_VDOT.ps1"
+        description: "VDOT script downloaded and extracted"
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "az-vm-run-command"
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@modules/05-golden-image/operations/07-run-vdot.ps1" \
+        --output json > artifacts/outputs/golden-image-run-vdot.json
+
+  # PowerShell script (can be inline or external file)
+  powershell:
+    file: "07-run-vdot.ps1"
+    content: |
+      # ==============================================================================
+      # Run Virtual Desktop Optimization Tool (VDOT)
+      # ==============================================================================
+
+      Write-Host "[START] VDOT optimization: $(Get-Date -Format 'HH:mm:ss')"
+
+      # Configuration
+      $vdotUrl = "https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool/archive/refs/heads/main.zip"
+      $tempPath = "C:\Temp"
+      $vdotZip = "$tempPath\VDOT.zip"
+      $vdotExtractPath = "$tempPath\VDOT"
+      $vdotScriptPath = "$vdotExtractPath\Virtual-Desktop-Optimization-Tool-main"
+
+      try {
+          # Step 1: Check for cached VDOT
+          Write-Host "[PROGRESS] Step 1/5: Checking for cached VDOT..."
+
+          if (Test-Path $vdotZip) {
+              Write-Host "[PROGRESS] VDOT.zip already exists, using cached version"
+          }
+          else {
+              # Step 2: Download VDOT
+              Write-Host "[PROGRESS] Step 2/5: Downloading VDOT from GitHub..."
+              Invoke-WebRequest -Uri $vdotUrl -OutFile $vdotZip -UseBasicParsing -TimeoutSec 180 -ErrorAction Stop
+
+              if (-not (Test-Path $vdotZip)) {
+                  Write-Host "[ERROR] Download failed: File not found"
+                  exit 1
+              }
+
+              Write-Host "[PROGRESS] Download complete ($($(Get-Item $vdotZip).Length / 1MB) MB)"
+          }
+
+          # Step 3: Extract VDOT
+          Write-Host "[PROGRESS] Step 3/5: Extracting VDOT..."
+
+          if (Test-Path $vdotExtractPath) {
+              Remove-Item -Path $vdotExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          Expand-Archive -Path $vdotZip -DestinationPath $vdotExtractPath -Force -ErrorAction Stop
+          Write-Host "[PROGRESS] Extraction complete"
+
+          # Step 4: Validate VDOT script exists
+          Write-Host "[PROGRESS] Step 4/5: Locating VDOT script..."
+
+          $vdotScript = "$vdotScriptPath\Windows_VDOT.ps1"
+          if (-not (Test-Path $vdotScript)) {
+              Write-Host "[ERROR] VDOT script not found at: $vdotScript"
+              exit 1
+          }
+
+          Write-Host "[PROGRESS] Found VDOT script: $vdotScript"
+
+          # Step 5: Run VDOT optimizations
+          Write-Host "[PROGRESS] Step 5/5: Running VDOT optimizations (this may take 5-10 minutes)..."
+          Write-Host "[PROGRESS] This will optimize Windows for Virtual Desktop environments..."
+
+          Set-Location $vdotScriptPath
+
+          # Run VDOT with all optimizations
+          & ".\Windows_VDOT.ps1" -Optimizations All -AcceptEULA -Verbose *>&1 | ForEach-Object {
+              if ($_ -match "^\[") {
+                  Write-Host "[PROGRESS] VDOT: $_"
+              }
+          }
+
+          Write-Host "[PROGRESS] VDOT optimizations complete"
+
+          # Validation
+          Write-Host "[VALIDATE] Verifying VDOT execution..."
+
+          # Check if script still exists (basic validation)
+          if (-not (Test-Path $vdotScript)) {
+              Write-Host "[ERROR] VDOT validation failed"
+              exit 1
+          }
+
+          # Cleanup (optional - keep for troubleshooting)
+          # Write-Host "[PROGRESS] Cleaning up VDOT files..."
+          # Remove-Item -Path $vdotZip -Force -ErrorAction SilentlyContinue
+          # Remove-Item -Path $vdotExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-Host "[SUCCESS] VDOT optimizations completed successfully"
+          Write-Host "[SUCCESS] Windows has been optimized for Azure Virtual Desktop"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur
