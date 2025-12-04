@@ -9,6 +9,7 @@
 # az vm run-command invoke --command-id RunPowerShellScript --scripts @avd-registry-optimizations.ps1
 #
 # Optimizations Applied:
+# - Persistent timezone configuration
 # - RDP timezone redirection
 # - FSLogix Defender exclusions (Pooled only)
 # - Locale settings (en-US)
@@ -185,6 +186,131 @@ function Configure-DefaultUserProfile {
 }
 
 # ============================================================================
+# Timezone Configuration
+# ============================================================================
+
+function Configure-TimezoneSettings {
+    param(
+        [string]$TargetTimeZone = "Central Standard Time",
+        [bool]$EnableRedirection = $true
+    )
+
+    Write-LogSection "Configuring AVD Timezone Settings"
+
+    Write-LogInfo "Target Timezone: $TargetTimeZone"
+
+    # === SET PERSISTENT TIMEZONE ===
+    Write-LogInfo "Setting persistent system timezone..."
+    try {
+        Set-TimeZone -Id $TargetTimeZone -Verbose -ErrorAction Stop
+        Write-LogSuccess "Timezone set to: $TargetTimeZone"
+    }
+    catch {
+        Write-LogError "Failed to set timezone: $($_.Exception.Message)"
+        throw
+    }
+
+    # === DISABLE AZURE UTC REVERSION MECHANISM ===
+    Write-LogInfo "Disabling Azure UTC auto-reversion mechanism..."
+    $timeZoneInfoPath = "HKLM:\SYSTEM\CurrentControlSet\Control\TimeZoneInformation"
+    if (!(Test-Path $timeZoneInfoPath)) { New-Item -Path $timeZoneInfoPath -Force | Out-Null }
+    Set-ItemProperty -Path $timeZoneInfoPath -Name "RealTimeIsUniversal" -Value 0 -Type DWord -Force
+    Write-LogSuccess "RealTimeIsUniversal set to 0 (prevents UTC reversion)"
+
+    # === DISABLE AUTOMATIC DAYLIGHT SAVING TIME ADJUSTMENT ===
+    Write-LogInfo "Disabling automatic daylight saving time adjustment..."
+    $timeZonesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Time Zones"
+    if (!(Test-Path $timeZonesPath)) { New-Item -Path $timeZonesPath -Force | Out-Null }
+    Set-ItemProperty -Path $timeZonesPath -Name "DisableAutoDaylightTimeSet" -Value 1 -Type DWord -Force
+    Write-LogSuccess "DisableAutoDaylightTimeSet set to 1"
+
+    # === ENABLE RDP TIMEZONE REDIRECTION ===
+    if ($EnableRedirection) {
+        Write-LogInfo "Enabling RDP timezone redirection..."
+        $terminalServicesPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+        if (!(Test-Path $terminalServicesPath)) { New-Item -Path $terminalServicesPath -Force | Out-Null }
+        Set-ItemProperty -Path $terminalServicesPath -Name "fEnableTimeZoneRedirection" -Value 1 -Type DWord -Force
+        Write-LogSuccess "RDP timezone redirection enabled"
+    }
+
+    # === ENABLE TZAUTOUPDATE SERVICE ===
+    Write-LogInfo "Ensuring timezone auto-update service is enabled..."
+    try {
+        $tzAutoUpdateService = Get-Service -Name "tzautoupdate" -ErrorAction SilentlyContinue
+        if ($tzAutoUpdateService) {
+            Set-Service -Name "tzautoupdate" -StartupType "Automatic" -ErrorAction SilentlyContinue
+            if ($tzAutoUpdateService.Status -ne "Running") {
+                Start-Service -Name "tzautoupdate" -ErrorAction SilentlyContinue
+            }
+            Write-LogSuccess "tzautoupdate service enabled and started"
+        }
+        else {
+            Write-LogWarning "tzautoupdate service not found"
+        }
+    }
+    catch {
+        Write-LogWarning "Could not configure tzautoupdate service: $($_.Exception.Message)"
+    }
+
+    # === ENABLE LOCATION SERVICES ===
+    Write-LogInfo "Enabling Location services..."
+    $locationPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location"
+    if (!(Test-Path $locationPath)) { New-Item -Path $locationPath -Force | Out-Null }
+    Set-ItemProperty -Path $locationPath -Name "Value" -Value "Allow" -Type String -Force
+    Write-LogSuccess "Location services enabled"
+
+    # === ENSURE GROUP POLICY DOESN'T BLOCK LOCATION PROVIDER ===
+    Write-LogInfo "Ensuring Group Policy doesn't block Location Provider..."
+    $gpoPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors"
+    if (!(Test-Path $gpoPath)) { New-Item -Path $gpoPath -Force | Out-Null }
+    Set-ItemProperty -Path $gpoPath -Name "LocationProvider" -Value 0 -Type DWord -Force
+    Write-LogSuccess "Location Provider GPO disabled"
+
+    # === VERIFY WINDOWS TIME SERVICE ===
+    Write-LogInfo "Verifying Windows Time Service is set to NTP..."
+    $w32timePath = "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Parameters"
+    if (!(Test-Path $w32timePath)) { New-Item -Path $w32timePath -Force | Out-Null }
+    Set-ItemProperty -Path $w32timePath -Name "Type" -Value "NTP" -Type String -Force
+    Write-LogSuccess "Windows Time Service set to NTP"
+
+    # === RESTART RELATED SERVICES ===
+    Write-LogInfo "Restarting related services..."
+    try {
+        Restart-Service -Name "tzautoupdate" -Force -ErrorAction SilentlyContinue
+        Write-LogSuccess "tzautoupdate service restarted"
+    }
+    catch {
+        Write-LogWarning "Could not restart tzautoupdate: $($_.Exception.Message)"
+    }
+
+    try {
+        Restart-Service -Name "W32Time" -Force -ErrorAction SilentlyContinue
+        Write-LogSuccess "W32Time service restarted"
+    }
+    catch {
+        Write-LogWarning "Could not restart W32Time: $($_.Exception.Message)"
+    }
+
+    try {
+        Restart-Service -Name "TermService" -Force -ErrorAction SilentlyContinue
+        Write-LogSuccess "Terminal Services restarted"
+    }
+    catch {
+        Write-LogWarning "Could not restart TermService: $($_.Exception.Message)"
+    }
+
+    # === VERIFY CONFIGURATION ===
+    Write-LogInfo "Verifying timezone configuration..."
+    $currentTZ = Get-TimeZone
+    Write-LogSuccess "Current Timezone: $($currentTZ.Id) - $($currentTZ.DisplayName)"
+
+    $rdpRedirectValue = Get-ItemProperty -Path $terminalServicesPath -Name "fEnableTimeZoneRedirection" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty fEnableTimeZoneRedirection
+    Write-LogSuccess "RDP Timezone Redirect: $rdpRedirectValue"
+
+    Write-LogSuccess "Timezone configuration completed"
+}
+
+# ============================================================================
 # Main Execution
 # ============================================================================
 
@@ -195,6 +321,7 @@ Write-LogInfo "Starting at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
     Configure-RegistryForAvd
+    Configure-TimezoneSettings -TargetTimeZone $env:DEFAULT_TIMEZONE -EnableRedirection $true
     Configure-DefaultUserProfile
 
     Write-Host ""

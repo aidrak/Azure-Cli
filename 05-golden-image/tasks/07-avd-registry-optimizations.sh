@@ -5,6 +5,7 @@
 #
 # Purpose: Apply registry optimizations specific to Azure Virtual Desktop
 #          for Pooled (multi-session) environments with FSLogix.
+#          Includes persistent timezone configuration and RDP timezone redirection.
 #          This task corresponds to Step 7 of the manual golden image guide.
 #
 # Usage:
@@ -83,7 +84,7 @@ fi
 # INITIALIZE LOGGING
 # ============================================================================
 
-log_section "Task 07: Apply AVD-Specific Registry Optimizations"
+log_section "Task 07: Apply AVD-Specific Registry Optimizations and Timezone Configuration"
 log_info "Execution started at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 log_info "Log file: $LOG_FILE"
 log_info "Script location: $SCRIPT_DIR"
@@ -160,7 +161,9 @@ execute_registry_optimizations() {
     log_info "Found PowerShell script: $PS_SCRIPT"
 
     # Display what will be executed
-    log_info "Registry optimizations include:"
+    log_info "Registry optimizations and timezone configuration include:"
+    log_info "  • Persistent timezone configuration (Timezone: $DEFAULT_TIMEZONE)"
+    log_info "  • Disable Azure UTC auto-reversion mechanism"
     log_info "  • RDP timezone redirection"
     log_info "  • FSLogix Defender exclusions (Pooled only)"
     log_info "  • Locale settings (en-US)"
@@ -242,17 +245,20 @@ save_artifacts() {
     # Create details file
     local details_file="${LOG_DIR}/${SCRIPT_NAME%.*}-details.txt"
     {
-        echo "Task 07: Apply AVD-Specific Registry Optimizations"
-        echo "======================================================="
+        echo "Task 07: Apply AVD-Specific Registry Optimizations and Timezone Configuration"
+        echo "==============================================================================="
         echo ""
         echo "Execution Details:"
         echo "  Timestamp: $TIMESTAMP"
         echo "  Script: $SCRIPT_NAME"
         echo "  Resource Group: $RESOURCE_GROUP_NAME"
         echo "  VM Name: $TEMP_VM_NAME"
+        echo "  Default Timezone: $DEFAULT_TIMEZONE"
         echo ""
         echo "Optimizations Applied:"
-        echo "  ✓ RDP timezone redirection"
+        echo "  ✓ Persistent timezone configuration"
+        echo "  ✓ Azure UTC auto-reversion disabled"
+        echo "  ✓ RDP timezone redirection enabled"
         echo "  ✓ FSLogix Defender exclusions"
         echo "  ✓ Locale settings (en-US)"
         echo "  ✓ System Restore and VSS disabled"

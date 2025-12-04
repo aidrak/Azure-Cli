@@ -200,6 +200,191 @@ Disable Windows Hello setup prompts and Getting Started tips on first login for 
 
 ---
 
+## Part 5: Hide Shutdown Button from Start Menu
+
+### Purpose
+Prevents users from shutting down AVD session hosts via the Start menu. Users can still disconnect, sign out, or end sessions appropriately. This is important in pooled deployments where shutdown would affect other connected users.
+
+### Intune Admin Center
+
+#### Option 1: Settings Catalog (Recommended)
+1. **Devices** → **Configuration** → **+ Create** → **Settings catalog**
+2. Name: `AVD - Hide Shutdown Button`
+3. Description: `Prevents shutdown option in Start menu for AVD session hosts`
+4. **+ Add settings** → Search: `Start`
+5. Find and select: **Hide Shutdown**
+6. Configure:
+   - Toggle: **Enabled** or **Block**
+7. **Assignments:** Assign to device group: `AVD-Devices-Pooled-Network` (or your session host device groups)
+8. **Review + create**
+
+#### Option 2: Device Restrictions (Alternative)
+1. **Devices** → **Configuration** → **+ Create** → **Device restrictions**
+2. Name: `AVD - Hide Shutdown Button (Device Restrictions)`
+3. Platform: **Windows 10 and later**
+4. Under **Start** section:
+   - **Shut Down**: Set to **Block**
+5. **Assignments:** Assign to session host device groups
+6. **Review + create**
+
+### Verification
+
+```powershell
+# On session host, verify registry setting
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" `
+  -Name "NoClose" -ErrorAction SilentlyContinue
+
+# Expected: NoClose = 1 (if policy applied)
+# Result: Users should not see shutdown option in Start menu
+```
+
+### Expected Behavior
+- Users can still disconnect from AVD session
+- Users can still sign out
+- Users cannot directly shutdown the VM via Start menu
+- Session continues to run for other users
+
+---
+
+## Part 6: Auto-Close Applications on Logoff (AutoEndTasks)
+
+### Purpose
+⚠️ **IMPORTANT**: This setting automatically closes applications when users log off, without prompting to save work. **Use with caution and clear user communication.**
+
+**Benefits:**
+- Prevents sessions from remaining connected when users click logoff and walk away
+- Eliminates "save your work?" prompts that can prolong logoff
+- Ensures clean logoff for multi-session pooled environments
+
+**Risks:**
+- Unsaved work will be lost without warning
+- Users must understand to save work BEFORE logging off
+
+### Intune Admin Center
+
+1. **Devices** → **Configuration** → **+ Create** → **Settings catalog**
+2. Name: `AVD - Auto End Tasks on Logoff`
+3. Description: `Automatically closes applications on logoff without prompting`
+4. **+ Add settings** → Search: `AutoEndTasks` (or navigate to User Configuration section below)
+5. Path: **User Configuration > Administrative Templates > System > Logon/Logoff**
+6. Find and select: **AutoEndTasks** (alternative search terms: "Auto close," "End Tasks")
+7. Configure:
+   - Toggle: **Enabled**
+8. **Optional:** Add additional setting for timeout
+   - Search: `WaitToKillAppTimeout`
+   - Path: Same as above
+   - Value: `5000` (milliseconds = 5 seconds)
+9. **Assignments:** Assign to user groups (not device groups) - e.g., `AVD-Users-Pooled`, `AVD-Users-Pooled-Multi-Session`
+10. **Review + create**
+
+### Alternative: Group Policy (for reference)
+
+If using traditional Group Policy instead of Intune:
+
+1. Open **Group Policy Management Console**
+2. Edit GPO for AVD session hosts
+3. Navigate to: **User Configuration > Preferences > Windows Settings > Registry**
+4. Right-click → **New → Registry Item**
+5. Configure:
+   - Action: **Update**
+   - Hive: **HKEY_CURRENT_USER**
+   - Key Path: `Control Panel\Desktop`
+   - Value name: `AutoEndTasks`
+   - Value type: **REG_SZ**
+   - Value data: `1`
+6. Optional: Add second registry item for timeout
+   - Same path
+   - Value name: `WaitToKillAppTimeout`
+   - Value type: **REG_SZ**
+   - Value data: `5000`
+
+### Registry Path (for verification)
+
+```
+User Configuration:
+HKEY_CURRENT_USER\Control Panel\Desktop
+- AutoEndTasks (REG_SZ) = "1"           [Enabled = 1, Disabled = 0]
+
+Optional timeout setting:
+HKEY_CURRENT_USER\Control Panel\Desktop
+- WaitToKillAppTimeout (REG_SZ) = "5000"  [in milliseconds]
+```
+
+### Deployment Considerations
+
+1. **User Communication**: Inform users that unsaved work will be lost on logoff
+2. **Application Impact**: Consider applications with auto-save features
+   - OneDrive, Google Drive: Auto-save enabled
+   - Office: May lose unsaved docs
+   - Browsers: Session restore varies
+3. **User Training**: Train users to save work BEFORE logging off
+4. **Alternative**: Consider longer timeout values for grace period
+   - Default: 3000 ms (3 seconds)
+   - Recommended: 5000 ms (5 seconds)
+   - Maximum: 10000 ms (10 seconds)
+5. **Scope**: User-based policy (applies per user, not per device)
+6. **Timing**: Takes effect on next user logon after policy application
+
+### Verification
+
+```powershell
+# On session host (after user logs in with policy applied)
+
+# Check if policy applied
+dsregcmd /status | Select-String "Intune"
+
+# Verify registry setting (in user's session)
+Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" `
+  -Name "AutoEndTasks" -ErrorAction SilentlyContinue
+
+# Expected result: AutoEndTasks = 1
+
+# Check timeout setting (optional)
+Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" `
+  -Name "WaitToKillAppTimeout" -ErrorAction SilentlyContinue
+
+# Expected result: WaitToKillAppTimeout = 5000
+```
+
+### Expected Behavior
+
+**When enabled and working correctly:**
+1. User opens application with unsaved work (e.g., Notepad with text, Word document)
+2. User clicks "Sign Out" on AVD session
+3. Application closes immediately WITHOUT "Save your work?" prompt
+4. Session ends
+5. No pending app saves or hanging processes
+
+**Testing Steps:**
+1. Deploy policy to test user group
+2. User signs in to AVD session
+3. Open application with unsaved work (Notepad, Word, VS Code, etc.)
+4. Type some text/make changes
+5. Click Start → Sign Out
+6. Verify: Application closes immediately without save prompt
+7. Verify: Session ends cleanly
+8. Verify registry: `Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name AutoEndTasks`
+
+### Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Policy not applying | User group not assigned or incorrect | Verify assignment to correct user group, wait 15-30 min for sync |
+| AutoEndTasks not set to 1 | Policy didn't apply | Check device Intune enrollment: `dsregcmd /status` |
+| Apps still prompt to save | Policy not applied yet | Wait 15-30 minutes, restart session host, user re-login |
+| Timeout too short | Apps killed before proper shutdown | Increase WaitToKillAppTimeout to 10000 |
+| Users complain of lost work | Expected behavior of AutoEndTasks | User communication and training needed |
+
+### Rollback
+
+If issues occur:
+1. Remove policy assignment from user group
+2. Or delete the policy entirely
+3. Wait 15-30 minutes for sync
+4. Users' next logon will not have AutoEndTasks enforced
+
+---
+
 ## Verification
 
 ### On Session Host
