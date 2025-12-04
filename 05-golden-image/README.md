@@ -1,5 +1,7 @@
 # Golden Image Creation for Azure Virtual Desktop
 
+> **🤖 AI ASSISTANTS**: See `../.claude/CLAUDE.md` for project rules. Use task scripts, not standalone scripts. Use `az vm run-command` for all VM operations.
+
 This directory contains a modular, AI-friendly workflow for creating golden images for Azure Virtual Desktop deployments.
 
 ## Quick Start
