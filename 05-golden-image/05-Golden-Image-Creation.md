@@ -15,6 +15,37 @@
 
 ---
 
+## Quick Start: Task Scripts (No RDP Required)
+
+**Recommended approach** - Execute all tasks via bash scripts without needing RDP connection:
+
+```bash
+cd /mnt/cache_pool/development/azure-cli/05-golden-image
+
+# Option 1: Run all tasks sequentially (1-2 hours total)
+./build_golden_image.sh
+
+# Option 2: Run tasks individually with verification
+./tasks/01-create-vm.sh           # Create VM (5-10 min)
+./tasks/02-validate-vm.sh         # Validate VM ready (5-15 min)
+./tasks/03-configure-vm.sh        # Configure with software (30-60 min)
+./tasks/04-sysprep-vm.sh          # Sysprep and generalize (5-10 min)
+./tasks/05-capture-image.sh       # Capture to gallery (15-30 min)
+./tasks/06-cleanup.sh             # Cleanup resources (5-10 min)
+```
+
+**Why this approach is better**:
+- ✓ No RDP connection needed
+- ✓ Fully automated and scriptable
+- ✓ Better error handling and logging
+- ✓ Idempotent (safe to re-run)
+- ✓ Integrates with CI/CD pipelines
+
+**How it works**:
+All configuration happens via `az vm run-command` which executes PowerShell scripts remotely on the VM. See [AZURE-VM-REMOTE-EXECUTION.md](../AZURE-VM-REMOTE-EXECUTION.md) for technical details.
+
+---
+
 ## Automated Deployment (Recommended)
 
 ### Using Automation Scripts
@@ -111,9 +142,9 @@ az vm create \
   --resource-group $resourceGroup \
   --name $vmName \
   --image "MicrosoftWindowsDesktop:windows-11:win11-25h2-avd:latest" \
-  --size "Standard_D4s_v3" \
-  --admin-username "avd-admin" \
-  --admin-password "YourSecureP@ssw0rd123!" \
+  --size "Standard_D4s_v6" \
+  --admin-username "entra-admin" \
+  --admin-password "klsdf0j2;3s(fjls)" \
   --vnet-name $vnetName \
   --subnet $subnetName \
   --public-ip-sku Standard \
@@ -141,9 +172,9 @@ az vm create \
   --resource-group $resourceGroup \
   --name $vmName \
   --image "MicrosoftWindowsDesktop:windows-11:win11-25h2-ent:latest" \
-  --size "Standard_D4s_v3" \
-  --admin-username "avd-admin" \
-  --admin-password "YourSecureP@ssw0rd123!" \
+  --size "Standard_D4s_v6" \
+  --admin-username "emtra-admin" \
+  --admin-password "klsdf0j2;3s(fjls)" \
   --vnet-name $vnetName \
   --subnet $subnetName \
   --public-ip-sku Standard \
@@ -395,7 +426,33 @@ Write-Host "`n✓ WDOT optimizations complete" -ForegroundColor Green
 
 ### Step 7: Apply AVD-Specific Optimizations
 
-Create and run this script to add the settings that WDOT doesn't include:
+#### Automated Approach (Recommended) - Using Task 07
+
+Rather than manually running PowerShell in RDP, use the automated task script from your workstation:
+
+```bash
+cd /mnt/cache_pool/development/azure-cli/05-golden-image
+
+# Execute Task 07 via Azure CLI (no RDP needed)
+./tasks/07-avd-registry-optimizations.sh
+```
+
+**What this does**:
+- Validates VM is running and accessible
+- Executes registry optimizations via `az vm run-command`
+- Saves logs and output to `artifacts/`
+- No RDP connection required
+- Fully automated and repeatable
+
+**Time**: ~2-5 minutes
+
+This approach follows the [AI Interaction Guide](../AI-INTERACTION-GUIDE.md) task-centric architecture.
+
+---
+
+#### Manual Approach - Using RDP (Alternative)
+
+If you prefer to execute manually via RDP, create and run this script to add the settings that WDOT doesn't include:
 
 ```powershell
 # AVD_Optimizations.ps1
@@ -521,6 +578,34 @@ Write-Host "  - Black screen fix applied" -ForegroundColor Green
 ---
 
 ### Step 8: Final Cleanup & Sysprep Preparation
+
+#### Automated Approach (Recommended) - Using Task 08
+
+Rather than manually running PowerShell in RDP, use the automated task script from your workstation:
+
+```bash
+cd /mnt/cache_pool/development/azure-cli/05-golden-image
+
+# Execute Task 08 via Azure CLI (no RDP needed)
+./tasks/08-final-cleanup-sysprep.sh
+```
+
+**What this does**:
+- Removes temporary files from both user and system temp directories
+- Clears all Windows event logs
+- Empties the Recycle Bin
+- Prepares VM for sysprep
+- Saves logs and output to `artifacts/`
+
+**Time**: ~1-2 minutes
+
+**IMPORTANT**: After this step, proceed immediately to Task 04 (Sysprep VM). The VM will shut down automatically during sysprep.
+
+---
+
+#### Manual Approach - Using RDP (Alternative)
+
+If you prefer to execute manually via RDP, run the following PowerShell commands:
 
 ```powershell
 Write-Host "Preparing for sysprep..." -ForegroundColor Cyan
