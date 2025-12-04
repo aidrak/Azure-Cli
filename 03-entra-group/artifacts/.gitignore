@@ -1,0 +1,4 @@
+# Artifacts generated during execution
+*.log
+*.json
+*.txt
