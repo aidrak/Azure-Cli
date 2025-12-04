@@ -13,12 +13,12 @@
 - **Task Reference:** [README.md#task-overview](README.md#task-overview)
 
 ### For Task 07 (AVD Registry Optimizations)
-- **Quick Reference:** [TASK-07-QUICK-REFERENCE.md](TASK-07-QUICK-REFERENCE.md) - Start here for Task 07
-- **Complete Summary:** [TASK-07-COMPLETE-FIX-SUMMARY.md](TASK-07-COMPLETE-FIX-SUMMARY.md) - All issues and solutions
-- **Technical Details:** [TASK-07-FIX-DOCUMENTATION.md](TASK-07-FIX-DOCUMENTATION.md) - In-depth technical analysis
+- **Quick Reference:** [docs/TASK-07-QUICK-REFERENCE.md](docs/TASK-07-QUICK-REFERENCE.md) - Start here for Task 07
+- **Complete Summary:** [docs/TASK-07-COMPLETE-FIX-SUMMARY.md](docs/TASK-07-COMPLETE-FIX-SUMMARY.md) - All issues and solutions
+- **Technical Details:** [docs/TASK-07-FIX-DOCUMENTATION.md](docs/TASK-07-FIX-DOCUMENTATION.md) - In-depth technical analysis
 
 ### For Changes & History
-- **What Changed:** [CHANGELOG.md](CHANGELOG.md) - Version history and changes
+- **What Changed:** [docs/CHANGELOG.md](docs/CHANGELOG.md) - Version history and changes
 - **Git Log:** `git log --oneline` - Commit history
 
 ---
@@ -35,7 +35,7 @@
 ### 🚀 I Want to Run Task 07
 
 **Read:**
-1. [TASK-07-QUICK-REFERENCE.md](TASK-07-QUICK-REFERENCE.md) - How to run it
+1. [docs/TASK-07-QUICK-REFERENCE.md](docs/TASK-07-QUICK-REFERENCE.md) - How to run it
 2. [README.md#configuration](README.md#configuration) - Configuration needed
 3. [README.md#validation](README.md#validation) - Pre-flight checks
 
@@ -48,22 +48,22 @@
 ### 🔧 I Want to Debug Issues
 
 **Read:**
-1. [TASK-07-QUICK-REFERENCE.md#troubleshooting](TASK-07-QUICK-REFERENCE.md#troubleshooting) - Common issues
-2. [TASK-07-COMPLETE-FIX-SUMMARY.md#issues-found-and-fixed](TASK-07-COMPLETE-FIX-SUMMARY.md) - What was broken and how it was fixed
+1. [docs/TASK-07-QUICK-REFERENCE.md#troubleshooting](docs/TASK-07-QUICK-REFERENCE.md#troubleshooting) - Common issues
+2. [docs/TASK-07-COMPLETE-FIX-SUMMARY.md#issues-found-and-fixed](docs/TASK-07-COMPLETE-FIX-SUMMARY.md) - What was broken and how it was fixed
 3. [README.md#logs-and-troubleshooting](README.md#logs-and-troubleshooting) - Log file locations
 
 ### 📚 I Want Technical Deep Dive
 
 **Read in Order:**
-1. [TASK-07-FIX-DOCUMENTATION.md](TASK-07-FIX-DOCUMENTATION.md) - Complete technical documentation
-2. [TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made](TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made) - All registry modifications
-3. [CHANGELOG.md](CHANGELOG.md) - Version history
+1. [docs/TASK-07-FIX-DOCUMENTATION.md](docs/TASK-07-FIX-DOCUMENTATION.md) - Complete technical documentation
+2. [docs/TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made](docs/TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made) - All registry modifications
+3. [docs/CHANGELOG.md](docs/CHANGELOG.md) - Version history
 
 ### 🎯 I Want to Know What Changed
 
 **Read:**
-1. [CHANGELOG.md](CHANGELOG.md) - All changes summarized
-2. [TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary](TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary) - Exact file modifications
+1. [docs/CHANGELOG.md](docs/CHANGELOG.md) - All changes summarized
+2. [docs/TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary](docs/TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary) - Exact file modifications
 3. `git diff HEAD~1` - View actual code changes
 
 ---
@@ -92,13 +92,16 @@ powershell/
 
 ### Documentation
 ```
-Documentation/
+docs/
+  ├── docs/CHANGELOG.md                        # What changed
+  ├── docs/TASK-07-QUICK-REFERENCE.md          # Quick guide
+  ├── docs/TASK-07-FIX-DOCUMENTATION.md        # Technical details
+  └── docs/TASK-07-COMPLETE-FIX-SUMMARY.md    # Complete summary
+
+Root:
   ├── README.md                           # Main workflow guide
-  ├── CHANGELOG.md                        # ⭐ NEW - What changed
-  ├── DOCUMENTATION-INDEX.md              # ⭐ NEW - This file
-  ├── TASK-07-QUICK-REFERENCE.md          # ⭐ NEW - Quick guide
-  ├── TASK-07-FIX-DOCUMENTATION.md        # ⭐ NEW - Technical details
-  └── TASK-07-COMPLETE-FIX-SUMMARY.md    # ⭐ NEW - Complete summary
+  ├── DOCUMENTATION-INDEX.md              # This file - Navigation guide
+  └── 05-Golden-Image-Creation.md         # Legacy documentation (reference)
 ```
 
 ---
@@ -117,7 +120,7 @@ Documentation/
 
 **When to Read:** First time setting up or needing workflow overview
 
-### CHANGELOG.md
+### docs/CHANGELOG.md
 **Purpose:** Track all changes and version history
 **Contains:**
 - What was fixed (Issues #1, #2, #3)
@@ -129,7 +132,7 @@ Documentation/
 
 **When to Read:** Understanding what changed and why
 
-### TASK-07-QUICK-REFERENCE.md
+### docs/TASK-07-QUICK-REFERENCE.md
 **Purpose:** Quick reference for Task 07 execution
 **Contains:**
 - What Task 07 does
@@ -142,7 +145,7 @@ Documentation/
 
 **When to Read:** Running Task 07, or quick questions
 
-### TASK-07-FIX-DOCUMENTATION.md
+### docs/TASK-07-FIX-DOCUMENTATION.md
 **Purpose:** Detailed technical documentation of the fix
 **Contains:**
 - Problem summary
@@ -157,7 +160,7 @@ Documentation/
 
 **When to Read:** Deep technical understanding of the fix
 
-### TASK-07-COMPLETE-FIX-SUMMARY.md
+### docs/TASK-07-COMPLETE-FIX-SUMMARY.md
 **Purpose:** Complete summary of all issues and solutions
 **Contains:**
 - Executive summary
@@ -192,33 +195,33 @@ Documentation/
 ### 👤 User Profile: New to AVD Golden Image Creation
 **Read:**
 1. README.md (full)
-2. TASK-07-QUICK-REFERENCE.md
+2. docs/TASK-07-QUICK-REFERENCE.md
 3. Run tasks following the Quick Start
 
 ### 👤 User Profile: Running Task 07
 **Read:**
-1. TASK-07-QUICK-REFERENCE.md
+1. docs/TASK-07-QUICK-REFERENCE.md
 2. README.md - Configuration section
 3. Run the task
 4. Review logs in artifacts/
 
 ### 👤 User Profile: Debugging Issues
 **Read:**
-1. TASK-07-QUICK-REFERENCE.md - Troubleshooting
-2. TASK-07-COMPLETE-FIX-SUMMARY.md - Issues & Solutions
-3. TASK-07-FIX-DOCUMENTATION.md - Technical details
+1. docs/TASK-07-QUICK-REFERENCE.md - Troubleshooting
+2. docs/TASK-07-COMPLETE-FIX-SUMMARY.md - Issues & Solutions
+3. docs/TASK-07-FIX-DOCUMENTATION.md - Technical details
 4. Check artifacts/ logs
 
 ### 👤 User Profile: Reviewing Changes
 **Read:**
-1. CHANGELOG.md (full)
-2. TASK-07-COMPLETE-FIX-SUMMARY.md - Files Modified Summary
+1. docs/CHANGELOG.md (full)
+2. docs/TASK-07-COMPLETE-FIX-SUMMARY.md - Files Modified Summary
 3. `git log` or `git diff`
 
 ### 👤 User Profile: AI Assistant (Claude, Gemini)
 **Read:**
 1. README.md - Full context
-2. TASK-07-QUICK-REFERENCE.md - Execution details
+2. docs/TASK-07-QUICK-REFERENCE.md - Execution details
 3. Relevant technical docs as needed
 4. Check artifacts/ for logs
 
@@ -231,21 +234,21 @@ Documentation/
 - **How:** `./tasks/07-avd-registry-optimizations.sh`
 - **Duration:** 2-5 minutes
 - **Prerequisites:** VM running, Tasks 1-6 complete
-- **Details:** TASK-07-QUICK-REFERENCE.md
+- **Details:** docs/TASK-07-QUICK-REFERENCE.md
 
 ### Fixes Applied
-- **Unicode Encoding:** TASK-07-COMPLETE-FIX-SUMMARY.md#issue-1
-- **Azure CLI Syntax:** TASK-07-COMPLETE-FIX-SUMMARY.md#issue-2
-- **Missing Settings:** TASK-07-COMPLETE-FIX-SUMMARY.md#issue-3
-- **Technical Details:** TASK-07-FIX-DOCUMENTATION.md
+- **Unicode Encoding:** docs/TASK-07-COMPLETE-FIX-SUMMARY.md#issue-1
+- **Azure CLI Syntax:** docs/TASK-07-COMPLETE-FIX-SUMMARY.md#issue-2
+- **Missing Settings:** docs/TASK-07-COMPLETE-FIX-SUMMARY.md#issue-3
+- **Technical Details:** docs/TASK-07-FIX-DOCUMENTATION.md
 
 ### Registry Settings
-- **All 12+ Settings:** TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes
+- **All 12+ Settings:** docs/TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes
 - **Implementation:** powershell/avd-registry-optimizations.ps1
 - **Verification:** Check artifacts/ logs
 
 ### Files Modified
-- **Summary:** TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary
+- **Summary:** docs/TASK-07-COMPLETE-FIX-SUMMARY.md#files-modified-summary
 - **Scripts:** tasks/07-avd-registry-optimizations.sh, powershell/avd-registry-optimizations.ps1
 - **Documentation:** README.md and others in this list
 
@@ -257,22 +260,22 @@ Documentation/
 A: Read README.md first for complete overview.
 
 **Q: How do I run Task 07?**
-A: See TASK-07-QUICK-REFERENCE.md or follow Quick Start in README.md
+A: See docs/TASK-07-QUICK-REFERENCE.md or follow Quick Start in README.md
 
 **Q: What was broken and how was it fixed?**
-A: See TASK-07-COMPLETE-FIX-SUMMARY.md for complete explanation.
+A: See docs/TASK-07-COMPLETE-FIX-SUMMARY.md for complete explanation.
 
 **Q: Which registry settings are applied?**
-A: See TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made for all 12+ settings.
+A: See docs/TASK-07-COMPLETE-FIX-SUMMARY.md#complete-registry-changes-made for all 12+ settings.
 
 **Q: How do I debug issues?**
-A: See TASK-07-QUICK-REFERENCE.md#troubleshooting
+A: See docs/TASK-07-QUICK-REFERENCE.md#troubleshooting
 
 **Q: What changed in this version?**
-A: See CHANGELOG.md
+A: See docs/CHANGELOG.md
 
 **Q: I'm debugging and need technical details**
-A: See TASK-07-FIX-DOCUMENTATION.md
+A: See docs/TASK-07-FIX-DOCUMENTATION.md
 
 **Q: Can I skip Task 07?**
 A: Not recommended - registry optimizations are critical for AVD performance

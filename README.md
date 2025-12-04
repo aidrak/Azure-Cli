@@ -1,5 +1,9 @@
 # Azure Virtual Desktop (AVD) Deployment Template
 
+> **🤖 AI ASSISTANTS: Before doing any work, read `.claude/CLAUDE.md` (5 min read)**
+>
+> This project has strict patterns to prevent script proliferation. Rules: (1) Never create standalone scripts, (2) Always use `az` CLI commands, (3) Always use `az vm run-command` for VM operations. See `.claude/CLAUDE.md` for details.
+
 ## Overview
 
 This repository contains a complete, AI-friendly task-centric template for deploying a production-ready Azure Virtual Desktop (AVD) environment. The template supports both full automation and individual task execution across 12 deployment steps.
