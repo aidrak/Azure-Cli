@@ -361,6 +361,174 @@ execute_operation() {
 }
 
 # ==============================================================================
+# Edit PowerShell Content in Template
+# ==============================================================================
+edit_powershell_in_template() {
+    local yaml_file="$1"
+    local new_powershell_content="$2"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "[x] Template file not found: $yaml_file"
+        return 1
+    fi
+
+    echo "[*] Updating PowerShell content in template"
+
+    # Create temporary file with new content
+    local temp_file
+    temp_file=$(mktemp)
+    echo "$new_powershell_content" > "$temp_file"
+
+    # Use yq to update the powershell.content field
+    yq e -i ".operation.powershell.content = load_str(\"$temp_file\")" "$yaml_file"
+
+    rm -f "$temp_file"
+
+    echo "[v] PowerShell content updated in: $yaml_file"
+    return 0
+}
+
+# ==============================================================================
+# Add Fix to Template
+# ==============================================================================
+add_fix_to_template() {
+    local yaml_file="$1"
+    local issue="$2"
+    local fix_description="$3"
+    local fix_date="${4:-$(date +%Y-%m-%d)}"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "[x] Template file not found: $yaml_file"
+        return 1
+    fi
+
+    echo "[*] Adding fix record to template"
+
+    # Check if fixes section exists
+    local has_fixes
+    has_fixes=$(yq e '.operation.fixes' "$yaml_file")
+
+    if [[ "$has_fixes" == "null" ]]; then
+        # Initialize fixes array
+        yq e -i '.operation.fixes = []' "$yaml_file"
+    fi
+
+    # Get current number of fixes
+    local fix_count
+    fix_count=$(yq e '.operation.fixes | length' "$yaml_file")
+
+    # Add new fix entry
+    yq e -i ".operation.fixes[$fix_count].issue = \"$issue\"" "$yaml_file"
+    yq e -i ".operation.fixes[$fix_count].detected = \"$fix_date\"" "$yaml_file"
+    yq e -i ".operation.fixes[$fix_count].fix = \"$fix_description\"" "$yaml_file"
+    yq e -i ".operation.fixes[$fix_count].applied_to_template = true" "$yaml_file"
+
+    echo "[v] Fix record added to template"
+    return 0
+}
+
+# ==============================================================================
+# Get Fixes from Template
+# ==============================================================================
+get_template_fixes() {
+    local yaml_file="$1"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "Template not found: $yaml_file"
+        return 1
+    fi
+
+    local fixes
+    fixes=$(yq e '.operation.fixes' "$yaml_file")
+
+    if [[ "$fixes" == "null" || "$fixes" == "[]" ]]; then
+        echo "No fixes recorded in template"
+        return 0
+    fi
+
+    echo "Fixes applied to this template:"
+    yq e '.operation.fixes[] | "  [" + .detected + "] " + .issue + "\n    Fix: " + .fix' "$yaml_file"
+}
+
+# ==============================================================================
+# Update Operation Duration
+# ==============================================================================
+update_operation_duration() {
+    local yaml_file="$1"
+    local expected="$2"
+    local timeout="$3"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "[x] Template file not found: $yaml_file"
+        return 1
+    fi
+
+    echo "[*] Updating operation duration"
+
+    yq e -i ".operation.duration.expected = $expected" "$yaml_file"
+    yq e -i ".operation.duration.timeout = $timeout" "$yaml_file"
+
+    echo "[v] Duration updated: expected=${expected}s, timeout=${timeout}s"
+    return 0
+}
+
+# ==============================================================================
+# Add Validation Check to Template
+# ==============================================================================
+add_validation_check() {
+    local yaml_file="$1"
+    local check_type="$2"
+    shift 2
+    local -a check_params=("$@")
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "[x] Template file not found: $yaml_file"
+        return 1
+    fi
+
+    echo "[*] Adding validation check: $check_type"
+
+    # Ensure validation is enabled
+    yq e -i '.operation.validation.enabled = true' "$yaml_file"
+
+    # Check if checks array exists
+    local has_checks
+    has_checks=$(yq e '.operation.validation.checks' "$yaml_file")
+
+    if [[ "$has_checks" == "null" ]]; then
+        yq e -i '.operation.validation.checks = []' "$yaml_file"
+    fi
+
+    # Get current number of checks
+    local check_count
+    check_count=$(yq e '.operation.validation.checks | length' "$yaml_file")
+
+    # Add check based on type
+    case "$check_type" in
+        "file_exists")
+            yq e -i ".operation.validation.checks[$check_count].type = \"file_exists\"" "$yaml_file"
+            yq e -i ".operation.validation.checks[$check_count].path = \"${check_params[0]}\"" "$yaml_file"
+            ;;
+        "registry_key")
+            yq e -i ".operation.validation.checks[$check_count].type = \"registry_key\"" "$yaml_file"
+            yq e -i ".operation.validation.checks[$check_count].path = \"${check_params[0]}\"" "$yaml_file"
+            ;;
+        "service_status")
+            yq e -i ".operation.validation.checks[$check_count].type = \"service_status\"" "$yaml_file"
+            yq e -i ".operation.validation.checks[$check_count].service_name = \"${check_params[0]}\"" "$yaml_file"
+            yq e -i ".operation.validation.checks[$check_count].expected_status = \"${check_params[1]}\"" "$yaml_file"
+            ;;
+        *)
+            echo "[x] Unknown validation check type: $check_type"
+            return 1
+            ;;
+    esac
+
+    echo "[v] Validation check added"
+    return 0
+}
+
+# ==============================================================================
 # Export functions for use by other scripts
 # ==============================================================================
 export -f parse_operation_yaml
@@ -370,3 +538,8 @@ export -f render_command
 export -f validate_prerequisites
 export -f validate_results
 export -f execute_operation
+export -f edit_powershell_in_template
+export -f add_fix_to_template
+export -f get_template_fixes
+export -f update_operation_duration
+export -f add_validation_check
