@@ -5,8 +5,8 @@
 **Prerequisites:**
 - Host pool deployed: `Pool-Pooled-Prod`
 - Session hosts deployed (10-40 VMs)
-- RBAC role assigned for autoscaling
-- Max session limit configured on host pool
+- PowerShell with Az.DesktopVirtualization and Az.Accounts modules
+- Logged into Azure
 
 **Benefits:**
 - Automatically power on/off VMs based on schedule
@@ -15,7 +15,66 @@
 
 ---
 
-## Part 1: Prerequisites Check
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `10-Autoscaling-Setup.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. Run the script with defaults
+.\10-Autoscaling-Setup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -ScalingPlanName "ScalingPlan-Pooled-Prod"
+
+# 3. Or customize timezone and plan name
+.\10-Autoscaling-Setup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -ScalingPlanName "ScalingPlan-Pooled-Prod" `
+  -TimeZone "Pacific Standard Time"
+```
+
+**What the script does:**
+1. Validates prerequisites (host pool exists, Azure login)
+2. Grants AVD service principal `Desktop Virtualization Power On Off Contributor` role
+3. Creates scaling plan `ScalingPlan-Pooled-Prod`
+4. Documents recommended scaling schedules:
+   - **Ramp Up** (07:00): Minimum 20% sessions, BreadthFirst load balancing
+   - **Peak** (09:00): Minimum 100% sessions, DepthFirst load balancing
+   - **Ramp Down** (17:00): Minimum 10% sessions, BreadthFirst
+   - **Off-Peak** (19:00): Minimum 5% sessions, stops all hosts on weekends
+5. Assigns scaling plan to host pool
+6. Documents manual steps for capacity threshold alerts
+
+**Expected Runtime:** 2-3 minutes
+
+**Important Notes:**
+- Default schedule is Central Standard Time; adjust TimeZone parameter for your region
+- Schedules are recommendations; adjust based on your organization's working hours
+- Off-peak period stops session hosts on weekends completely to save costs
+- Requires Azure PowerShell SDK 1.0.0+ for scaling plans
+
+**Verification:**
+```powershell
+# Check scaling plan created
+Get-AzWvdScalingPlan -ResourceGroupName "RG-Azure-VDI-01" -Name "ScalingPlan-Pooled-Prod"
+
+# Verify host pool assigned
+Get-AzWvdHostPoolSchedule -ResourceGroupName "RG-Azure-VDI-01" -HostPoolName "Pool-Pooled-Prod"
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Part 1: Prerequisites Check
 
 ### Assign Required RBAC Role
 

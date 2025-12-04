@@ -6,14 +6,76 @@
 - Resource group: `RG-Azure-VDI-01` exists
 - AVD spoke VNet with session host subnet created
 - Golden images captured (or will be deployed later)
-- PowerShell modules (for PowerShell option):
-  ```powershell
-  Install-Module -Name Az.DesktopVirtualization -Force
-  ```
+- PowerShell installed with Az.DesktopVirtualization module
+- Logged into Azure
 
 ---
 
-## Overview
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `04-Host-Pool-Workspace-Setup.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. Run the script with default settings
+.\04-Host-Pool-Workspace-Setup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -Location "centralus" `
+  -WorkspaceName "AVD-Workspace-Prod" `
+  -HostPoolName "Pool-Pooled-Prod"
+
+# 3. Or customize max session limit and load balancing
+.\04-Host-Pool-Workspace-Setup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -Location "centralus" `
+  -WorkspaceName "AVD-Workspace-Prod" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -MaxSessionLimit 12 `
+  -LoadBalancerType "BreadthFirst"
+```
+
+**What the script does:**
+1. Creates AVD workspace as single user entry point
+2. Creates pooled host pool for multi-session Windows 11
+3. Configures RDP properties:
+   - Enables Entra SSO (passwordless authentication)
+   - Disables UDP, forces TCP-only (per security requirements)
+   - Enables clipboard, microphone, and camera redirection
+   - Disables printer redirection
+4. Creates desktop application group
+5. Links application group to workspace
+6. Validates all resources created successfully
+
+**Expected Runtime:** 2-3 minutes
+
+**Verification:**
+```powershell
+# Check workspace created
+Get-AzWvdWorkspace -ResourceGroupName "RG-Azure-VDI-01" -Name "AVD-Workspace-Prod"
+
+# Check host pool created
+Get-AzWvdHostPool -ResourceGroupName "RG-Azure-VDI-01" -Name "Pool-Pooled-Prod"
+
+# Check RDP properties
+$hp = Get-AzWvdHostPool -ResourceGroupName "RG-Azure-VDI-01" -Name "Pool-Pooled-Prod"
+Write-Host $hp.CustomRdpProperty
+
+# Verify SSO and TCP settings
+if ($hp.CustomRdpProperty -match "enablerdsaadauth:i:1") { Write-Host "✓ SSO Enabled" }
+if ($hp.CustomRdpProperty -match "use udp:i:0") { Write-Host "✓ UDP Disabled (TCP only)" }
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Overview
 
 **What we're creating:**
 1. **Workspace** - User-facing workspace URL (single entry point)
@@ -33,7 +95,7 @@ Workspace: "Production Desktop"
 
 ---
 
-## Part 1: Create Workspace
+### Part 1: Create Workspace
 
 ### Option A: Azure Portal (GUI)
 
@@ -42,7 +104,7 @@ Workspace: "Production Desktop"
    - Click **Workspaces** in left menu
    - Click **+ Create**
 
-2. **Basics Tab**
+2. **Basics Tab (Workspace Creation)**
    - Subscription: Your subscription
    - Resource group: `RG-Azure-VDI-01`
    - Workspace name: `AVD-Workspace-Prod`
@@ -110,7 +172,7 @@ Write-Host "`nNext Step: Create Host Pools" -ForegroundColor Cyan
 
 ---
 
-## Part 2: Create Pooled Host Pool
+### Part 2: Create Pooled Host Pool
 
 **For:** 400 standard users, multi-session Windows 11
 

@@ -14,65 +14,167 @@ Before you begin, ensure you have the following:
 - PowerShell with the Az module installed.
 - You are logged into your Azure account via `az login`.
 
+## Deployment Approach
+
+This repository supports **two deployment methods**:
+
+### 1. Automated Deployment (Recommended)
+
+Each step includes PowerShell or Bash automation scripts that:
+- Follow infrastructure-as-code best practices
+- Include error handling and idempotency checks
+- Provide detailed console output with progress indicators
+- Verify operations completed successfully
+
+**When to use:** Production deployments, repeatable processes, consistent results across environments.
+
+### 2. Manual Deployment
+
+Each step also includes detailed manual instructions for Azure Portal, Azure CLI, and PowerShell.
+
+**When to use:** Learning the platform, troubleshooting, customizing individual resources.
+
+## Script Conventions
+
+**Naming Pattern:** `[step-number]-[step-name].[sh|ps1]`
+
+**Script Types:**
+- `.sh` - Bash scripts using Azure CLI (infrastructure provisioning)
+- `.ps1` - PowerShell scripts using Az/Microsoft.Graph modules (configuration/management)
+- `.Tests.ps1` - Verification scripts to validate deployment
+
+**Script Features:**
+- **Idempotent:** Safe to run multiple times
+- **Parameterized:** Customize for your environment
+- **Validated:** Check prerequisites before executing
+- **Verbose:** Clear console output with color-coded status
+- **Error Handling:** Fail-fast with meaningful error messages
+
+**Color-Coded Output:**
+- **Blue/Cyan** = Section headers and informational messages
+- **Yellow** = Processing steps and warnings
+- **Green** = Successful operations (✓)
+- **Red** = Errors (✗)
+
 ## Workflow Steps
 
 Follow the steps below in order. Each step corresponds to a directory containing detailed instructions and any necessary scripts.
 
 1.  **Networking Setup**
-    *   Provisions the core networking infrastructure, including the VNet, subnets, and Network Security Groups.
+    *   Provisions the core networking infrastructure (VNet, subnets, NSGs).
+    *   **Automation:** `01-Networking-Setup.sh` (Bash/Azure CLI)
     *   [View Details](./01-networking/01-Networking-Setup.md)
 
 2.  **Storage Setup**
-    *   Creates the Azure Files share that will be used for FSLogix user profiles.
+    *   Creates Azure Files Premium with FSLogix profiles and private endpoint.
+    *   **Automation:** `02-Storage-Setup.ps1` (PowerShell)
     *   [View Details](./02-storage/02-Storage-Setup.md)
 
 3.  **Entra ID Group Setup**
-    *   Creates the necessary Microsoft Entra ID (formerly Azure AD) groups for managing user and administrator access to the AVD environment.
+    *   Creates user security groups and device dynamic groups for policy targeting.
+    *   **Automation:** `03-Entra-Group-Setup.ps1` (PowerShell)
     *   [View Details](./03-entra-group/03-Entra-Group-Setup.md)
 
 4.  **Host Pool & Workspace Setup**
-    *   Creates the AVD Host Pool, Application Group, and Workspace.
+    *   Creates AVD workspace, host pool, and application group with RDP configuration.
+    *   **Automation:** `04-Host-Pool-Workspace-Setup.ps1` (PowerShell)
     *   [View Details](./04-host-pool-workspace/04-Host-Pool-Workspace-Setup.md)
 
 5.  **Golden Image Creation**
-    *   Guides you through creating and configuring a "golden image" VM with all necessary applications and settings. This image will be used as a template for the session hosts.
-    *   [View Details](./05-golden-image/05-Golden-Image-Creation.md)
+    *   Creates and configures a golden image VM with all necessary applications (Office, Chrome, Adobe, FSLogix, VDOT optimizations).
+    *   **Automation:** Three-script workflow:
+      - `05-Golden-Image-VM-Create.sh` (Bash/Azure CLI) - Create temporary VM
+      - `05-Golden-Image-VM-Configure.ps1` (PowerShell) - Configure inside VM via RDP
+      - `05-Golden-Image-Capture.sh` (Bash/Azure CLI) - Sysprep and capture image
+    *   [View Details](./05-golden-image-updated/05-Golden-Image-Creation.md)
 
 6.  **Session Host Deployment**
-    *   Deploys session host VMs into the host pool using the golden image created in the previous step.
+    *   Deploys N session host VMs from golden image and registers to host pool.
+    *   **Automation:** `06-Session-Host-Deployment.ps1` (PowerShell)
     *   [View Details](./06-session-host-deployment/06-Session-Host-Deployment.md)
 
 7.  **Intune Configuration**
-    *   Enrolls the session hosts into Microsoft Intune and applies configuration policies for management and security.
+    *   Creates and assigns Intune configuration policies for FSLogix, RDP transport, and security baselines.
+    *   **Automation:** `07-Intune-Configuration.ps1` (PowerShell)
     *   [View Details](./07-intune/07-Intune-Configuration.md)
 
 8.  **RBAC Assignments**
-    *   Assigns the appropriate Role-Based Access Control (RBAC) permissions to the Entra ID groups, granting users access to the AVD resources.
+    *   Assigns Role-Based Access Control (RBAC) to Entra ID groups for user access.
+    *   **Automation:** `08-RBAC-Assignments.ps1` (PowerShell) + `08-RBAC-Assignments.Tests.ps1`
     *   [View Details](./08-rbac/08-RBAC-Assignments.md)
 
 9.  **SSO Configuration**
-    *   Configures Kerberos and enables Single Sign-On (SSO) for a seamless user login experience.
+    *   Configures Windows Cloud Login for Kerberos SSO and seamless authentication.
+    *   **Automation:** `09-SSO-Configuration.ps1` (PowerShell)
     *   [View Details](./09-sso/09-SSO-Configuration.md)
 
 10. **Autoscaling Setup**
-    *   Sets up autoscaling plans to automatically start and stop session host VMs based on a schedule, optimizing costs.
+    *   Creates scaling plans with time-based schedules to optimize costs by starting/stopping VMs.
+    *   **Automation:** `10-Autoscaling-Setup.ps1` (PowerShell)
     *   [View Details](./10-autoscaling/10-Autoscaling-Setup.md)
 
 11. **Testing & Validation**
-    *   Provides a checklist for testing the end-to-end user experience, from logging in to application usage.
+    *   Comprehensive automated validation of entire AVD infrastructure and configuration.
+    *   **Automation:** `11-Testing-Validation.ps1` (PowerShell)
     *   [View Details](./11-testing/11-Testing-Validation.md)
 
 12. **VM Cleanup & Migration**
-    *   Includes steps for cleaning up temporary resources and preparing the environment for production.
+    *   Automated cleanup of temporary VMs and orphaned resources; migration guide for user transition.
+    *   **Automation:** `12-VM-Cleanup.ps1` (PowerShell)
     *   [View Details](./12-cleanup-migration/12-VM-Cleanup-Migration.md)
 
 ## Shared Utilities
 
-The `common/` directory contains scripts that may be used for debugging or recovery purposes across multiple steps.
+The `common/` directory contains reusable scripts and utilities for debugging, validation, and recovery:
 
-- `debug_apps.ps1`: Script to assist with debugging application installations.
-- `recover_vm.sh`: Script to aid in recovering a VM.
+**Prerequisites & Validation:**
+- **`verify_prerequisites.ps1`** - Validates environment prerequisites before deployment
+  - Checks PowerShell version, Azure modules, Microsoft Graph modules
+  - Verifies Azure subscription access and permissions
+  - Validates Entra ID licenses and resource provider registration
+  - **Usage:** `.\verify_prerequisites.ps1` (run before starting deployment)
 
-## Usage
+**Configuration & Documentation:**
+- **`export_deployment_config.ps1`** - Exports all deployed resources and configuration as JSON
+  - Exports: Resource group, VNets, storage accounts, host pools, app groups, workspaces, VMs
+  - **Usage:** `.\export_deployment_config.ps1 -ResourceGroupName "RG-Azure-VDI-01" -OutputFile "avd-config.json"`
 
-Start with Step 1 and proceed sequentially. Navigate into each directory and follow the instructions within the markdown file.
+**Debugging & Recovery:**
+- **`debug_apps.ps1`** - Diagnostic tool for troubleshooting application installations on golden image
+  - Tests application installation status, registry keys, file permissions
+  - **Usage:** Run on golden image VM to verify installations
+
+- **`recover_vm.sh`** - Recovery script for troubleshooting or recovering sysprep issues
+  - Helps with VM recovery after failed generalization
+  - **Usage:** Use when VM recovery is needed after golden image capture failure
+
+## Quick Start
+
+### Option 1: Quick Validation Only
+```bash
+# Run prerequisites check
+cd common
+pwsh -ExecutionPolicy Bypass -File verify_prerequisites.ps1
+```
+
+### Option 2: Full Automated Deployment
+```bash
+# Step 1: Validate environment
+cd common
+pwsh -ExecutionPolicy Bypass -File verify_prerequisites.ps1
+
+# Step 2: Run each deployment script in order
+cd ../01-networking
+bash 01-Networking-Setup.sh
+
+cd ../02-storage
+pwsh 02-Storage-Setup.ps1
+# ... continue through all 12 steps
+
+# Step 13: Validate complete deployment
+cd ../11-testing
+pwsh 11-Testing-Validation.ps1
+```
+
+### Option 3: Manual Deployment
+Start with Step 1 and proceed sequentially. Navigate into each directory and follow the instructions within the markdown file. Each directory contains an `XX-*.md` file with detailed manual instructions.

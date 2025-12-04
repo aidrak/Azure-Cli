@@ -6,6 +6,7 @@
 - Azure subscription with Owner or Contributor role
 - Entra ID P1 or P2 licenses (for dynamic device groups)
 - Admin access to Microsoft Entra admin center
+- PowerShell with Microsoft.Graph module installed
 
 **Overview:** This guide creates:
 1. **User Security Groups** - Segregate standard users from administrators
@@ -14,7 +15,61 @@
 
 ---
 
-## Part 1: Create User Security Groups
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `03-Entra-Group-Setup.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Run the script
+.\03-Entra-Group-Setup.ps1
+
+# 2. Or with custom device naming pattern
+.\03-Entra-Group-Setup.ps1 -DeviceNamePattern "avd-pool-"
+```
+
+**What the script does:**
+1. Connects to Microsoft Graph with required Directory.ReadWrite.All scope
+2. Creates 2 user security groups:
+   - `AVD-Users-Standard` (390 users, standard permissions)
+   - `AVD-Users-Admins` (10 users, elevated permissions, local admin rights)
+3. Creates 4 device dynamic groups auto-populated by VM naming:
+   - `AVD-Devices-Pooled-SSO` (for SSO configuration)
+   - `AVD-Devices-Pooled-FSLogix` (for FSLogix policies)
+   - `AVD-Devices-Pooled-Network` (for network policies)
+   - `AVD-Devices-Pooled-Security` (for security baselines)
+4. Validates all groups created successfully
+
+**Expected Runtime:** 1-2 minutes
+
+**What happens next:**
+- Dynamic device groups will auto-populate when session hosts are deployed with matching names (avd-pool-*)
+- Groups will be used in Intune policy assignments (Guide 07)
+- Groups will be used in RBAC assignments (Guide 08)
+
+**Verification:**
+```powershell
+# Check user groups
+Get-MgGroup -Filter "displayName in ('AVD-Users-Standard', 'AVD-Users-Admins')"
+
+# Check device dynamic groups
+Get-MgGroup -Filter "displayName startsWith 'AVD-Devices-'" -All
+
+# Verify dynamic rules
+$groups = Get-MgGroup -Filter "displayName startsWith 'AVD-Devices-'" -All
+foreach ($group in $groups) {
+    Get-MgGroupDynamicMembershipRule -GroupId $group.Id
+}
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Part 1: Create User Security Groups
 
 ### Option A: Azure Portal (GUI)
 
