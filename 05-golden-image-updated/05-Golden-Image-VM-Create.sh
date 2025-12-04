@@ -48,21 +48,20 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration with defaults
-RESOURCE_GROUP="${RESOURCE_GROUP:-RG-Azure-VDI-01}"
-LOCATION="${LOCATION:-centralus}"
-VM_NAME="${VM_NAME:-avd-gold-pool}"
-VNET_NAME="${VNET_NAME:-vnet-avd-prod}"
-SUBNET_NAME="${SUBNET_NAME:-subnet-session-hosts}"
-VM_SIZE="${VM_SIZE:-Standard_D4s_v6}"
-ADMIN_USERNAME="${ADMIN_USERNAME:-entra-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+# Source configuration variables
+source "$(dirname "$0")/config.env"
 
-# Image reference
-IMAGE_PUBLISHER="MicrosoftWindowsDesktop"
-IMAGE_OFFER="windows-11"
-IMAGE_SKU="win11-25h2-avd"
-IMAGE_VERSION="latest"
+# Validate that the password is set in the config, or prompt for it
+if [[ -z "$ADMIN_PASSWORD" ]]; then
+    log_info "ADMIN_PASSWORD not set in config.env. Enter admin password for VM (will not be displayed):"
+    read -sp "Password: " ADMIN_PASSWORD
+    echo ""
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        log_error "Password cannot be empty"
+        exit 1
+    fi
+fi
+
 
 # ============================================================================
 # Helper Functions
@@ -158,9 +157,9 @@ create_virtual_machine() {
     log_info "Image: $IMAGE_PUBLISHER:$IMAGE_OFFER:$IMAGE_SKU:$IMAGE_VERSION"
 
     az vm create \
-        --resource-group "$RESOURCE_GROUP" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
         --name "$VM_NAME" \
-        --image "${IMAGE_PUBLISHER}:${IMAGE_OFFER}:${IMAGE_SKU}:${IMAGE_VERSION}" \
+        --image "$WINDOWS_IMAGE_SKU" \
         --size "$VM_SIZE" \
         --admin-username "$ADMIN_USERNAME" \
         --admin-password "$ADMIN_PASSWORD" \

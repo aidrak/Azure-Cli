@@ -19,19 +19,35 @@
 # - DeviceGroupName: Device group for policy assignment (default: AVD-Devices-Pooled-SSO)
 # - PolicyProfileName: Configuration profile name (default: FSLogix-Pooled-Configuration)
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$StorageAccountName,
+    [Parameter(Mandatory=$false)]
+    [string]$StorageAccountName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.StorageAccountName } else { "" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$FileShareName = "fslogix-profiles",
+    [string]$FileShareName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Storage.FileShareName } else { "fslogix-profiles" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$DeviceGroupName = "AVD-Devices-Pooled-SSO",
+    [string]$DeviceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.DeviceDynamicGroupName } else { "AVD-Devices-Pooled-SSO" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$PolicyProfileName = "FSLogix-Pooled-Configuration"
+    [string]$PolicyProfileName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Intune.PolicyProfileName } else { "FSLogix-Pooled-Configuration" })
 )
 
 $ErrorActionPreference = "Stop"

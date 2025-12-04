@@ -26,6 +26,19 @@ echo "  Image Definition: $GOLDEN_IMAGE_NAME"
 echo "  New Image Version: $IMAGE_VERSION"
 echo "----------------------------------------"
 
+# --- Create Azure Compute Gallery if it doesn't exist ---
+echo "Checking for existing Azure Compute Gallery '$IMAGE_GALLERY_NAME'..."
+if ! az sig show --resource-group "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" &> /dev/null; then
+  echo "Gallery not found. Creating it..."
+  az sig create \
+    --resource-group "$RESOURCE_GROUP_NAME" \
+    --gallery-name "$IMAGE_GALLERY_NAME" \
+    --location "$LOCATION"
+  echo "Gallery '$IMAGE_GALLERY_NAME' created."
+else
+  echo "Gallery already exists."
+fi
+
 # --- Create Image Definition if it doesn't exist ---
 echo "Checking for existing Image Definition '$GOLDEN_IMAGE_NAME'..."
 if ! az sig image-definition show --resource-group "$RESOURCE_GROUP_NAME" --gallery-name "$IMAGE_GALLERY_NAME" --gallery-image-definition "$GOLDEN_IMAGE_NAME" &> /dev/null; then

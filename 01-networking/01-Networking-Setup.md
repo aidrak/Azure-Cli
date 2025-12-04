@@ -22,14 +22,29 @@ AVD Spoke VNet (10.1.0.0/16) - New
 
 ## Automated Deployment (Recommended)
 
-### Using the Automation Script
+### Step 1: Configure Your Environment
+
+First-time setup (copy from example configuration):
+```bash
+cp config/avd-config.example.sh config/avd-config.sh
+nano config/avd-config.sh  # Edit with your values
+```
+
+Required values to update:
+- `AVD_SUBSCRIPTION_ID` - Your Azure subscription ID
+- `AVD_TENANT_ID` - Your Entra ID tenant ID
+- `AVD_RESOURCE_GROUP` - Resource group name (default: RG-Azure-VDI-01)
+- `AVD_LOCATION` - Azure region (default: centralus)
+
+### Step 2: Run the Automation Script
 
 **Script:** `01-Networking-Setup.sh` (Bash/Azure CLI)
 
 **Prerequisites for script:**
 - Azure CLI installed (`az --version`)
 - Logged into Azure (`az login`)
-- Existing hub VNet details (name, resource group)
+- Configuration file copied and customized (`config/avd-config.sh`)
+- Existing hub VNet details (name, resource group) if using peering
 
 **Quick Start:**
 
@@ -37,17 +52,15 @@ AVD Spoke VNet (10.1.0.0/16) - New
 # 1. Make script executable
 chmod +x ./01-Networking-Setup.sh
 
-# 2. Run the script with default settings
+# 2. Run with configuration file (recommended)
+# Script will automatically load config/avd-config.sh
 ./01-Networking-Setup.sh
 
-# 3. Or customize parameters
-./01-Networking-Setup.sh \
-  --resource-group "RG-Azure-VDI-01" \
-  --location "centralus" \
-  --vnet-name "vnet-avd-prod" \
-  --vnet-prefix "10.1.0.0/16" \
-  --hub-rg "RG-HUB" \
-  --hub-vnet "vnet-hub-centralus"
+# 3. Or override specific parameters
+./01-Networking-Setup.sh --location "eastus"
+
+# 4. Or use custom config file
+CONFIG_FILE="config/avd-config-prod.sh" ./01-Networking-Setup.sh
 ```
 
 **What the script does:**
@@ -69,17 +82,26 @@ chmod +x ./01-Networking-Setup.sh
 **Verification:**
 After running the script, verify creation:
 ```bash
+# Load configuration to use variables
+source ./config/avd-config.sh
+
 # Check VNet
-az network vnet show --resource-group RG-Azure-VDI-01 --name vnet-avd-prod
+az network vnet show \
+  --resource-group ${AVD_RESOURCE_GROUP} \
+  --name ${AVD_VNET_NAME}
 
 # Check subnets
-az network vnet subnet list --resource-group RG-Azure-VDI-01 --vnet-name vnet-avd-prod
+az network vnet subnet list \
+  --resource-group ${AVD_RESOURCE_GROUP} \
+  --vnet-name ${AVD_VNET_NAME}
 
 # Check NSGs
-az network nsg list --resource-group RG-Azure-VDI-01
+az network nsg list --resource-group ${AVD_RESOURCE_GROUP}
 
 # Check peering (if created)
-az network vnet peering list --resource-group RG-Azure-VDI-01 --vnet-name vnet-avd-prod
+az network vnet peering list \
+  --resource-group ${AVD_RESOURCE_GROUP} \
+  --vnet-name ${AVD_VNET_NAME}
 ```
 
 ---

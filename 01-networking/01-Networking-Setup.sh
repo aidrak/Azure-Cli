@@ -51,23 +51,36 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists (config/avd-config.sh)
+# Command-line parameters and environment variables override config file values
+
+CONFIG_FILE="${CONFIG_FILE:-./config/avd-config.sh}"
+if [ -f "$CONFIG_FILE" ]; then
+    echo -e "${BLUE}ℹ Loading configuration from: $CONFIG_FILE${NC}"
+    source "$CONFIG_FILE"
+fi
+
 # Configuration with defaults
-RESOURCE_GROUP="${RESOURCE_GROUP:-RG-Azure-VDI-01}"
-LOCATION="${LOCATION:-centralus}"
-VNET_NAME="${VNET_NAME:-vnet-avd-prod}"
-VNET_PREFIX="${VNET_PREFIX:-10.0.0.0/16}"
+# Priority: 1) Command-line param, 2) Environment var, 3) Config file var, 4) Script default
+RESOURCE_GROUP="${RESOURCE_GROUP:-${AVD_RESOURCE_GROUP:-RG-Azure-VDI-01}}"
+LOCATION="${LOCATION:-${AVD_LOCATION:-centralus}}"
+VNET_NAME="${VNET_NAME:-${AVD_VNET_NAME:-vnet-avd-prod}}"
+VNET_PREFIX="${VNET_PREFIX:-${AVD_VNET_PREFIX:-10.0.0.0/16}}"
 
-SESSION_HOSTS_SUBNET="${SESSION_HOSTS_SUBNET:-subnet-session-hosts}"
-SESSION_HOSTS_PREFIX="${SESSION_HOSTS_PREFIX:-10.0.1.0/24}"
+SESSION_HOSTS_SUBNET="${SESSION_HOSTS_SUBNET:-${AVD_SUBNET_SESSION_HOSTS:-subnet-session-hosts}}"
+SESSION_HOSTS_PREFIX="${SESSION_HOSTS_PREFIX:-${AVD_SUBNET_SESSION_HOSTS_PREFIX:-10.0.1.0/24}}"
 
-PRIVATE_ENDPOINTS_SUBNET="${PRIVATE_ENDPOINTS_SUBNET:-subnet-private-endpoints}"
-PRIVATE_ENDPOINTS_PREFIX="${PRIVATE_ENDPOINTS_PREFIX:-10.0.2.0/24}"
+PRIVATE_ENDPOINTS_SUBNET="${PRIVATE_ENDPOINTS_SUBNET:-${AVD_SUBNET_PRIVATE_ENDPOINTS:-subnet-private-endpoints}}"
+PRIVATE_ENDPOINTS_PREFIX="${PRIVATE_ENDPOINTS_PREFIX:-${AVD_SUBNET_PRIVATE_ENDPOINTS_PREFIX:-10.0.2.0/24}}"
 
-FILE_SERVER_SUBNET="${FILE_SERVER_SUBNET:-subnet-file-server}"
-FILE_SERVER_PREFIX="${FILE_SERVER_PREFIX:-10.0.3.0/24}"
+FILE_SERVER_SUBNET="${FILE_SERVER_SUBNET:-${AVD_SUBNET_FILE_SERVER:-subnet-file-server}}"
+FILE_SERVER_PREFIX="${FILE_SERVER_PREFIX:-${AVD_SUBNET_FILE_SERVER_PREFIX:-10.0.3.0/24}}"
 
-HUB_VNET_NAME="${HUB_VNET_NAME:-}"
-HUB_VNET_RG="${HUB_VNET_RG:-}"
+HUB_VNET_NAME="${HUB_VNET_NAME:-${AVD_HUB_VNET_NAME:-}}"
+HUB_VNET_RG="${HUB_VNET_RG:-${AVD_HUB_VNET_RG:-}}"
 
 # ============================================================================
 # Helper Functions

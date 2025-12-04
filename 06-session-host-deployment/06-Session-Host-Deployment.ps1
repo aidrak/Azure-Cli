@@ -40,31 +40,47 @@
 # - Expected runtime: 15-30 minutes for 10 VMs
 # - VMs are registered to host pool during deployment
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$HostPoolName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$GalleryImageId,
-
-    [Parameter(Mandatory=$true)]
-    [string]$VNetName,
-
-    [Parameter(Mandatory=$true)]
-    [string]$SubnetName,
+    [Parameter(Mandatory=$false)]
+    [string]$ResourceGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.ResourceGroup } else { "RG-Azure-VDI-01" }),
 
     [Parameter(Mandatory=$false)]
-    [int]$NumberOfVMs = 10,
+    [string]$HostPoolName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.HostPool.HostPoolName } else { "Pool-Pooled-Prod" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$VmPrefix = "avd-pool",
+    [string]$GalleryImageId = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.SessionHosts.GalleryImageId } else { "" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$VmSize = "Standard_D4s_v6"
+    [string]$VNetName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Networking.VNetName } else { "vnet-avd-prod" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$SubnetName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.Networking.SubnetName } else { "subnet-session-hosts" }),
+
+    [Parameter(Mandatory=$false)]
+    [int]$NumberOfVMs = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.SessionHosts.NumberOfVMs } else { 10 }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$VmPrefix = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.SessionHosts.VmPrefix } else { "avd-pool" }),
+
+    [Parameter(Mandatory=$false)]
+    [string]$VmSize = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.SessionHosts.VmSize } else { "Standard_D4s_v6" })
 )
 
 $ErrorActionPreference = "Stop"

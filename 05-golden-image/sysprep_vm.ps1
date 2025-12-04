@@ -17,8 +17,13 @@ try {
 
     Write-Host "Clearing Windows Event Logs..."
     wevtutil el | ForEach-Object { 
-        Write-Host "Clearing log: $_"
-        wevtutil cl "$_" 
+        try {
+            Write-Host "Clearing log: $_"
+            wevtutil cl "$_" -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Could not clear log '$_'. This is often due to permissions and is non-critical. Error: $($_.Exception.Message)"
+        }
     }
 
     Write-Host "Clearing PowerShell history..."

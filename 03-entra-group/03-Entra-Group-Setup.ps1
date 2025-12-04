@@ -31,19 +31,35 @@
 # - Dynamic device groups require Azure AD Premium P1 license
 # - Expected runtime: 1-2 minutes
 
+# ============================================================================
+# Configuration Loading
+# ============================================================================
+# Load configuration from file if it exists
+# Script parameters and environment variables override config file values
+
+$ConfigFile = $env:AVD_CONFIG_FILE
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $PSScriptRoot ".." "config" "avd-config.ps1"
+}
+
+if (Test-Path $ConfigFile) {
+    Write-Host "ℹ Loading configuration from: $ConfigFile" -ForegroundColor Cyan
+    . $ConfigFile
+}
+
 [CmdletBinding()]
 param (
     [Parameter(Mandatory=$false)]
-    [string]$StandardUsersGroupName = "AVD-Users-Standard",
+    [string]$StandardUsersGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.StandardUsersGroupName } else { "AVD-Users-Standard" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$AdminUsersGroupName = "AVD-Users-Admins",
+    [string]$AdminUsersGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.AdminUsersGroupName } else { "AVD-Users-Admins" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$DeviceDynamicGroupName = "AVD-Devices-Pooled-SSO",
+    [string]$DeviceDynamicGroupName = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.DeviceDynamicGroupName } else { "AVD-Devices-Pooled-SSO" }),
 
     [Parameter(Mandatory=$false)]
-    [string]$DeviceDynamicGroupRule = '(device.displayName -startsWith "avd-pool")'
+    [string]$DeviceDynamicGroupRule = $(if ($Global:AVD_CONFIG) { $Global:AVD_CONFIG.EntraGroups.DeviceDynamicGroupRule } else { '(device.displayName -startsWith "avd-pool")' })
 )
 
 $ErrorActionPreference = "Stop"
