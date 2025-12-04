@@ -1,0 +1,183 @@
+# ==============================================================================
+# Azure VDI Deployment - Central Configuration
+# ==============================================================================
+#
+# This is the single source of truth for all configuration values.
+# Claude Code is always aware of this file via .claude/CLAUDE.md
+#
+# Configuration is loaded via: source core/config-manager.sh && load_config
+#
+# Security Note:
+#   - This file should be added to .gitignore
+#   - Never commit passwords or secrets
+#   - Use environment variables for sensitive data
+#
+# ==============================================================================
+
+# ==============================================================================
+# Azure Global Settings
+# ==============================================================================
+azure:
+  subscription_id: "00000000-0000-0000-0000-000000000000"  # REPLACE with your subscription ID
+  tenant_id: "00000000-0000-0000-0000-000000000000"        # REPLACE with your tenant ID
+  location: "centralus"                                     # Azure region
+  resource_group: "RG-Azure-VDI-01"                        # Main resource group
+  environment: "prod"                                       # Environment: prod, dev, test
+
+# ==============================================================================
+# Networking Configuration (Module 01)
+# ==============================================================================
+networking:
+  vnet_name: "avd-vnet"
+  vnet_cidr: "10.0.0.0/16"
+  subnet_name: "avd-subnet"
+  subnet_cidr: "10.0.1.0/24"
+  nsg_name: "avd-nsg"
+
+# ==============================================================================
+# Storage Configuration (Module 02)
+# ==============================================================================
+storage:
+  account_name: ""                      # Auto-generated if empty: fslogix<random5>
+  share_name: "fslogix-profiles"
+  quota_gb: 1024
+  tier: "Premium"                       # Premium or Standard
+
+# ==============================================================================
+# Entra ID Configuration (Module 03)
+# ==============================================================================
+entra_id:
+  # User groups
+  group_users_standard: "AVD-Users-Standard"
+  group_users_admins: "AVD-Users-Admins"
+
+  # Device groups
+  group_devices_sso: "AVD-Devices-Pooled-SSO"
+  group_devices_fslogix: "AVD-Devices-Pooled-FSLogix"
+  group_devices_network: "AVD-Devices-Pooled-Network"
+  group_devices_security: "AVD-Devices-Pooled-Security"
+
+# ==============================================================================
+# Host Pool Configuration (Module 04)
+# ==============================================================================
+host_pool:
+  name: "Pool-Pooled-Prod"
+  type: "Pooled"                        # Pooled or Personal
+  max_sessions: 10
+  load_balancer: "BreadthFirst"         # BreadthFirst or DepthFirst
+
+# ==============================================================================
+# Workspace Configuration (Module 04)
+# ==============================================================================
+workspace:
+  name: "AVD-Workspace-Prod"
+  friendly_name: "Azure Virtual Desktop"
+  description: "Production AVD workspace"
+
+# ==============================================================================
+# Application Group Configuration (Module 04)
+# ==============================================================================
+app_group:
+  name: "Desktop-Prod"
+  type: "Desktop"                       # Desktop or RemoteApp
+  friendly_name: "Desktop"
+
+# ==============================================================================
+# Golden Image Configuration (Module 05)
+# ==============================================================================
+golden_image:
+  # Temporary VM for image creation
+  temp_vm_name: "gm-temp-vm"
+  vm_size: "Standard_D4s_v6"
+
+  # Windows base image
+  image_publisher: "MicrosoftWindowsDesktop"
+  image_offer: "windows-11"
+  image_sku: "win11-25h2-avd"
+  image_version: "latest"
+
+  # VM credentials (password should be set via environment variable)
+  admin_username: "entra-admin"
+  admin_password: ""                    # NEVER commit password - use environment variable
+
+  # Azure Compute Gallery
+  gallery_name: "avd_gallery"
+  definition_name: "windows11-golden-image"
+  image_sku_name: "Win11-Pooled-FSLogix"
+  image_publisher_name: "YourCompany"
+  image_offer_name: "AVD"
+
+  # Timezone
+  timezone: "Central Standard Time"
+  timezone_redirection_enabled: true
+
+  # Software versions
+  fslogix_version: "2.9.8653.48899"
+  vdot_version: "3.8"
+
+# ==============================================================================
+# Session Host Configuration (Module 06)
+# ==============================================================================
+session_host:
+  vm_count: 2
+  vm_size: "Standard_D4s_v6"
+  name_prefix: "avd-sh"
+
+  # Image source (from golden image)
+  use_golden_image: true
+
+# ==============================================================================
+# Intune Configuration (Module 07)
+# ==============================================================================
+intune:
+  enabled: true
+  device_compliance_required: false
+
+# ==============================================================================
+# RBAC Configuration (Module 08)
+# ==============================================================================
+rbac:
+  # Role assignments for user groups
+  assign_desktop_users: true
+  assign_admin_users: true
+
+# ==============================================================================
+# SSO Configuration (Module 09)
+# ==============================================================================
+sso:
+  enabled: true
+  method: "azuread"                     # azuread or adfs
+
+# ==============================================================================
+# Autoscaling Configuration (Module 10)
+# ==============================================================================
+autoscaling:
+  enabled: true
+  schedule:
+    weekday_start_hour: 7               # 7 AM
+    weekday_stop_hour: 19               # 7 PM
+    weekend_enabled: false
+
+  capacity:
+    min_vms: 1
+    max_vms: 10
+    ramp_up_capacity_threshold: 60      # Percentage
+    ramp_down_capacity_threshold: 30    # Percentage
+
+# ==============================================================================
+# Testing Configuration (Module 11)
+# ==============================================================================
+testing:
+  validate_connectivity: true
+  validate_fslogix: true
+  validate_sso: true
+  test_user_login: false                # Requires test user credentials
+
+# ==============================================================================
+# Tags (Applied to all resources)
+# ==============================================================================
+tags:
+  environment: "production"
+  project: "avd-deployment"
+  managed_by: "azure-cli-automation"
+  cost_center: "IT"
