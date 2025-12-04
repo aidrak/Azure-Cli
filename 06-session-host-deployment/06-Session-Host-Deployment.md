@@ -6,10 +6,79 @@
 - Golden images in Azure Compute Gallery
 - Host pool: `Pool-Pooled-Prod`
 - VNet and subnets created
+- PowerShell with Az.DesktopVirtualization and Az.Compute modules
 
 ---
 
-## Deploy via Host Pool
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `06-Session-Host-Deployment.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. Find your golden image ID first (from Guide 05)
+$imageId = "/subscriptions/{subscriptionId}/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Compute/galleries/AVD_Image_Gallery/images/Win11-AVD-Pooled/versions/1.0.0"
+
+# 3. Run the script with defaults (deploys 10 session hosts)
+.\06-Session-Host-Deployment.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -GalleryImageId $imageId `
+  -VNetName "vnet-avd-prod" `
+  -SubnetName "snet-avd-sessionhosts"
+
+# 4. Or customize number of VMs, sizing, naming
+.\06-Session-Host-Deployment.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -GalleryImageId $imageId `
+  -VNetName "vnet-avd-prod" `
+  -SubnetName "snet-avd-sessionhosts" `
+  -NumberOfVMs 10 `
+  -VmPrefix "avd-pool" `
+  -VmSize "Standard_D4s_v6"
+```
+
+**What the script does:**
+1. Validates prerequisites (host pool exists, image accessible)
+2. Generates host pool registration token (24-hour validity)
+3. Creates N session host VMs with zero-padded naming (avd-pool-001, avd-pool-002, etc.)
+4. Joins session hosts to VNet in private subnet (no public IPs)
+5. Registers session hosts to host pool using registration token
+6. Validates all session hosts available and ready
+7. Updates dynamic device groups (devices matching "avd-pool-*" will auto-join)
+
+**Expected Runtime:** 15-20 minutes for 10 VMs
+
+**Important Notes:**
+- Session hosts are created without public IPs (secure, private deployment)
+- Naming pattern `avd-pool-*` ensures automatic membership in Entra device groups
+- Registration token is valid for 24 hours; script runs within this window
+- VMs auto-join Entra ID via Intune enrollment setting
+
+**Verification:**
+```powershell
+# Check session hosts registered
+Get-AzWvdSessionHost -ResourceGroupName "RG-Azure-VDI-01" -HostPoolName "Pool-Pooled-Prod"
+
+# Verify all are "Available"
+Get-AzWvdSessionHost -ResourceGroupName "RG-Azure-VDI-01" -HostPoolName "Pool-Pooled-Prod" | Select-Object Name, Status
+
+# Check in Entra ID - devices should appear with avd-pool-* naming
+# Navigate to: Devices > All devices (filter: avd-pool-)
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Deploy via Host Pool
 
 ### Azure Portal
 

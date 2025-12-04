@@ -6,11 +6,8 @@
 - Azure subscription with Owner or Contributor role
 - Resource group: `RG-Azure-VDI-01` exists
 - AVD spoke VNet created with private endpoint subnet (10.1.4.0/24)
-- PowerShell modules (for PowerShell option):
-  ```powershell
-  Install-Module -Name Az.Storage -Force
-  Install-Module -Name Az.Network -Force
-  ```
+- Azure CLI or PowerShell installed
+- Logged into Azure
 
 **Storage Account Naming (IMPORTANT):**
 - Pattern: `fslogix<random-5-digits>` (e.g., `fslogix37402`, `fslogix12345`)
@@ -22,7 +19,59 @@
 
 ---
 
-## Part 1: Create FSLogix Storage Account
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `02-Storage-Setup.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. Run the script with default settings
+.\02-Storage-Setup.ps1 -ResourceGroupName "RG-Azure-VDI-01" -Location "centralus" -VNetName "vnet-avd-prod"
+
+# 3. Or with custom storage account name
+.\02-Storage-Setup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -Location "centralus" `
+  -StorageAccountName "fslogix52847" `
+  -VNetName "vnet-avd-prod" `
+  -PrivateEndpointSubnetName "snet-avd-privateendpoints" `
+  -FileShareQuotaGB 5120
+```
+
+**What the script does:**
+1. Creates Premium FileStorage account with globally unique name
+2. Enables Entra Kerberos authentication for passwordless access
+3. Creates `fslogix-profiles` file share (5 TB default, adjustable)
+4. Creates private DNS zone for Azure Files
+5. Creates private endpoint in VNet for secure storage access
+6. Links DNS zone to VNet for DNS resolution
+7. Validates all configurations completed successfully
+
+**Expected Runtime:** 5-8 minutes
+
+**Verification:**
+```powershell
+# Verify storage account created
+Get-AzStorageAccount -ResourceGroupName "RG-Azure-VDI-01" -Name "YOUR_STORAGE_ACCOUNT"
+
+# Verify file share exists
+Get-AzStorageShare -Name "fslogix-profiles" -Context (Get-AzStorageAccount -ResourceGroupName "RG-Azure-VDI-01" -Name "YOUR_STORAGE_ACCOUNT").Context
+
+# Verify private endpoint
+Get-AzPrivateEndpoint -ResourceGroupName "RG-Azure-VDI-01" -Name "pe-fslogix-files"
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Part 1: Create FSLogix Storage Account
 
 ### Option A: Azure Portal (GUI)
 

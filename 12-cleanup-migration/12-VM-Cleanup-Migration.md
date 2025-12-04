@@ -4,13 +4,84 @@
 
 **Prerequisites:**
 - New AVD environment tested and validated
-- All tests from Guide 10 passed
+- All tests from Guide 11 passed
 - Communication sent to users
 - Backup plan in place
+- PowerShell with Az.Compute and Az.Network modules
 
 ---
 
-## Migration Strategy
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `12-VM-Cleanup.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. List VMs to clean up (dry-run first)
+.\12-VM-Cleanup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -WhatIf
+
+# 3. Delete specific temporary VMs by name pattern
+.\12-VM-Cleanup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -VmNamesToDelete "avd-gold-*" `
+  -DeleteDisks $true `
+  -DeleteNics $true
+
+# 4. Or delete multiple VM patterns
+.\12-VM-Cleanup.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -VmNamesToDelete @("avd-gold-*", "avd-test-*") `
+  -DeleteDisks $true `
+  -DeleteNics $true
+```
+
+**What the script does:**
+1. **Finds Temporary VMs** - Searches for VMs matching specified name patterns (supports wildcards)
+2. **Confirms Deletion** - Prompts for confirmation before deleting (unless -WhatIf specified)
+3. **Deletes VMs** - Removes matched VMs from resource group
+4. **Cleans Orphaned Disks** - Finds and removes disks no longer attached to VMs
+5. **Cleans Orphaned NICs** - Finds and removes network interfaces no longer attached to VMs
+6. **Validates Cleanup** - Confirms all deletions completed successfully
+
+**Expected Runtime:** 5-10 minutes (varies based on number of VMs)
+
+**Important Parameters:**
+- `-VmNamesToDelete`: Array of VM name patterns (e.g., "avd-gold-*", "avd-test-01")
+- `-DeleteDisks`: Delete orphaned managed disks (default: true)
+- `-DeleteNics`: Delete orphaned network interfaces (default: true)
+- `-WhatIf`: Show what would be deleted WITHOUT actually deleting (safe for testing)
+
+**Safety Features:**
+- Requires explicit confirmation before deleting
+- Supports `-WhatIf` for dry-run
+- Clear logging of what will be deleted
+- Validation that resources were successfully removed
+
+**Typical Usage:**
+```powershell
+# Step 1: See what will be deleted (safe, no changes)
+.\12-VM-Cleanup.ps1 -ResourceGroupName "RG-Azure-VDI-01" -VmNamesToDelete "avd-gold-*" -WhatIf
+
+# Step 2: Actually delete (with confirmation prompt)
+.\12-VM-Cleanup.ps1 -ResourceGroupName "RG-Azure-VDI-01" -VmNamesToDelete "avd-gold-*"
+
+# Step 3: Verify cleanup
+Get-AzVm -ResourceGroupName "RG-Azure-VDI-01" | Where-Object { $_.Name -like "avd-gold-*" }
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Migration Strategy
 
 ### Phased Approach (Recommended)
 

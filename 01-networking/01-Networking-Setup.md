@@ -5,6 +5,7 @@
 **Prerequisites:**
 - Existing hub VNet with VPN gateway to 10 firewalls
 - Resource group: `RG-Azure-VDI-01`
+- Azure CLI installed and configured
 
 **Architecture:**
 ```
@@ -19,7 +20,73 @@ AVD Spoke VNet (10.1.0.0/16) - New
 
 ---
 
-## Part 1: Create VNet and Subnets
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `01-Networking-Setup.sh` (Bash/Azure CLI)
+
+**Prerequisites for script:**
+- Azure CLI installed (`az --version`)
+- Logged into Azure (`az login`)
+- Existing hub VNet details (name, resource group)
+
+**Quick Start:**
+
+```bash
+# 1. Make script executable
+chmod +x ./01-Networking-Setup.sh
+
+# 2. Run the script with default settings
+./01-Networking-Setup.sh
+
+# 3. Or customize parameters
+./01-Networking-Setup.sh \
+  --resource-group "RG-Azure-VDI-01" \
+  --location "centralus" \
+  --vnet-name "vnet-avd-prod" \
+  --vnet-prefix "10.1.0.0/16" \
+  --hub-rg "RG-HUB" \
+  --hub-vnet "vnet-hub-centralus"
+```
+
+**What the script does:**
+1. Creates AVD spoke VNet with address space 10.1.0.0/16
+2. Creates 3 subnets:
+   - `snet-avd-sessionhosts`: 10.1.0.0/22 (for session host VMs)
+   - `snet-avd-privateendpoints`: 10.1.4.0/24 (for storage private endpoint)
+   - `snet-fileserver`: 10.1.5.0/24 (for file server)
+3. Creates 3 Network Security Groups with appropriate rules:
+   - `nsg-avd-sessionhosts`: Allows AVD Gateway, Azure Cloud, Entra ID, Storage traffic
+   - `nsg-avd-privateendpoints`: Allows SMB (445) from session hosts
+   - `nsg-fileserver`: Allows SMB (445) from session hosts
+4. Attaches NSGs to respective subnets
+5. Optional: Creates VNet peering to hub VNet
+6. Validates all resources created successfully
+
+**Expected Runtime:** 2-3 minutes
+
+**Verification:**
+After running the script, verify creation:
+```bash
+# Check VNet
+az network vnet show --resource-group RG-Azure-VDI-01 --name vnet-avd-prod
+
+# Check subnets
+az network vnet subnet list --resource-group RG-Azure-VDI-01 --vnet-name vnet-avd-prod
+
+# Check NSGs
+az network nsg list --resource-group RG-Azure-VDI-01
+
+# Check peering (if created)
+az network vnet peering list --resource-group RG-Azure-VDI-01 --vnet-name vnet-avd-prod
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Part 1: Create VNet and Subnets
 
 ### Option A: Azure Portal
 
@@ -228,4 +295,9 @@ az network vnet peering list --resource-group RG-Azure-VDI-01 --vnet-name vnet-a
 
 ---
 
-**Next:** Create Entra ID groups (Guide 03), then FSLogix storage (Guide 02)
+## Next Steps
+
+1. ✓ Networking infrastructure created
+2. ⏭ Create FSLogix storage account (Guide 02)
+3. ⏭ Create Entra ID security groups (Guide 03)
+4. ⏭ Create host pool and workspace (Guide 04)

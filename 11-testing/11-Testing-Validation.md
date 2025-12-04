@@ -7,10 +7,72 @@
 - Session hosts created
 - Policies configured
 - RBAC assigned
+- PowerShell with Az modules
 
 ---
 
-## Quick Validation Script
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `11-Testing-Validation.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Azure
+Connect-AzAccount
+
+# 2. Run comprehensive validation
+.\11-Testing-Validation.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -WorkspaceName "AVD-Workspace-Prod" `
+  -StorageAccountName "fslogix52847"
+
+# 3. Or run with minimal parameters (workspace is required)
+.\11-Testing-Validation.ps1 `
+  -ResourceGroupName "RG-Azure-VDI-01" `
+  -HostPoolName "Pool-Pooled-Prod" `
+  -WorkspaceName "AVD-Workspace-Prod"
+```
+
+**What the script does:**
+1. **Resource Group Validation** - Verifies resource group exists
+2. **Host Pool Testing** - Checks host pool configuration, session limits, load balancing
+3. **Session Host Validation** - Enumerates all session hosts, verifies available count
+4. **Workspace Verification** - Confirms workspace created and accessible
+5. **Application Group Validation** - Checks app groups linked to host pool
+6. **Storage Testing** (optional) - Verifies FSLogix storage account accessible
+7. **Summary Report** - Provides pass/fail/warning counts
+
+**Expected Runtime:** 2-3 minutes
+
+**Output:**
+- Console output with colored results (green=pass, yellow=warning, red=fail)
+- Summary section with counts of passed/failed/warned tests
+- Clear indication of what's ready for production
+
+**Important Notes:**
+- Script is read-only; no resources are modified
+- Safe to run multiple times
+- Storage account parameter is optional (skips storage tests if not provided)
+- All validation checks are infrastructure-level only (not user access testing)
+
+**Verification:**
+After running the script, you should see:
+- ✓ Resource group exists
+- ✓ Host pool exists with correct configuration
+- ✓ Session hosts available (all or most showing "Available" status)
+- ✓ Workspace accessible
+- ✓ Application groups configured
+- ✓ Storage account accessible (if provided)
+
+---
+
+## Manual Deployment (Alternative)
+
+### Quick Validation Script
 
 ```powershell
 # Run on session host as administrator

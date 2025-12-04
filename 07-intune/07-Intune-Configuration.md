@@ -7,6 +7,7 @@
 - FSLogix storage: Use the storage account name you created in Guide 02 (pattern: `fslogix<random-5-digits>`, e.g., `fslogix52847`)
 - Entra ID groups created (Guide 03)
 - Device dynamic groups created and populated with session hosts
+- Intune admin access
 
 **Configuring:**
 1. FSLogix profile containers
@@ -16,7 +17,71 @@
 
 ---
 
-## Part 1: FSLogix Configuration
+## Automated Deployment (Recommended)
+
+### Using the Automation Script
+
+**Script:** `07-Intune-Configuration.ps1` (PowerShell)
+
+**Quick Start:**
+
+```powershell
+# 1. Login to Microsoft Graph
+Connect-MgGraph -Scopes "DeviceManagementConfiguration.ReadWrite.All", "Group.Read.All"
+
+# 2. Run the script with your storage account details
+.\07-Intune-Configuration.ps1 `
+  -StorageAccountName "fslogix52847" `
+  -FileShareName "fslogix-profiles" `
+  -DeviceGroupName "AVD-Devices-Pooled-FSLogix"
+
+# 3. Or use all defaults (requires groups exist from Guide 03)
+.\07-Intune-Configuration.ps1
+```
+
+**What the script does:**
+1. Validates FSLogix storage account and file share exist
+2. Validates device groups created in Guide 03
+3. Creates Intune Settings Catalog policies for:
+   - FSLogix profile container configuration
+   - RDP TCP-only transport (disable UDP) for session hosts
+   - RDP TCP-only transport (disable UDP) for client devices
+   - Windows Hello and tips suppression
+4. Assigns policies to respective device groups:
+   - FSLogix policy → `AVD-Devices-Pooled-FSLogix`
+   - Session host TCP policy → `AVD-Devices-Pooled-Network`
+   - Client TCP policy → `AVD-Devices-Clients-Corporate`
+   - Suppression policy → `AVD-Devices-Pooled-*` (all session hosts)
+5. Validates all policies created and assigned successfully
+
+**Expected Runtime:** 3-5 minutes
+
+**Important Notes:**
+- Policies will apply to devices within 15-30 minutes of Intune sync
+- FSLogix cache is 20 GB, adjustable via script parameter
+- Policies take precedence over host pool RDP settings
+- Device groups must exist and have devices before policy assignment (Groups auto-populate when session hosts are deployed with "avd-pool-*" naming)
+
+**Verification:**
+```powershell
+# Check policies created
+Get-MgDeviceManagementConfigurationPolicy | Where-Object { $_.Name -like "AVD*" }
+
+# Check policy assignments
+$policies = Get-MgDeviceManagementConfigurationPolicy | Where-Object { $_.Name -like "AVD*" }
+foreach ($policy in $policies) {
+    Get-MgDeviceManagementConfigurationPolicyAssignment -DeviceManagementConfigurationPolicyId $policy.Id
+}
+
+# Verify policy deployment on device (RDP into session host)
+# Look for Intune settings in: Settings > System > About > Device manager
+```
+
+---
+
+## Manual Deployment (Alternative)
+
+### Part 1: FSLogix Configuration
 
 ### Intune Admin Center
 
