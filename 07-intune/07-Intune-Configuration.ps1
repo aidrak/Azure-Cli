@@ -162,6 +162,76 @@ function Assign-ProfileToDeviceGroup {
     }
 }
 
+function Document-ShutdownButtonPolicy {
+    Write-LogSection "Part 5: Hide Shutdown Button from Start Menu"
+
+    Write-LogInfo "Policy Name: AVD - Hide Shutdown Button"
+    Write-LogInfo "Type: Settings Catalog or Device Restrictions"
+    Write-LogInfo "Target Group: AVD session host device groups (e.g., AVD-Devices-Pooled-Network)"
+    Write-Host ""
+
+    Write-Host "Settings Catalog Configuration:" -ForegroundColor Cyan
+    Write-Host "  1. Devices > Configuration > + Create > Settings catalog"
+    Write-Host "  2. Name: AVD - Hide Shutdown Button"
+    Write-Host "  3. + Add settings → Search: 'Start'"
+    Write-Host "  4. Select: Hide Shutdown"
+    Write-Host "  5. Enable the setting"
+    Write-Host "  6. Assign to: Session host device groups"
+    Write-Host ""
+
+    Write-Host "Device Restrictions Alternative:" -ForegroundColor Cyan
+    Write-Host "  1. Devices > Configuration > + Create > Device restrictions"
+    Write-Host "  2. Start section → Shut Down: Block"
+    Write-Host "  3. Assign to: Session host device groups"
+    Write-Host ""
+
+    Write-LogInfo "Expected Result: Users cannot shutdown VM via Start menu"
+    Write-LogInfo "Users can still: Disconnect, Sign Out, End session"
+}
+
+function Document-AutoEndTasksPolicy {
+    Write-LogSection "Part 6: Auto-Close Applications on Logoff (AutoEndTasks)"
+
+    Write-LogWarning "IMPORTANT: This closes apps WITHOUT saving work!"
+    Write-LogInfo "Policy Name: AVD - Auto End Tasks on Logoff"
+    Write-LogInfo "Type: Settings Catalog (User Configuration)"
+    Write-LogInfo "Target Group: AVD user groups (NOT device groups)"
+    Write-Host ""
+
+    Write-Host "Registry Path (for verification):" -ForegroundColor Cyan
+    Write-Host "  HKEY_CURRENT_USER\Control Panel\Desktop"
+    Write-Host "    - AutoEndTasks (REG_SZ) = '1'"
+    Write-Host "    - WaitToKillAppTimeout (REG_SZ) = '5000' (optional)"
+    Write-Host ""
+
+    Write-Host "Settings Catalog Configuration:" -ForegroundColor Cyan
+    Write-Host "  1. Devices > Configuration > + Create > Settings catalog"
+    Write-Host "  2. Name: AVD - Auto End Tasks on Logoff"
+    Write-Host "  3. + Add settings → Search: 'AutoEndTasks'"
+    Write-Host "  4. Path: User Configuration > Administrative Templates > System > Logon/Logoff"
+    Write-Host "  5. Select: AutoEndTasks"
+    Write-Host "  6. Enable the setting"
+    Write-Host "  7. Optional: Add WaitToKillAppTimeout setting (value: 5000)"
+    Write-Host "  8. IMPORTANT: Assign to USER groups, not device groups"
+    Write-Host ""
+
+    Write-Host "Group Policy Alternative (for reference):" -ForegroundColor Cyan
+    Write-Host "  User Configuration > Preferences > Windows Settings > Registry"
+    Write-Host "    - Hive: HKEY_CURRENT_USER"
+    Write-Host "    - Key: Control Panel\Desktop"
+    Write-Host "    - Value: AutoEndTasks (REG_SZ) = 1"
+    Write-Host ""
+
+    Write-LogWarning "Deployment Considerations:"
+    Write-Host "  • Informs users: Unsaved work will be lost on logoff"
+    Write-Host "  • Prevents sessions from staying connected after logoff"
+    Write-Host "  • Takes effect on next user logon"
+    Write-Host "  • Consider user training and communication"
+    Write-Host ""
+
+    Write-LogInfo "Expected Behavior: Apps close immediately on logoff without save prompts"
+}
+
 function main {
     Write-Host ""
     Write-LogSection "AVD Intune Configuration"
@@ -169,6 +239,8 @@ function main {
     Test-MgGraphConnection
     New-FslogixConfigurationProfile
     Assign-ProfileToDeviceGroup
+    Document-ShutdownButtonPolicy
+    Document-AutoEndTasksPolicy
 
     Write-Host ""
     Write-LogSuccess "Intune Configuration Documented!"
@@ -176,8 +248,8 @@ function main {
     Write-LogWarning "IMPORTANT: Manual Steps Required"
     Write-Host "  1. Go to Intune admin center"
     Write-Host "  2. Devices > Configuration > Create configuration profile"
-    Write-Host "  3. Settings mentioned above"
-    Write-Host "  4. Assign to $DeviceGroupName"
+    Write-Host "  3. Configure settings documented above"
+    Write-Host "  4. Assign to appropriate device/user groups"
     Write-Host "  5. Ensure session hosts are enrolled in Intune"
     Write-Host ""
 }

@@ -34,7 +34,7 @@ Each task is a standalone, executable script that performs one specific operatio
 - **`01-create-vm.sh`** - Create temporary Windows 11 VM (5-10 min)
 - **`02-validate-vm.sh`** - Wait for VM to boot and be ready (5-15 min)
 - **`03-configure-vm.sh`** - Install software and optimizations (30-60 min)
-- **`07-avd-registry-optimizations.sh`** - Apply AVD-specific registry settings (2-5 min)
+- **`07-avd-registry-optimizations.sh`** - Apply AVD-specific registry settings and timezone configuration (2-5 min)
 - **`08-final-cleanup-sysprep.sh`** - Final cleanup and sysprep preparation (5-10 min)
 - **`04-sysprep-vm.sh`** - Prepare VM for image capture (5-10 min)
 - **`05-capture-image.sh`** - Save VM as reusable image (15-30 min)
@@ -229,10 +229,11 @@ Task 03 installs:
 - **Windows Updates** - Latest patches
 - **AVD Optimization Tool (VDOT)** - Performance tuning
 
-Plus registry optimizations for:
+Plus registry optimizations and configuration for:
+- Persistent timezone configuration (Central Standard Time by default)
 - Windows permissions redirection
 - Printer redirection
-- Timezone redirection
+- Timezone redirection (both system and RDP client)
 - User profile optimization
 
 ### Image Output
