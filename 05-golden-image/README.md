@@ -15,6 +15,8 @@ export ADMIN_PASSWORD="YourSecurePassword123!"
 ./tasks/01-create-vm.sh && \
 ./tasks/02-validate-vm.sh && \
 ./tasks/03-configure-vm.sh && \
+./tasks/07-avd-registry-optimizations.sh && \
+./tasks/08-final-cleanup-sysprep.sh && \
 ./tasks/04-sysprep-vm.sh && \
 ./tasks/05-capture-image.sh && \
 ./tasks/06-cleanup.sh
@@ -30,6 +32,8 @@ Each task is a standalone, executable script that performs one specific operatio
 - **`01-create-vm.sh`** - Create temporary Windows 11 VM (5-10 min)
 - **`02-validate-vm.sh`** - Wait for VM to boot and be ready (5-15 min)
 - **`03-configure-vm.sh`** - Install software and optimizations (30-60 min)
+- **`07-avd-registry-optimizations.sh`** - Apply AVD-specific registry settings (2-5 min)
+- **`08-final-cleanup-sysprep.sh`** - Final cleanup and sysprep preparation (5-10 min)
 - **`04-sysprep-vm.sh`** - Prepare VM for image capture (5-10 min)
 - **`05-capture-image.sh`** - Save VM as reusable image (15-30 min)
 - **`06-cleanup.sh`** - Delete temporary resources (5-10 min)
@@ -207,6 +211,8 @@ Checks:
 | 01 | Create VM | 5-10 min | No |
 | 02 | Validate readiness | 5-15 min | No |
 | 03 | Configure VM | 30-60 min | No |
+| 07 | AVD Registry Optimizations | 2-5 min | No |
+| 08 | Final Cleanup & Sysprep | 5-10 min | No |
 | 04 | Sysprep | 5-10 min | No |
 | 05 | Capture image | 15-30 min | No |
 | 06 | Cleanup | 5-10 min | No |

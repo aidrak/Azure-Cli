@@ -328,6 +328,52 @@ az account show
 ./orchestrate.sh --resume
 ```
 
+### Task: Configure VM Remotely via `az vm run-command`
+
+**When to Use**: Golden image creation and any VM configuration that doesn't require RDP/GUI interaction.
+
+**Key Point**: The repository's task scripts (03-06 in golden image workflow) use `az vm run-command` to execute PowerShell scripts remotely **without needing RDP**. This enables fully automated configuration.
+
+```bash
+# Basic pattern - send local script to Azure VM for execution
+az vm run-command invoke \
+  --resource-group "$RESOURCE_GROUP_NAME" \
+  --name "$VM_NAME" \
+  --command-id RunPowerShellScript \
+  --scripts "$(cat /path/to/script.ps1)" \
+  --output json > output.json
+
+# For golden image configuration (example):
+cd 05-golden-image
+source config.env
+
+# Execute comprehensive configuration (30-60 min)
+az vm run-command invoke \
+  --resource-group "$RESOURCE_GROUP_NAME" \
+  --name "$TEMP_VM_NAME" \
+  --command-id RunPowerShellScript \
+  --scripts "$(cat config_vm.ps1)" \
+  --output json > artifacts/config_output.json
+
+# Extract results from JSON output
+STDOUT=$(cat artifacts/config_output.json | jq -r '.value[0].message')
+echo "$STDOUT"
+```
+
+**Why This Matters**:
+- No RDP connection required for VM configuration
+- Fully scriptable automation workflow
+- Enables CI/CD pipeline integration
+- Allows configuration of VMs without public IP addresses
+
+**Important Characteristics**:
+1. **Synchronous by default**: Command waits for PowerShell to complete
+2. **Script loading**: `$(cat script.ps1)` reads entire script into bash string
+3. **Output format**: JSON response with stdout/stderr/exitCode
+4. **Error handling**: Use `|| true` to prevent bash exit on PowerShell errors
+
+**Related Documentation**: See [AZURE-VM-REMOTE-EXECUTION.md](./AZURE-VM-REMOTE-EXECUTION.md) for comprehensive pattern documentation, examples, and troubleshooting.
+
 ---
 
 ## Troubleshooting
