@@ -1,24 +1,34 @@
 {
   "current_module": "01-networking",
-  "updated_at": "2025-12-05T04:19:23Z",
+  "updated_at": "2025-12-05T04:21:55Z",
   "modules": {
     "01-networking": {
-      "status": "running",
-      "timestamp": "2025-12-05T04:18:13Z"
+      "status": "failed",
+      "timestamp": "2025-12-05T04:21:55Z"
     }
   },
-  "current_operation": "networking-create-subnets",
-  "status": "running",
+  "current_operation": "networking-configure-nsg-rules",
+  "status": "failed",
   "operations": {
     "networking-create-vnet": {
       "status": "completed",
-      "duration": 16,
-      "timestamp": "2025-12-05T04:17:02Z"
+      "duration": 2,
+      "timestamp": "2025-12-05T04:21:23Z"
     },
     "networking-create-subnets": {
       "status": "completed",
-      "duration": 20,
-      "timestamp": "2025-12-05T04:19:43Z"
+      "duration": 4,
+      "timestamp": "2025-12-05T04:21:27Z"
+    },
+    "networking-create-nsgs": {
+      "status": "completed",
+      "duration": 12,
+      "timestamp": "2025-12-05T04:21:39Z"
+    },
+    "networking-configure-nsg-rules": {
+      "status": "failed",
+      "duration": 16,
+      "timestamp": "2025-12-05T04:21:55Z"
     }
   }
 }

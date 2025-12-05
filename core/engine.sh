@@ -272,7 +272,7 @@ execute_module() {
 
     # Execute each operation in sequence
     while IFS= read -r operation_id; do
-        ((current_op++))
+        current_op=$((current_op + 1))  # Increment safely (avoids set -e issue with ((current_op++)))
 
         echo ""
         echo "========================================================================"
