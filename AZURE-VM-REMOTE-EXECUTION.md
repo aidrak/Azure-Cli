@@ -1,8 +1,6 @@
-# Azure VM Remote Execution Pattern
+# Azure VM Remote Execution - `az vm run-command` Pattern
 
-## Overview
-
-Execute PowerShell scripts and commands on Azure VMs without RDP using `az vm run-command`. This is the foundation of the automated golden image creation workflow, enabling fully scriptable VM configuration.
+Reference guide for executing PowerShell scripts on Azure VMs without RDP, used extensively in the YAML-based deployment engine.
 
 ## Basic Pattern
 
@@ -19,31 +17,31 @@ az vm run-command invoke \
 
 ### 1. Script Loading: `$(cat script.ps1)`
 - Reads local PowerShell script into bash string
-- Entire script content is passed to Azure
-- Allows complex multi-function scripts to run remotely
-- Works with scripts up to ~32KB in size
+- Entire script content passed to Azure
+- Supports complex multi-function scripts
+- Maximum script size: ~32KB
 
 ### 2. Synchronous by Default
-- Command WAITS for PowerShell execution to complete
-- No `--no-wait` flag means blocking operation
-- Full output (stdout/stderr/exitCode) returned in JSON response
-- Suitable for sequential workflow steps
+- Command waits for PowerShell completion
+- Full output (stdout/stderr/exitCode) in JSON response
+- Suitable for sequential workflows
+- No `--no-wait` flag = blocking operation
 
-### 3. Async Option with `--no-wait`
+### 3. Async Option: `--no-wait`
 ```bash
 az vm run-command invoke \
-  --resource-group "$RESOURCE_GROUP_NAME" \
-  --name "$VM_NAME" \
+  --resource-group "$RG" \
+  --name "$VM" \
   --command-id RunPowerShellScript \
   --scripts "$(cat script.ps1)" \
   --no-wait
 ```
-- Command returns immediately
-- Operation continues on VM in background
-- Useful for very long operations (1+ hour)
-- Requires polling to check completion status
+- Returns immediately
+- Operation continues in background
+- Useful for 1+ hour operations
+- Requires polling to check completion
 
-### 4. Output Format: JSON with Structure
+### 4. JSON Output Format
 ```json
 {
   "value": [
@@ -55,7 +53,6 @@ az vm run-command invoke \
     },
     {
       "code": "ComponentStatus/StdErr/succeeded",
-      "displayStatus": "Provisioning succeeded",
       "level": "Info",
       "message": "stderr content here"
     }
@@ -63,209 +60,277 @@ az vm run-command invoke \
 }
 ```
 
-### 5. Error Handling: Use `|| true` to Continue
+### 5. Error Handling
 ```bash
+# Continue on PowerShell errors (capture full output)
 az vm run-command invoke \
-  --resource-group "$RESOURCE_GROUP_NAME" \
-  --name "$VM_NAME" \
-  --command-id RunPowerShellScript \
   --scripts "$(cat script.ps1)" \
   --output json > output.json 2>&1 || true
 ```
 
-- PowerShell errors won't cause bash script to exit
-- Allows capture of full output for debugging
-- Script can check exit code and stderr separately
+## YAML Engine Integration
 
-## Use Cases
+### In Operation Templates
 
-### VM Configuration and Software Installation
-```bash
-# Install applications, configure settings
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "$(cat config_vm.ps1)"
+YAML operations use inline PowerShell or external scripts:
+
+#### Method 1: External PowerShell Script
+
+```yaml
+operation:
+  id: "golden-image-install-fslogix"
+  template:
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@modules/05-golden-image/operations/install-fslogix.ps1" \
+        --output json > artifacts/outputs/golden-image-install-fslogix.json
 ```
 
-### Running Optimization Tools
-```bash
-# Download and run WDOT (Windows Desktop Optimization Tool)
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "$(cat run-wdot.ps1)"
+#### Method 2: Inline PowerShell
+
+```yaml
+operation:
+  id: "golden-image-system-prep"
+  powershell:
+    content: |
+      Write-Host "[START] System preparation: $(Get-Date -Format 'HH:mm:ss')"
+
+      # Create temp directory
+      if (!(Test-Path "C:\Temp")) {
+          New-Item -Path "C:\Temp" -ItemType Directory -Force
+      }
+
+      Write-Host "[SUCCESS] System prepared"
+      exit 0
 ```
 
-### Executing Sysprep for Image Capture
-```bash
-# Generalize VM before image capture
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "C:\\Windows\\System32\\Sysprep\\sysprep.exe /oobe /generalize /shutdown /quiet"
+The template engine extracts PowerShell to `artifacts/scripts/[operation].ps1` and executes via `az vm run-command`.
+
+### Progress Markers (Required)
+
+All PowerShell scripts **must** include:
+
+```powershell
+Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
+Write-Host "[PROGRESS] Step 1/4: Downloading..."
+Write-Host "[PROGRESS] Step 2/4: Installing..."
+Write-Host "[VALIDATE] Checking installation..."
+Write-Host "[SUCCESS] Operation completed"
+exit 0  # Required for success detection
 ```
 
-### Diagnostic Commands and Troubleshooting
-```bash
-# Check system information
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "Get-ComputerInfo; Get-Disk; Get-NetAdapter"
+**Supported Markers**:
+- `[START]` - Operation begins
+- `[PROGRESS]` - Step update (numbered: "Step X/Y")
+- `[VALIDATE]` - Validation check
+- `[SUCCESS]` - Completed successfully
+- `[ERROR]` - Error occurred
+- `[WARNING]` - Non-fatal issue
+
+## Common Use Cases
+
+### 1. Software Installation
+
+```yaml
+operation:
+  powershell:
+    content: |
+      Write-Host "[START] Installing FSLogix"
+      Write-Host "[PROGRESS] Step 1/3: Downloading installer..."
+
+      $url = "https://aka.ms/fslogix_download"
+      $dest = "C:\Temp\FSLogix.zip"
+      Invoke-WebRequest -Uri $url -OutFile $dest -TimeoutSec 120
+
+      Write-Host "[PROGRESS] Step 2/3: Extracting archive..."
+      Expand-Archive -Path $dest -DestinationPath "C:\Temp\FSLogix"
+
+      Write-Host "[PROGRESS] Step 3/3: Running installer..."
+      Start-Process -FilePath "C:\Temp\FSLogix\x64\Release\FSLogixAppsSetup.exe" -ArgumentList "/install /quiet /norestart" -Wait
+
+      Write-Host "[VALIDATE] Checking installation..."
+      if (!(Test-Path "C:\Program Files\FSLogix\Apps\frx.exe")) {
+          Write-Host "[ERROR] FSLogix not installed"
+          exit 1
+      }
+
+      Write-Host "[SUCCESS] FSLogix installed"
+      exit 0
 ```
 
-## Output Parsing Examples
+### 2. System Configuration
 
-### Extract stdout from JSON Response
+```yaml
+operation:
+  powershell:
+    content: |
+      Write-Host "[START] Configuring AVD registry settings"
+
+      # Configure timezone
+      Set-TimeZone -Name "{{GOLDEN_IMAGE_TIMEZONE}}"
+
+      # Disable automatic updates
+      Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoUpdate" -Value 1
+
+      Write-Host "[SUCCESS] Configuration complete"
+      exit 0
+```
+
+### 3. Running Sysprep
+
+```yaml
+operation:
+  template:
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "C:\\Windows\\System32\\Sysprep\\sysprep.exe /oobe /generalize /shutdown /quiet"
+```
+
+### 4. Validation Checks
+
+```yaml
+operation:
+  powershell:
+    content: |
+      Write-Host "[START] Validating installation"
+
+      $checks = @(
+          @{Path = "C:\Program Files\FSLogix\Apps\frx.exe"; Name = "FSLogix"},
+          @{Path = "C:\Program Files\Google\Chrome\Application\chrome.exe"; Name = "Chrome"},
+          @{Path = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"; Name = "Office"}
+      )
+
+      $failed = @()
+      foreach ($check in $checks) {
+          Write-Host "[VALIDATE] Checking $($check.Name)..."
+          if (!(Test-Path $check.Path)) {
+              $failed += $check.Name
+          }
+      }
+
+      if ($failed.Count -gt 0) {
+          Write-Host "[ERROR] Missing: $($failed -join ', ')"
+          exit 1
+      }
+
+      Write-Host "[SUCCESS] All components validated"
+      exit 0
+```
+
+## Output Parsing
+
+### Extract stdout
+
 ```bash
+# Using jq
 STDOUT=$(cat output.json | jq -r '.value[0].message')
 echo "$STDOUT"
-```
 
-### Extract with grep and sed (backward compatible)
-```bash
-STDOUT=$(cat output.json | grep -o '"message":"[^"]*"' | sed 's/"message":"\(.*\)"/\1/' | head -1)
-echo "$STDOUT"
+# Grep for specific markers
+cat output.json | jq -r '.value[0].message' | grep '\[ERROR\]'
 ```
 
 ### Check Exit Code
+
 ```bash
-# Note: `az vm run-command invoke` CLI command exit code (0=success)
-# Different from PowerShell script exit code (check stderr for errors)
+# Azure CLI exit code (0 = command submitted successfully)
 if [ $? -eq 0 ]; then
     echo "Command submitted successfully"
 fi
-```
 
-## Golden Image Workflow Example
-
-The golden image creation uses this pattern across multiple tasks:
-
-### Task 01: Create VM
-```bash
-# Direct Azure resource creation (no remote execution)
-az vm create --resource-group ... --name gm-temp-vm ...
-```
-
-### Task 02: Validate VM
-```bash
-# Poll VM state (no remote execution)
-az vm get-instance-view --query "instanceView.statuses[?starts_with(code, 'PowerState')]"
-```
-
-### Task 03: Configure VM (30-60 minutes)
-```bash
-# Remote execution of comprehensive configuration script
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "$(cat config_vm.ps1)" \
-  --output json > artifacts/03-configure-vm_output.json
-```
-
-Executes:
-- Disable BitLocker
-- Install FSLogix Agent
-- Install Google Chrome Enterprise
-- Install Adobe Reader DC
-- Install Microsoft Office 365
-- Run VDOT optimizations
-- Configure AVD registry settings
-- Configure Default User profile
-
-### Task 04: Sysprep VM (5-10 minutes)
-```bash
-# Remote execution of sysprep command
-az vm run-command invoke \
-  --command-id RunPowerShellScript \
-  --scripts "C:\\Windows\\System32\\Sysprep\\sysprep.exe /oobe /generalize /shutdown /quiet" \
-  --output json > artifacts/04-sysprep-vm_output.json
-```
-
-### Task 05: Capture Image (15-30 minutes)
-```bash
-# Direct Azure operations (no remote execution)
-az sig image-version create \
-  --gallery-name AVD_Image_Gallery \
-  --gallery-image-definition "Win11-25H2-AVD-Pooled" \
-  --gallery-image-version "1.0.0"
-```
-
-### Task 06: Cleanup (5-10 minutes)
-```bash
-# Async deletion of resources
-az vm delete --resource-group ... --name gm-temp-vm --yes --no-wait
+# PowerShell script exit code (check stderr for errors)
+if grep -q '\[ERROR\]' output.json; then
+    echo "PowerShell script failed"
+fi
 ```
 
 ## Best Practices
 
 ### 1. Always Use Timestamped Logs
+
 ```bash
 TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-LOG_FILE="artifacts/task_${TIMESTAMP}.log"
-az vm run-command invoke ... --output json > output.json
+az vm run-command invoke ... > artifacts/outputs/${OPERATION_ID}_${TIMESTAMP}.json
 ```
 
 ### 2. Save Full Output for Debugging
+
 ```bash
 az vm run-command invoke \
   --scripts "$(cat script.ps1)" \
-  --output json > artifacts/full_output.json 2>&1 || true
+  --output json > artifacts/outputs/operation.json 2>&1 || true
 ```
 
-### 3. Handle Long-Running Operations
-For operations taking 30+ minutes:
-- Use `--no-wait` flag
-- Log that operation started with expected duration
-- Poll for completion in next task's pre-flight checks
-- Don't block user waiting for completion
+### 3. Use ASCII Characters in Output
 
-### 4. Validate VM Prerequisites Before Execution
-```bash
-# Check VM exists and is running
-if ! az vm show -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" &> /dev/null; then
-    echo "ERROR: VM '$VM_NAME' not found"
-    exit 1
-fi
-
-# Check VM is running
-VM_STATE=$(az vm get-instance-view -g "$RESOURCE_GROUP_NAME" -n "$VM_NAME" \
-    --query "instanceView.statuses[?starts_with(code, 'PowerState')].displayStatus" -o tsv)
-if [[ "$VM_STATE" != "VM running" ]]; then
-    echo "ERROR: VM is not running (current state: $VM_STATE)"
-    exit 1
-fi
-```
-
-### 5. Use ASCII Characters in Remote Scripts
-When executing via `az vm run-command`, stick to ASCII characters in output:
+For compatibility with all Azure regions:
 - Use `[v]` instead of `✓`
 - Use `[x]` instead of `✗`
 - Use `[!]` instead of `⚠`
 - Use `[i]` instead of `ℹ`
 
-This ensures compatibility with all Azure regions and encoding.
+### 4. Validate VM Prerequisites
 
-## Common Issues and Solutions
+```bash
+# Check VM exists
+if ! az vm show -g "$RG" -n "$VM" &> /dev/null; then
+    echo "ERROR: VM not found"
+    exit 1
+fi
 
-### Issue: "Script execution timed out"
-**Cause**: Operation takes longer than Azure's timeout (typically 10 minutes for small scripts)
-**Solution**: Break into smaller scripts or use `--no-wait` for long operations
+# Check VM is running
+VM_STATE=$(az vm get-instance-view -g "$RG" -n "$VM" \
+    --query "instanceView.statuses[?starts_with(code, 'PowerState')].displayStatus" -o tsv)
+if [[ "$VM_STATE" != "VM running" ]]; then
+    echo "ERROR: VM is not running (state: $VM_STATE)"
+    exit 1
+fi
+```
 
-### Issue: "File not found" errors
-**Cause**: Script assumes files exist on VM that weren't created
+### 5. Handle Long Operations
+
+For operations taking 30+ minutes:
+- Use `--no-wait` flag
+- Log expected duration
+- Poll for completion in next operation
+- Don't block on completion
+
+## Troubleshooting
+
+### Script Execution Timed Out
+
+**Cause**: Operation exceeds Azure timeout (~10 minutes)
+**Solution**: Break into smaller scripts or use `--no-wait`
+
+### File Not Found Errors
+
+**Cause**: Script assumes files exist that weren't created
 **Solution**: Use absolute paths and create directories first:
+
 ```powershell
 if (!(Test-Path "C:\Temp")) {
     New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null
 }
 ```
 
-### Issue: "Access Denied" errors
-**Cause**: Command requires admin privileges
-**Solution**: Scripts run as Administrator by default. If still failing, check:
-- User account has proper RBAC permissions in Azure
-- VM agent is running (`az vm run-command` requires VM agent)
+### Access Denied Errors
 
-### Issue: "PowerShell execution policy" errors
+**Cause**: Insufficient permissions
+**Solution**: Scripts run as Administrator by default. Check:
+- RBAC permissions in Azure
+- VM agent is running
+
+### PowerShell Execution Policy Errors
+
 **Cause**: Execution policy too restrictive
 **Solution**: Set in script:
+
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 ```
@@ -273,6 +338,11 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 ## References
 
 - [Azure CLI: az vm run-command documentation](https://docs.microsoft.com/en-us/cli/azure/vm/run-command)
-- [Golden Image Task Scripts](./05-golden-image/tasks/)
-- [AI Interaction Guide - Remote VM Execution](./AI-INTERACTION-GUIDE.md#remote-vm-execution)
+- [ARCHITECTURE.md](ARCHITECTURE.md) - YAML engine documentation
+- [Module 05: Golden Image operations](modules/05-golden-image/operations/) - Production examples
 - [Windows Desktop Optimization Tool (VDOT)](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool)
+
+---
+
+**Last Updated**: 2025-12-05
+**Related**: YAML-based deployment engine
