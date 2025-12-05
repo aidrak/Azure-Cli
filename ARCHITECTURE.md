@@ -1,12 +1,14 @@
 # Azure VDI Deployment - System Architecture
 
+Complete technical reference for the YAML-based deployment engine.
+
 ## Quick Reference
 
-- **Active System**: YAML-based engine (`core/` + `modules/`)
+- **Active System**: YAML engine (`core/` + `modules/`)
 - **Configuration**: `config.yaml` (single source of truth)
 - **Execution**: `./core/engine.sh run [module] [operation]`
 - **State**: `state.json` (centralized tracking)
-- **Legacy**: `legacy/modules/` (reference only, never executed)
+- **Legacy**: `legacy/` directory (reference only, never execute)
 
 ---
 
@@ -17,177 +19,97 @@
 3. [Configuration System](#configuration-system)
 4. [Execution Model](#execution-model)
 5. [Module Development](#module-development)
-6. [State Tracking](#state-tracking)
-7. [Error Handling & Self-Healing](#error-handling--self-healing)
-8. [Legacy vs New Comparison](#legacy-vs-new-comparison)
+6. [Error Handling & Self-Healing](#error-handling--self-healing)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Architecture Overview
 
-### New YAML-Based System (Active)
-
-The project uses a **template-based YAML engine** with the following components:
+### System Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         config.yaml                                 │
-│                  (Single Source of Truth)                           │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   core/config-manager.sh                            │
-│                  - Parse YAML with yq                               │
-│                  - Export 50+ environment variables                 │
-│                  - Validate required fields                         │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     core/engine.sh                                  │
-│                  Main Orchestrator                                  │
-│   - run [module] [operation]                                        │
-│   - resume (from failure)                                           │
-│   - list [module]                                                   │
-│   - status                                                          │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              core/template-engine.sh                                │
-│   - Parse YAML operation templates                                 │
-│   - Substitute {{VARIABLES}} with values                           │
-│   - Generate executable Azure CLI commands                         │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              core/progress-tracker.sh                               │
-│   - Monitor [START/PROGRESS/SUCCESS] markers                       │
-│   - Real-time duration tracking                                    │
-│   - Timeout detection (fail-fast)                                  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              Execute Azure CLI Command                              │
-│   az vm run-command invoke --scripts @operation.ps1                │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              core/error-handler.sh                                  │
-│   If error occurs:                                                  │
-│   1. Extract error from PowerShell logs                            │
-│   2. Generate fix description                                      │
-│   3. Apply fix to YAML template (via yq)                           │
-│   4. Retry operation (max 3 times)                                 │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              Update state.json + artifacts/                         │
-│   - Operation status: completed/failed                             │
-│   - Duration tracking                                              │
-│   - Checkpoint files for resume                                    │
-│   - Structured logs (JSONL)                                        │
-└─────────────────────────────────────────────────────────────────────┘
+config.yaml → config-manager.sh → Export ENV vars
+                ↓
+      template-engine.sh → Substitute {{VARIABLES}}
+                ↓
+           engine.sh → Execute operations
+                ↓
+    progress-tracker.sh → Monitor [START/PROGRESS/SUCCESS]
+                ↓
+       error-handler.sh → Self-heal on failure
+                ↓
+    state.json + artifacts/ → Track execution
 ```
 
-### Core Engine Components
+### Core Components
 
 | Component | Lines | Purpose |
 |-----------|-------|---------|
-| `core/config-manager.sh` | 556 | Load YAML config, export env vars, validate required fields |
-| `core/template-engine.sh` | 556 | Parse YAML operations, substitute variables, execute templates |
-| `core/engine.sh` | 515 | Main orchestrator: run/resume/status/list operations |
-| `core/progress-tracker.sh` | 325 | Real-time monitoring, progress markers, duration validation |
-| `core/error-handler.sh` | 382 | Extract errors, generate fixes, apply to YAML, retry (max 3) |
-| `core/logger.sh` | 322 | Structured logging to JSONL format |
-| `core/validator.sh` | 362 | Configuration validation, prerequisite checks |
+| `core/config-manager.sh` | 556 | Load config.yaml, export 50+ ENV vars, validate |
+| `core/template-engine.sh` | 556 | Parse YAML operations, substitute variables |
+| `core/engine.sh` | 515 | Main orchestrator (run/resume/status/list) |
+| `core/progress-tracker.sh` | 325 | Real-time monitoring, duration validation |
+| `core/error-handler.sh` | 382 | Extract errors, apply fixes, retry (max 3) |
+| `core/logger.sh` | 322 | Structured JSONL logging |
+| `core/validator.sh` | 362 | Configuration & prerequisite validation |
 
-**Total**: 3,018 lines of production code
+**Total**: 3,018 lines
 
 ---
 
 ## Directory Structure
 
-### Post-Reorganization Structure
-
 ```
-/mnt/cache_pool/development/azure-cli/
-├── README.md                    # Project documentation (YAML-focused)
-├── ARCHITECTURE.md              # THIS FILE - Complete system architecture
-├── config.yaml                  # Single source of truth for configuration
-├── state.json                   # Execution state tracker
+azure-cli/
+├── config.yaml                  # Single source of truth
+├── state.json                   # Execution state
 │
-├── core/                        # Core YAML engine components
-│   ├── config-manager.sh        # Configuration loading & validation
-│   ├── template-engine.sh       # YAML template processing
-│   ├── engine.sh                # Main orchestrator
-│   ├── progress-tracker.sh      # Real-time progress monitoring
-│   ├── error-handler.sh         # Self-healing & error management
-│   ├── logger.sh                # Structured logging
-│   └── validator.sh             # Configuration validation
+├── core/                        # Engine components (7 files)
+│   ├── config-manager.sh
+│   ├── template-engine.sh
+│   ├── engine.sh
+│   ├── progress-tracker.sh
+│   ├── error-handler.sh
+│   ├── logger.sh
+│   └── validator.sh
 │
-├── modules/                     # Active YAML-based modules
-│   └── 05-golden-image/
-│       ├── module.yaml          # Module definition
-│       └── operations/          # 11 YAML operation templates
-│           ├── 01-system-prep.yaml
-│           ├── 02-install-fslogix.yaml
-│           ├── 03-install-chrome.yaml
-│           ├── 04-install-adobe.yaml
-│           ├── 05-install-office.yaml
-│           ├── 06-configure-defaults.yaml
-│           ├── 07-run-vdot.yaml
-│           ├── 08-registry-avd.yaml
-│           ├── 09-configure-default-profile.yaml
-│           ├── 10-cleanup-temp.yaml
-│           └── 11-validate-all.yaml
+├── modules/                     # YAML-based modules
+│   ├── 01-networking/
+│   ├── 02-storage/
+│   ├── 03-entra-group/
+│   ├── 04-host-pool-workspace/
+│   ├── 05-golden-image/        # ✅ Complete (11 operations)
+│   │   ├── module.yaml
+│   │   └── operations/
+│   │       ├── 01-system-prep.yaml
+│   │       ├── 02-install-fslogix.yaml
+│   │       └── ... (9 more operations)
+│   ├── 06-session-host-deployment/
+│   ├── 08-rbac/
+│   ├── 09-sso/
+│   └── 10-autoscaling/
 │
-├── artifacts/                   # Centralized output storage
-│   ├── logs/                    # Operation logs (JSONL format)
-│   │   └── deployment_20251204.jsonl
-│   ├── outputs/                 # Azure CLI operation outputs (JSON)
-│   │   ├── golden-image-system-prep.json
-│   │   └── ... (11 operation outputs)
+├── artifacts/                   # Centralized output
+│   ├── logs/                    # JSONL structured logs
+│   ├── outputs/                 # Azure CLI JSON outputs
 │   ├── scripts/                 # Generated PowerShell scripts
-│   ├── state/                   # Operation state files
-│   └── checkpoint_*.json        # Checkpoint files for resume capability
+│   ├── state/                   # Retry counters
+│   └── checkpoint_*.json        # Resume files
 │
-├── tools/                       # Development tools
-│   └── create-module.sh         # Module template generator
+├── tools/
+│   └── create-module.sh         # Module generator
 │
-├── docs/                        # Documentation
-│   └── config-migration.md      # Legacy config.env → config.yaml mapping
+├── docs/
+│   ├── config-migration.md
+│   └── archive/                 # Historical documentation
 │
-├── .claude/                     # Claude Code configuration
-│   ├── CLAUDE.md                # AI assistant instructions
-│   └── settings.local.json
+├── .claude/
+│   └── CLAUDE.md                # AI assistant instructions
 │
-├── common/                      # Shared utilities (legacy compatibility)
-│   ├── functions/               # Bash functions
-│   └── scripts/                 # Utility scripts
-│
-└── legacy/                      # ARCHIVED: Legacy bash-based modules
-    ├── README.md                # Why legacy exists, migration guide
-    ├── modules/                 # All 12 legacy bash modules
-    │   ├── 01-networking/
-    │   ├── 02-storage/
-    │   ├── 03-entra-group/
-    │   ├── 04-host-pool-workspace/
-    │   ├── 05-golden-image/     # Bash version (superseded by modules/)
-    │   ├── 06-session-host-deployment/
-    │   ├── 07-intune/
-    │   ├── 08-rbac/
-    │   ├── 09-sso/
-    │   ├── 10-autoscaling/
-    │   ├── 11-testing/
-    │   └── 12-cleanup-migration/
-    ├── config/                  # Old config directory
-    └── orchestrate.sh           # Old bash orchestrator
+└── legacy/                      # ARCHIVED: Bash-based modules
+    ├── README.md
+    └── modules/                 # 12 legacy modules (reference only)
 ```
 
 ---
@@ -196,166 +118,95 @@ The project uses a **template-based YAML engine** with the following components:
 
 ### config.yaml Structure
 
-The **single source of truth** for all configuration values:
+Single file containing all deployment configuration:
 
 ```yaml
-# Global Azure Settings
+# Global Azure
 azure:
   subscription_id: "00000000-0000-0000-0000-000000000000"
   tenant_id: "00000000-0000-0000-0000-000000000000"
   location: "centralus"
   resource_group: "RG-Azure-VDI-01"
-  environment: "prod"
 
-# Module-specific configurations
-networking:          # Module 01
+# Module-specific sections
+networking:
   vnet_name: "avd-vnet"
-  vnet_cidr: "10.0.0.0/16"
   subnet_name: "avd-subnet"
-  subnet_cidr: "10.0.1.0/24"
-  nsg_name: "avd-nsg"
 
-storage:            # Module 02
-  account_name: ""  # Auto-generated
+storage:
+  account_name: "avdfslogix001"
   share_name: "fslogix-profiles"
-  quota_gb: 1024
-  tier: "Premium"
 
-entra_id:           # Module 03
-  group_users_standard: "AVD-Users-Standard"
-  group_users_admins: "AVD-Users-Admins"
-  # ... device groups
-
-host_pool:          # Module 04
-  name: "Pool-Pooled-Prod"
-  type: "Pooled"
-  max_sessions: 10
-  load_balancer: "BreadthFirst"
-
-workspace:          # Module 04
-  name: "AVD-Workspace-Prod"
-  friendly_name: "Azure Virtual Desktop"
-
-app_group:          # Module 04
-  name: "Desktop-Prod"
-  type: "Desktop"
-
-golden_image:       # Module 05
+golden_image:
   temp_vm_name: "gm-temp-vm"
   vm_size: "Standard_D4s_v6"
-  image_publisher: "MicrosoftWindowsDesktop"
-  image_offer: "windows-11"
-  image_sku: "win11-25h2-avd"
-  admin_username: "entra-admin"
   fslogix_version: "2.9.8653.48899"
   timezone: "Central Standard Time"
 
-session_host:       # Module 06
-  vm_count: 1
+session_host:
+  vm_count: 2
   vm_size: "Standard_D4s_v6"
   name_prefix: "avd-sh"
-  use_golden_image: true
-
-# ... Modules 07-12
 ```
 
 ### Configuration Loading
 
 ```bash
-# Load configuration
+# Load configuration (exports 50+ environment variables)
 source core/config-manager.sh
 load_config
 
-# This exports 50+ environment variables:
-echo $AZURE_RESOURCE_GROUP        # "RG-Azure-VDI-01"
-echo $GOLDEN_IMAGE_TEMP_VM_NAME   # "gm-temp-vm"
-echo $NETWORKING_VNET_NAME        # "avd-vnet"
+# Variables available as:
+echo $AZURE_RESOURCE_GROUP          # "RG-Azure-VDI-01"
+echo $GOLDEN_IMAGE_TEMP_VM_NAME     # "gm-temp-vm"
+echo $SESSION_HOST_VM_COUNT         # "2"
 ```
 
-### Available Variables
+### Variable Usage in Templates
 
-Variables exported from `config.yaml` (used as `{{VARIABLE}}` in YAML templates):
+YAML templates use `{{VARIABLE}}` syntax:
 
-**Azure Global**:
-- `{{AZURE_SUBSCRIPTION_ID}}`
-- `{{AZURE_TENANT_ID}}`
-- `{{AZURE_LOCATION}}`
-- `{{AZURE_RESOURCE_GROUP}}`
-- `{{AZURE_ENVIRONMENT}}`
+```yaml
+operation:
+  template:
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --scripts "@modules/05-golden-image/operations/install-fslogix.ps1"
+```
 
-**Networking (Module 01)**:
-- `{{NETWORKING_VNET_NAME}}`
-- `{{NETWORKING_VNET_CIDR}}`
-- `{{NETWORKING_SUBNET_NAME}}`
-- `{{NETWORKING_SUBNET_CIDR}}`
-- `{{NETWORKING_NSG_NAME}}`
+**Available Variable Categories**:
+- `AZURE_*` - Global Azure settings (5 vars)
+- `NETWORKING_*` - VNet, subnet, NSG (5 vars)
+- `STORAGE_*` - Storage account, file shares (4 vars)
+- `ENTRA_ID_*` - Security groups (6 vars)
+- `HOST_POOL_*` - Host pool settings (4 vars)
+- `WORKSPACE_*` - Workspace settings (3 vars)
+- `APP_GROUP_*` - Application group settings (3 vars)
+- `GOLDEN_IMAGE_*` - Golden image settings (12 vars)
+- `SESSION_HOST_*` - Session host settings (4 vars)
 
-**Storage (Module 02)**:
-- `{{STORAGE_ACCOUNT_NAME}}`
-- `{{STORAGE_SHARE_NAME}}`
-- `{{STORAGE_QUOTA_GB}}`
-- `{{STORAGE_TIER}}`
-
-**Entra ID (Module 03)**:
-- `{{ENTRA_ID_GROUP_USERS_STANDARD}}`
-- `{{ENTRA_ID_GROUP_USERS_ADMINS}}`
-- `{{ENTRA_ID_GROUP_DEVICES_SSO}}`
-- ... (6 total group variables)
-
-**Host Pool (Module 04)**:
-- `{{HOST_POOL_NAME}}`
-- `{{HOST_POOL_TYPE}}`
-- `{{HOST_POOL_MAX_SESSIONS}}`
-- `{{HOST_POOL_LOAD_BALANCER}}`
-
-**Workspace (Module 04)**:
-- `{{WORKSPACE_NAME}}`
-- `{{WORKSPACE_FRIENDLY_NAME}}`
-- `{{WORKSPACE_DESCRIPTION}}`
-
-**Application Group (Module 04)**:
-- `{{APP_GROUP_NAME}}`
-- `{{APP_GROUP_TYPE}}`
-- `{{APP_GROUP_FRIENDLY_NAME}}`
-
-**Golden Image (Module 05)**:
-- `{{GOLDEN_IMAGE_TEMP_VM_NAME}}`
-- `{{GOLDEN_IMAGE_VM_SIZE}}`
-- `{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}`
-- `{{GOLDEN_IMAGE_IMAGE_OFFER}}`
-- `{{GOLDEN_IMAGE_IMAGE_SKU}}`
-- `{{GOLDEN_IMAGE_IMAGE_VERSION}}`
-- `{{GOLDEN_IMAGE_ADMIN_USERNAME}}`
-- `{{GOLDEN_IMAGE_GALLERY_NAME}}`
-- `{{GOLDEN_IMAGE_DEFINITION_NAME}}`
-- `{{GOLDEN_IMAGE_TIMEZONE}}`
-- `{{GOLDEN_IMAGE_FSLOGIX_VERSION}}`
-- `{{GOLDEN_IMAGE_VDOT_VERSION}}`
-
-**Session Host (Module 06)**:
-- `{{SESSION_HOST_VM_COUNT}}`
-- `{{SESSION_HOST_VM_SIZE}}`
-- `{{SESSION_HOST_NAME_PREFIX}}`
-- `{{SESSION_HOST_USE_GOLDEN_IMAGE}}`
+**Total**: 50+ configuration variables
 
 ---
 
 ## Execution Model
 
-### Command Structure
+### Commands
 
 ```bash
-# Run entire module (all operations in sequence)
-./core/engine.sh run [module-id]
+# Run entire module (all operations sequentially)
+./core/engine.sh run 05-golden-image
 
 # Run single operation
-./core/engine.sh run [module-id] [operation-id]
+./core/engine.sh run 05-golden-image 01-system-prep
 
 # Resume from last failure
 ./core/engine.sh resume
 
-# List available operations
-./core/engine.sh list [module-id]
+# List operations in module
+./core/engine.sh list 05-golden-image
 
 # Check execution status
 ./core/engine.sh status
@@ -364,79 +215,60 @@ Variables exported from `config.yaml` (used as `{{VARIABLE}}` in YAML templates)
 ### Execution Flow
 
 ```
-1. User Command:
-   ./core/engine.sh run 05-golden-image 01-system-prep
+1. User Command
+   ./core/engine.sh run 05-golden-image
 
-2. init_state()
+2. Initialize State
    ├─ Create state.json if missing
    ├─ Initialize module tracking
    └─ Create artifacts/ directories
 
-3. load_config()
+3. Load Configuration
    ├─ Parse config.yaml with yq
    ├─ Export 50+ environment variables
    └─ Validate required fields
 
-4. get_module_operations()
+4. Get Module Operations
    ├─ Read modules/05-golden-image/module.yaml
    └─ Extract operation list
 
-5. parse_operation_yaml()
-   ├─ Read modules/05-golden-image/operations/01-system-prep.yaml
-   ├─ Extract: id, name, duration, template, powershell, validation
-   └─ Load previous fixes (if any)
+5. For Each Operation:
+   ├─ Parse operation YAML
+   ├─ Load previous fixes (if any)
+   ├─ Substitute {{VARIABLES}}
+   ├─ Execute command
+   ├─ Monitor progress markers
+   ├─ Update state.json
+   └─ Create checkpoint
 
-6. substitute_variables()
-   ├─ Replace {{AZURE_RESOURCE_GROUP}} → "RG-Azure-VDI-01"
-   ├─ Replace {{GOLDEN_IMAGE_TEMP_VM_NAME}} → "gm-temp-vm"
-   └─ Generate executable command
+6. On Error → error-handler.sh
+   ├─ Extract [ERROR] markers
+   ├─ Generate fix description
+   ├─ Apply fix to YAML (yq)
+   ├─ Retry (max 3 times)
+   └─ Next run uses fixed template
 
-7. execute_operation()
-   ├─ Write PowerShell script to artifacts/scripts/
-   ├─ Execute: az vm run-command invoke
-   ├─ Save output to artifacts/outputs/golden-image-system-prep.json
-   └─ Parse [START/PROGRESS/SUCCESS] markers
-
-8. Monitor Progress (progress-tracker.sh)
-   ├─ Track duration
-   ├─ Detect timeout (if duration > 2x expected)
-   └─ Fail-fast if stuck
-
-9. Update State
-   ├─ Record operation status in state.json
-   ├─ Create checkpoint_golden-image-system-prep.json
-   ├─ Log to artifacts/logs/deployment_20251204.jsonl
-   └─ Update module status
-
-10. On Error → error-handler.sh
-    ├─ Extract [ERROR] markers
-    ├─ Generate fix description
-    ├─ Apply fix to YAML template (via yq)
-    ├─ Retry operation (max 3 times)
-    └─ Next run uses fixed template automatically
-
-11. On Success → Next Operation
-    └─ Proceed to 02-install-fslogix.yaml
+7. On Success → Next Operation
 ```
 
 ### Progress Markers
 
-All PowerShell scripts **must** include these markers for tracking:
+All PowerShell scripts **must** include:
 
 ```powershell
 Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
-Write-Host "[PROGRESS] Step 1/4: Downloading software..."
+Write-Host "[PROGRESS] Step 1/4: Downloading..."
 Write-Host "[PROGRESS] Step 2/4: Installing..."
 Write-Host "[VALIDATE] Checking installation..."
-Write-Host "[SUCCESS] Operation completed successfully"
-exit 0  # Required for success detection
+Write-Host "[SUCCESS] Operation completed"
+exit 0  # Required
 ```
 
-**Markers Used**:
+**Supported Markers**:
 - `[START]` - Operation begins
 - `[PROGRESS]` - Step update
 - `[VALIDATE]` - Validation check
-- `[SUCCESS]` - Operation completed
+- `[SUCCESS]` - Completed successfully
 - `[ERROR]` - Error occurred
 - `[WARNING]` - Non-fatal issue
 
@@ -446,7 +278,7 @@ exit 0  # Required for success detection
 
 ### Creating a New Module
 
-Use the template generator:
+Use the generator:
 
 ```bash
 ./tools/create-module.sh 06 "Session Host Deployment"
@@ -454,7 +286,7 @@ Use the template generator:
 
 Or manually:
 
-#### 1. Create Directory Structure
+#### 1. Create Directory
 
 ```bash
 mkdir -p modules/06-session-host-deployment/operations/
@@ -473,18 +305,6 @@ module:
       name: "Create Session Host VMs"
       duration: 300
       type: "NORMAL"
-
-    - id: "session-host-join-domain"
-      name: "Join VMs to Host Pool"
-      duration: 180
-      type: "NORMAL"
-
-  validation:
-    enabled: true
-    checks:
-      - type: "resource_exists"
-        resource: "vm"
-        name: "{{SESSION_HOST_NAME_PREFIX}}-01"
 ```
 
 #### 3. Create Operation Template (`operations/01-create-vms.yaml`)
@@ -495,20 +315,18 @@ operation:
   name: "Create Session Host VMs"
 
   duration:
-    expected: 300      # Expected duration (seconds)
-    timeout: 600       # Timeout threshold
-    type: "NORMAL"     # FAST, NORMAL, SLOW
+    expected: 300      # Seconds
+    timeout: 600
+    type: "NORMAL"
 
   template:
-    type: "az-vm-run-command"
+    type: "az-cli"
     command: |
       az vm create \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{SESSION_HOST_NAME_PREFIX}}-01" \
         --image "{{GOLDEN_IMAGE_DEFINITION_NAME}}" \
-        --size "{{SESSION_HOST_VM_SIZE}}" \
-        --vnet-name "{{NETWORKING_VNET_NAME}}" \
-        --subnet "{{NETWORKING_SUBNET_NAME}}"
+        --size "{{SESSION_HOST_VM_SIZE}}"
 
   validation:
     enabled: true
@@ -517,7 +335,7 @@ operation:
         timeout: 120
 
   fixes:
-    # Auto-populated by error handler on failures
+    # Auto-populated by error handler
 ```
 
 #### 4. Add Configuration to `config.yaml`
@@ -527,7 +345,6 @@ session_host:
   vm_count: 2
   vm_size: "Standard_D4s_v6"
   name_prefix: "avd-sh"
-  use_golden_image: true
 ```
 
 #### 5. Execute Module
@@ -537,133 +354,66 @@ source core/config-manager.sh && load_config
 ./core/engine.sh run 06-session-host-deployment
 ```
 
----
+### Operation YAML Template Format
 
-## State Tracking
+**Required Fields**:
+- `operation.id` - Unique identifier
+- `operation.name` - Human-readable name
+- `operation.duration.expected` - Expected duration (seconds)
+- `operation.duration.timeout` - Fail if exceeds this
+- `operation.duration.type` - `FAST` | `NORMAL` | `SLOW`
+- `operation.template.command` - Bash command to execute
 
-### state.json Format
-
-```json
-{
-  "version": "1.0",
-  "started_at": "2025-12-04T20:17:14Z",
-  "current_module": "05-golden-image",
-  "current_operation": "golden-image-validate-all",
-  "status": "running",
-
-  "modules": {
-    "05-golden-image": {
-      "status": "completed",
-      "timestamp": "2025-12-04T22:32:06Z"
-    }
-  },
-
-  "operations": {
-    "golden-image-system-prep": {
-      "status": "completed",
-      "duration": 33,
-      "timestamp": "2025-12-04T20:47:06Z"
-    },
-    "golden-image-install-fslogix": {
-      "status": "completed",
-      "duration": 155,
-      "timestamp": "2025-12-04T20:52:24Z"
-    }
-    // ... 9 more operations
-  },
-
-  "updated_at": "2025-12-04T22:32:06Z"
-}
-```
-
-### Checkpoint Files
-
-Created after each operation for resume capability:
-
-```json
-// artifacts/checkpoint_golden-image-system-prep.json
-{
-  "operation_id": "golden-image-system-prep",
-  "status": "completed",
-  "duration_seconds": 33,
-  "timestamp": "2025-12-04T20:47:06Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-system-prep_20251204_204633.log"
-}
-```
-
-### Logs
-
-**Structured JSONL** (JSON Lines) format:
-
-```jsonl
-{"timestamp":"2025-12-04T20:47:06Z","level":"INFO","module":"05-golden-image","operation":"golden-image-system-prep","message":"[START] System preparation"}
-{"timestamp":"2025-12-04T20:47:12Z","level":"INFO","module":"05-golden-image","operation":"golden-image-system-prep","message":"[PROGRESS] Step 1/3: Creating directory"}
-{"timestamp":"2025-12-04T20:47:39Z","level":"INFO","module":"05-golden-image","operation":"golden-image-system-prep","message":"[SUCCESS] Complete"}
-```
+**Optional Fields**:
+- `operation.powershell.content` - Inline PowerShell script
+- `operation.validation.enabled` - Enable validation
+- `operation.validation.checks` - List of validation checks
+- `operation.fixes` - Previous fixes (auto-populated)
 
 ---
 
 ## Error Handling & Self-Healing
 
-### Phase 3 Implementation
+### Automatic Error Recovery
 
-The engine includes **automatic error recovery**:
+When an operation fails:
 
 #### 1. Error Detection
 
 ```powershell
-# In PowerShell script:
 Write-Host "[ERROR] Failed to download FSLogix: Connection timeout"
 exit 1
 ```
 
-#### 2. Error Extraction (`error-handler.sh`)
+#### 2. Error Extraction
+
+`error-handler.sh` parses `[ERROR]` markers from operation output:
 
 ```bash
-extract_error_from_logs() {
-    # Parse [ERROR] markers from artifacts/outputs/
-    local error_msg=$(jq -r '.value[0].message' "$output_file" | grep '\[ERROR\]')
-    echo "$error_msg"
-}
+cat artifacts/outputs/golden-image-install-fslogix.json | jq -r '.value[0].message' | grep '\[ERROR\]'
 ```
 
 #### 3. Fix Generation
 
+Analyze error and generate fix description:
+
 ```bash
-generate_fix() {
-    local error="$1"
-    local fix=""
-
-    case "$error" in
-        *"timeout"*)
-            fix="Increase timeout value in Invoke-WebRequest -TimeoutSec 120"
-            ;;
-        *"access denied"*)
-            fix="Add elevated permissions to script execution"
-            ;;
-    esac
-
-    echo "$fix"
-}
+# Example error: "Connection timeout"
+# Generated fix: "Increase timeout in Invoke-WebRequest -TimeoutSec 120"
 ```
 
-#### 4. Apply Fix to YAML Template
+#### 4. Apply Fix to YAML
+
+Use `yq` to add fix to operation template:
 
 ```bash
-apply_fix_to_yaml() {
-    local operation_yaml="$1"
-    local fix_description="$2"
-
-    # Add fix to fixes: section using yq
-    yq eval ".operation.fixes += [{\"issue\": \"$error\", \"detected\": \"$(date -u +%Y-%m-%d)\", \"fix\": \"$fix_description\", \"applied_to_template\": true}]" -i "$operation_yaml"
-}
+yq eval '.operation.fixes += [{"issue": "Download timeout", "detected": "2025-12-05", "fix": "Added -TimeoutSec 120", "applied_to_template": true}]' -i operation.yaml
 ```
 
 #### 5. Retry Operation
 
 ```bash
-# Automatically retry (max 3 times)
-retry_count=$(get_retry_count "$operation_id")
+# Automatically retry (max 3 attempts)
 if [ "$retry_count" -lt 3 ]; then
     increment_retry_count "$operation_id"
     execute_operation "$module_id" "$operation_id"
@@ -674,104 +424,83 @@ fi
 
 ### Anti-Destructive Safeguards
 
-The error handler **blocks** destructive fixes:
+Error handler **blocks** these patterns:
 
-```bash
-# Blocked patterns:
-- "az vm delete"
-- "recreate.*vm"
-- "start over"
-- "create.*new.*vm"
-- "destroy"
-- "remove.*vm"
-- "az vm deallocate.*delete"
+- `az vm delete`
+- `recreate.*vm`
+- `start over`
+- `create.*new.*vm`
+- `destroy`
+- `remove.*vm`
+- `az vm deallocate.*delete`
+
+**Philosophy**: Fix incrementally, never destroy and recreate.
+
+### State Files
+
+**state.json**:
+```json
+{
+  "current_module": "05-golden-image",
+  "current_operation": "golden-image-install-fslogix",
+  "operations": {
+    "golden-image-system-prep": {
+      "status": "completed",
+      "duration": 33,
+      "timestamp": "2025-12-04T20:47:06Z"
+    }
+  }
+}
 ```
 
-**Philosophy**: Fix the issue, don't destroy and recreate.
+**Checkpoint Files** (`artifacts/checkpoint_[operation].json`):
+```json
+{
+  "operation_id": "golden-image-system-prep",
+  "status": "completed",
+  "duration_seconds": 33,
+  "timestamp": "2025-12-04T20:47:06Z"
+}
+```
 
----
-
-## Legacy vs New Comparison
-
-| Feature | Legacy (bash modules 01-04) | New (YAML engine) |
-|---------|----------------------------|-------------------|
-| **Config Format** | `config.env` (bash variables) | `config.yaml` (YAML) |
-| **Config Location** | Scattered (per-module) | Centralized (`config.yaml`) |
-| **State Tracking** | Per-module (`module/state/`) | Centralized (`state.json`) |
-| **Execution Engine** | Individual `*.sh` scripts | Unified `core/engine.sh` |
-| **Template System** | Direct bash/PowerShell | YAML templates with variable substitution |
-| **Error Handling** | Manual retry | Auto self-healing with fixes |
-| **Progress Tracking** | None | Real-time via markers |
-| **Logging** | Ad-hoc text files | Structured JSONL |
-| **Resume Capability** | None | Checkpoint-based resume |
-| **Validation** | Manual | Built-in per operation |
-| **Execution Status** | Unknown | Fully traced in `state.json` |
-| **Documentation** | Per-module READMEs | Centralized `ARCHITECTURE.md` |
-
-### Why Legacy Modules Exist
-
-The `legacy/modules/` directory contains:
-- **Valuable Azure CLI commands** for resource creation
-- **PowerShell implementation details** for configuration
-- **Task breakdowns** showing execution patterns
-- **Comments explaining AVD best practices**
-
-**Use them as reference** when converting to YAML format.
-
-**Do NOT execute** the legacy bash scripts - they were never run and are deprecated.
-
----
-
-## Module Status
-
-| Module | ID | Status | Implementation |
-|--------|----|--------|----------------|
-| Networking | 01 | Not executed | Azure resources created manually |
-| Storage | 02 | Not executed | Azure resources created manually |
-| Entra ID Groups | 03 | Not executed | Groups not created |
-| Host Pool & Workspace | 04 | Not executed | Azure resources created manually |
-| **Golden Image** | 05 | ✅ **Complete** | **11 operations executed successfully** |
-| Session Host Deployment | 06 | Pending | Awaiting YAML conversion |
-| Intune | 07 | Pending | Awaiting YAML conversion |
-| RBAC | 08 | Pending | Awaiting YAML conversion |
-| SSO | 09 | Pending | Awaiting YAML conversion |
-| Autoscaling | 10 | Pending | Awaiting YAML conversion |
-| Testing | 11 | Pending | Awaiting YAML conversion |
-| Cleanup & Migration | 12 | Pending | Awaiting YAML conversion |
+**Structured Logs** (`artifacts/logs/deployment_YYYYMMDD.jsonl`):
+```jsonl
+{"timestamp":"2025-12-04T20:47:06Z","level":"INFO","operation":"golden-image-system-prep","message":"[START] System preparation"}
+{"timestamp":"2025-12-04T20:47:39Z","level":"INFO","operation":"golden-image-system-prep","message":"[SUCCESS] Complete"}
+```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
-
-#### Config Loading Fails
+### Config Loading Fails
 
 ```bash
 # Error: yq command not found
-# Solution: Install yq
+# Solution:
 sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
 sudo chmod +x /usr/local/bin/yq
 ```
 
-#### Variable Substitution Fails
+### Variable Substitution Fails
 
 ```bash
 # Error: {{VARIABLE}} not replaced
 # Solution: Ensure load_config() was called
 source core/config-manager.sh
 load_config
+echo $AZURE_RESOURCE_GROUP  # Should not be empty
 ```
 
-#### Operation Timeout
+### Operation Timeout
 
 ```bash
-# Check expected vs actual duration in module.yaml
-# Adjust timeout value if operation genuinely takes longer
+# Check expected vs actual duration
+# Adjust timeout if operation legitimately takes longer
 yq eval '.operation.duration.timeout = 900' -i modules/05-golden-image/operations/01-system-prep.yaml
 ```
 
-#### Resume After Failure
+### Resume After Failure
 
 ```bash
 # Check current state
@@ -781,28 +510,49 @@ cat state.json | jq '.current_operation'
 ./core/engine.sh resume
 ```
 
-#### View Operation Logs
+### View Logs
 
 ```bash
-# Real-time log monitoring
+# Real-time monitoring
 tail -f artifacts/logs/deployment_$(date +%Y%m%d).jsonl
 
-# View specific operation output
-cat artifacts/outputs/golden-image-install-fslogix.json | jq -r '.value[0].message'
+# View operation output
+cat artifacts/outputs/[operation-id].json | jq -r '.value[0].message'
+
+# Check for errors
+grep '\[ERROR\]' artifacts/logs/*.jsonl
 ```
+
+---
+
+## Module Status
+
+| Module | Status | Operations | Notes |
+|--------|--------|------------|-------|
+| 01 - Networking | 🔨 In Progress | TBD | YAML conversion |
+| 02 - Storage | 🔨 In Progress | TBD | YAML conversion |
+| 03 - Entra ID Groups | 🔨 In Progress | TBD | YAML conversion |
+| 04 - Host Pool & Workspace | 🔨 In Progress | 5 ops | YAML templates created |
+| **05 - Golden Image** | ✅ **Complete** | 11 ops | **Production-ready** |
+| 06 - Session Host Deployment | 🔨 In Progress | 2 ops | YAML templates created |
+| 08 - RBAC | 🔨 In Progress | 4 ops | YAML templates created |
+| 09 - SSO | 🔨 In Progress | 3 ops | YAML templates created |
+| 10 - Autoscaling | 🔨 In Progress | 3 ops | YAML templates created |
+| 07, 11, 12 - Intune, Testing, Cleanup | 📋 Pending | - | Awaiting conversion |
 
 ---
 
 ## Additional Resources
 
-- **Project README**: [README.md](README.md) - Quick start guide
-- **Configuration Reference**: [config.yaml](config.yaml) - All available variables
-- **AI Instructions**: [.claude/CLAUDE.md](.claude/CLAUDE.md) - Claude Code instructions
-- **Legacy Reference**: [legacy/README.md](legacy/README.md) - Legacy module migration guide
-- **Config Migration**: [docs/config-migration.md](docs/config-migration.md) - Legacy → new mapping
+- **Quick Start**: [README.md](README.md)
+- **AI Instructions**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
+- **Remote Execution**: [AZURE-VM-REMOTE-EXECUTION.md](AZURE-VM-REMOTE-EXECUTION.md)
+- **Configuration**: [config.yaml](config.yaml)
+- **Legacy Reference**: [legacy/README.md](legacy/README.md)
+- **Config Migration**: [docs/config-migration.md](docs/config-migration.md)
 
 ---
 
-**Last Updated**: 2025-12-04
-**Engine Version**: Phase 3 Complete (Self-Healing & Error Handling)
-**Active Modules**: 1/12 (Module 05: Golden Image)
+**Last Updated**: 2025-12-05
+**Engine Version**: Phase 3 Complete (Self-Healing)
+**Active Modules**: 1/12 (Module 05: Golden Image ✅)
