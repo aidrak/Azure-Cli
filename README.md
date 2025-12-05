@@ -1,404 +1,316 @@
-# Azure Virtual Desktop (AVD) Deployment Template
+# Azure Virtual Desktop Deployment - YAML-Based Engine
 
-> **🤖 AI ASSISTANTS: Before doing any work, read `.claude/CLAUDE.md` (5 min read)**
->
-> This project has strict patterns to prevent script proliferation. Rules: (1) Never create standalone scripts, (2) Always use `az` CLI commands, (3) Always use `az vm run-command` for VM operations. See `.claude/CLAUDE.md` for details.
+> **🤖 AI ASSISTANTS**: Read [`.claude/CLAUDE.md`](.claude/CLAUDE.md) for instructions, then [`ARCHITECTURE.md`](ARCHITECTURE.md) for complete system documentation.
 
 ## Overview
 
-This repository contains a complete, AI-friendly task-centric template for deploying a production-ready Azure Virtual Desktop (AVD) environment. The template supports both full automation and individual task execution across 12 deployment steps.
+This repository provides a **template-based YAML engine** for deploying production-ready Azure Virtual Desktop (AVD) environments with:
 
-**Key Features:**
-- **Task-Centric Architecture**: Modular, reusable tasks that can be run individually or chained
-- **AI-Optimized**: Designed to prevent script proliferation and guide AI assistants effectively
-- **Configuration-Driven**: Single source of truth for all deployment values
-- **Multiple Execution Modes**: Interactive, automated, resume-from-failure, or single-step
-- **Complete Automation**: From networking and storage through session hosts, Intune, and testing
-- **Comprehensive Documentation**: For both AI assistants and human operators
+- **YAML-based operations** - Template-driven deployment with variable substitution
+- **Centralized configuration** - Single `config.yaml` source of truth
+- **Self-healing** - Automatic error recovery with retry mechanism
+- **Real-time tracking** - Progress monitoring, state management, checkpoint-based resume
+- **AI-optimized** - Designed for AI assistants with comprehensive documentation
 
 ## Quick Start
 
-### Automated Full Deployment
-```bash
-# Run entire 12-step pipeline in automated mode
-./orchestrate.sh --automated
+### 1. Configure
+
+Edit `config.yaml` with your Azure subscription and resource settings:
+
+```yaml
+azure:
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+  tenant_id: "00000000-0000-0000-0000-000000000000"
+  location: "centralus"
+  resource_group: "RG-Azure-VDI-01"
 ```
 
-### Interactive Deployment (Prompt per step)
+### 2. Execute
+
 ```bash
-# Run with prompts before each step
-./orchestrate.sh
+# Load configuration (exports 50+ environment variables)
+source core/config-manager.sh && load_config
+
+# Run entire module
+./core/engine.sh run 05-golden-image
+
+# Or run single operation
+./core/engine.sh run 05-golden-image 01-system-prep
 ```
 
-### Resume from Failure
+### 3. Monitor
+
 ```bash
-# Continue from where the last failure occurred
-./orchestrate.sh --resume
+# Check execution state
+cat state.json
+
+# Real-time log monitoring
+tail -f artifacts/logs/deployment_$(date +%Y%m%d).jsonl
+
+# View operation output
+cat artifacts/outputs/golden-image-install-fslogix.json | jq -r '.value[0].message'
 ```
 
-### Run Single Step
-```bash
-# Run only step 05 (golden image)
-./orchestrate.sh --step 05-golden-image
+### 4. Resume After Failure
 
-# Or run individual task
-cd 05-golden-image
-./tasks/01-create-vm.sh
+```bash
+# Automatically resume from last checkpoint
+./core/engine.sh resume
 ```
+
+## Architecture
+
+This project uses a **YAML-based template engine** with:
+
+- **Core Engine** - 7 components (3,018 lines):
+  - `core/config-manager.sh` - Configuration loading & validation
+  - `core/template-engine.sh` - YAML template processing
+  - `core/engine.sh` - Main orchestrator
+  - `core/progress-tracker.sh` - Real-time progress monitoring
+  - `core/error-handler.sh` - Self-healing & automatic retry
+  - `core/logger.sh` - Structured logging (JSONL)
+  - `core/validator.sh` - Configuration validation
+
+- **Module System** - Template-based operations:
+  ```
+  modules/[ID]-[name]/
+  ├── module.yaml              # Module definition
+  └── operations/
+      └── XX-[operation].yaml  # Self-contained YAML templates
+  ```
+
+- **Configuration Flow**:
+  ```
+  config.yaml → load_config() → {{VARIABLES}} → YAML templates → Azure CLI
+  ```
+
+**See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system documentation.**
+
+## Module Status
+
+| Module | Status | Operations | Duration |
+|--------|--------|------------|----------|
+| 05 - Golden Image | ✅ **Complete** | 11 operations | ~16 minutes |
+| 01-04, 06-12 | 🚧 Pending | Awaiting YAML conversion | - |
+
+### Module 05: Golden Image (Complete)
+
+Successfully executed 11 operations:
+1. System Preparation
+2. Install FSLogix
+3. Install Google Chrome
+4. Install Adobe Reader (optional)
+5. Install Microsoft Office 365
+6. Configure Default Applications
+7. Run VDOT Optimization
+8. Configure AVD Registry Settings
+9. Configure Default User Profile
+10. Cleanup Temporary Files
+11. Validate All Components
+
+**Status**: Golden image ready for capture and deployment.
+
+## Creating New Modules
+
+Use the template generator:
+
+```bash
+./tools/create-module.sh 06 "Session Host Deployment"
+```
+
+This creates:
+```
+modules/06-session-host-deployment/
+├── module.yaml
+└── operations/
+    └── 01-example-operation.yaml
+```
+
+Then:
+1. Define operations in `module.yaml`
+2. Create operation templates in `operations/`
+3. Add configuration section to `config.yaml`
+4. Execute: `./core/engine.sh run 06-session-host-deployment`
+
+**See [ARCHITECTURE.md](ARCHITECTURE.md) → Module Development** for details.
+
+## Legacy Reference
+
+The `legacy/` directory contains the **original bash-based modules** (never executed):
+
+- **Do NOT execute** these scripts (deprecated)
+- **Do reference** them for:
+  - Azure CLI commands
+  - PowerShell implementation details
+  - Task breakdowns
+  - AVD best practices
+
+**See [legacy/README.md](legacy/README.md)** for migration guide.
+
+## Key Features
+
+### Self-Healing Error Recovery
+
+When operations fail:
+1. Extract error from PowerShell logs
+2. Generate fix description
+3. Apply fix to YAML template (`fixes:` section)
+4. Automatically retry (max 3 times)
+5. Next run uses fixed template
+
+**Anti-Destructive Safeguards**: Blocks destructive operations like `az vm delete`, `recreate.*vm`, etc.
+
+### Real-Time Progress Tracking
+
+All operations include progress markers:
+```powershell
+Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
+Write-Host "[PROGRESS] Step 1/4: Downloading..."
+Write-Host "[VALIDATE] Checking installation..."
+Write-Host "[SUCCESS] Complete"
+```
+
+### State Management
+
+- **state.json** - Centralized execution state
+- **Checkpoint files** - Resume capability after failures
+- **Structured logs** - JSONL format for analysis
+- **Operation outputs** - Full Azure CLI results
+
+### Template System
+
+Operations use YAML templates with variable substitution:
+
+```yaml
+operation:
+  template:
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --scripts "@modules/05-golden-image/operations/01-system-prep.ps1"
+```
+
+Variables come from `config.yaml` - no hardcoded values.
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Complete system architecture (AI-focused) |
+| [.claude/CLAUDE.md](.claude/CLAUDE.md) | AI assistant instructions |
+| [config.yaml](config.yaml) | Configuration reference |
+| [legacy/README.md](legacy/README.md) | Legacy module migration guide |
+| [docs/config-migration.md](docs/config-migration.md) | Legacy config.env → config.yaml mapping |
 
 ## Prerequisites
 
-Before you begin, ensure you have the following:
-
-- An active Azure Subscription
-- A user account with 'Owner' or 'Contributor' and 'User Access Administrator' roles on the subscription
-- Azure CLI installed and configured (version 2.30+)
-- PowerShell Core or Windows PowerShell 5.1+
-- You are logged into your Azure account via `az login`
-- Sufficient quota in your Azure subscription for VMs, storage, and networking resources
-
-## Configuration
-
-### Setup Configuration
-
-1. **Configure centralized settings:**
-   ```bash
-   # Copy and edit the global configuration
-   cp config/avd-config.example.sh config/avd-config.sh
-   vi config/avd-config.sh
-   ```
-
-   Update these required values:
-   - `SUBSCRIPTION_ID` - Your Azure subscription ID
-   - `TENANT_ID` - Your Entra ID tenant ID
-   - `RESOURCE_GROUP_NAME` - Resource group name (e.g., RG-Azure-VDI-01)
-   - `LOCATION` - Azure region (e.g., centralus)
-
-2. **Configure individual steps (optional overrides):**
-   ```bash
-   # Each step can have its own config.env for step-specific settings
-   vi 05-golden-image/config.env
-   ```
-
-   Step-specific configurations override centralized settings for that step only.
-
-3. **Validate configuration:**
-   ```bash
-   # The orchestrator will validate prerequisites automatically
-   ./orchestrate.sh --help
-   ```
-
-### Configuration Hierarchy
-
-Configuration values are loaded in this order (first match wins):
-
-1. Environment variables (highest priority)
-2. Step-specific `config.env` (e.g., `05-golden-image/config.env`)
-3. Centralized `config/avd-config.sh` (global defaults)
-4. Script-level defaults (lowest priority)
-
-### Configuration File Structure
-
-The configuration files organize settings by deployment step:
-
-- **Global Settings** - Subscription, tenant, location, resource group, environment (prod/dev/test)
-- **Networking** (Step 01) - VNet name, subnets, IP ranges, NSG names
-- **Storage** (Step 02) - Storage account, file share name and quota
-- **Entra Groups** (Step 03) - User and device group names
-- **Host Pool** (Step 04) - Workspace, host pool, app group names
-- **Golden Image** (Step 05) - Image gallery, VM size
-- **Session Hosts** (Step 06) - VM prefix, size, count
-- **Autoscaling** (Step 10) - Scaling plan name, timezone, schedules
-
-### Using Configuration Files
-
-**Option 1: Automatic loading (recommended)**
-Scripts check for `./config/avd-config.sh` (Bash) or `../config/avd-config.ps1` (PowerShell) by default:
-```bash
-./01-Networking-Setup.sh
-```
-
-**Option 2: Custom config file location**
-```bash
-CONFIG_FILE="/path/to/my-config.sh" ./01-Networking-Setup.sh
-# OR PowerShell
-$env:AVD_CONFIG_FILE = "C:\path\to\my-config.ps1"
-.\02-Storage-Setup.ps1
-```
-
-**Option 3: Override with parameters**
-Config file loads first, CLI parameters override values:
-```bash
-./01-Networking-Setup.sh --location "eastus"
-# OR PowerShell
-.\02-Storage-Setup.ps1 -Location "eastus"
-```
-
-### Configuration Best Practices
-
-- **Never commit config files** - `avd-config.sh` and `avd-config.ps1` are in `.gitignore`
-- **Use example files** - Copy and customize from `avd-config.example.sh` and `avd-config.example.ps1`
-- **Validate before deployment** - Run `validate-config.ps1` to catch errors early
-- **Environment-specific configs** - Create separate configs: `avd-config-dev.sh`, `avd-config-prod.sh`
-
-## Directory Structure
-
-```
-azure-cli/
-├── orchestrate.sh                    # Master orchestration script
-├── config/
-│   └── avd-config.sh                # Centralized configuration (create from example)
-├── common/
-│   ├── functions/                   # Reusable function libraries
-│   ├── templates/                   # Task and config templates
-│   └── docs/                        # Reference documentation
-│
-├── 01-networking/
-│   ├── config.env                   # Networking configuration
-│   ├── tasks/                       # Individual task scripts
-│   ├── commands/                    # Azure CLI command references
-│   └── README.md                    # Step documentation
-│
-├── 02-storage/
-├── 03-entra-group/
-├── 04-host-pool-workspace/
-├── 05-golden-image/
-├── 06-session-host-deployment/
-├── 07-intune/
-├── 08-rbac/
-├── 09-sso/
-├── 10-autoscaling/
-├── 11-testing/
-└── 12-cleanup-migration/
-```
-
-Each step (01-12) follows the same structure:
-- **tasks/** - Modular, individually executable task scripts
-- **commands/** - Pre-built Azure CLI command references
-- **config.env** - Step-specific configuration settings
-- **README.md** - Quick start and documentation
-
-## Deployment Approach
-
-This repository supports **three deployment patterns**:
-
-### 1. Full Automated Pipeline (Recommended)
+- Azure CLI (`az`) installed and authenticated
+- `yq` (YAML processor) - [Install](https://github.com/mikefarah/yq)
+- `jq` (JSON processor) - [Install](https://stedolan.github.io/jq/)
+- Bash shell (Linux/macOS/WSL)
+- Azure subscription with appropriate permissions
 
 ```bash
-./orchestrate.sh --automated
+# Install yq
+sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+sudo chmod +x /usr/local/bin/yq
+
+# Verify prerequisites
+az account show
+yq --version
+jq --version
 ```
 
-The orchestrator runs all 12 steps sequentially with:
-- Automatic prerequisite validation
-- Error detection and stop-on-failure
-- State tracking for resume capability
-- Detailed logging to artifacts/
-
-**When to use:** Production deployments, repeatable processes, full automation.
-
-### 2. Interactive Deployment (Prompt per step)
+## Commands Reference
 
 ```bash
-./orchestrate.sh
+# Configuration
+source core/config-manager.sh && load_config  # Load config.yaml
+validate_config                                # Validate configuration
+
+# Execution
+./core/engine.sh run [module]                  # Run entire module
+./core/engine.sh run [module] [operation]      # Run single operation
+./core/engine.sh resume                        # Resume from failure
+./core/engine.sh list [module]                 # List operations
+./core/engine.sh status                        # Check execution status
+
+# Module Development
+./tools/create-module.sh [ID] "[Name]"         # Generate module template
+
+# Monitoring
+cat state.json                                 # View execution state
+tail -f artifacts/logs/deployment_*.jsonl      # Real-time logs
+cat artifacts/outputs/[operation].json         # Operation output
 ```
 
-Execute with confirmation prompts before each step:
-- Review configuration before each step
-- Option to skip steps
-- Resume capability on errors
+## Troubleshooting
 
-**When to use:** Learning the system, testing individual steps, manual oversight.
-
-### 3. Individual Task Execution
-
+**Config loading fails**:
 ```bash
-cd 05-golden-image
-./tasks/01-create-vm.sh
-./tasks/02-validate-vm.sh
+# Install yq
+sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+sudo chmod +x /usr/local/bin/yq
 ```
 
-Run specific tasks as needed:
-- Completely independent execution
-- Full control over order and parameters
-- Use for troubleshooting or custom workflows
-
-**When to use:** Debugging, custom deployments, integration with other tools.
-
-## Script Conventions
-
-**Naming Pattern:** `[step-number]-[step-name].[sh|ps1]`
-
-**Script Types:**
-- `.sh` - Bash scripts using Azure CLI (infrastructure provisioning)
-- `.ps1` - PowerShell scripts using Az/Microsoft.Graph modules (configuration/management)
-- `.Tests.ps1` - Verification scripts to validate deployment
-
-**Script Features:**
-- **Idempotent:** Safe to run multiple times
-- **Parameterized:** Customize for your environment
-- **Validated:** Check prerequisites before executing
-- **Verbose:** Clear console output with color-coded status
-- **Error Handling:** Fail-fast with meaningful error messages
-
-**Color-Coded Output:**
-- **Blue/Cyan** = Section headers and informational messages
-- **Yellow** = Processing steps and warnings
-- **Green** = Successful operations (✓)
-- **Red** = Errors (✗)
-
-## Workflow Steps
-
-Follow the steps below in order. Each step corresponds to a directory containing detailed instructions and any necessary scripts.
-
-1.  **Networking Setup**
-    *   Provisions the core networking infrastructure (VNet, subnets, NSGs).
-    *   **Automation:** `01-Networking-Setup.sh` (Bash/Azure CLI)
-    *   [View Details](./01-networking/01-Networking-Setup.md)
-
-2.  **Storage Setup**
-    *   Creates Azure Files Premium with FSLogix profiles and private endpoint.
-    *   **Automation:** `02-Storage-Setup.ps1` (PowerShell)
-    *   [View Details](./02-storage/02-Storage-Setup.md)
-
-3.  **Entra ID Group Setup**
-    *   Creates user security groups and device dynamic groups for policy targeting.
-    *   **Automation:** `03-Entra-Group-Setup.ps1` (PowerShell)
-    *   [View Details](./03-entra-group/03-Entra-Group-Setup.md)
-
-4.  **Host Pool & Workspace Setup**
-    *   Creates AVD workspace, host pool, and application group with RDP configuration.
-    *   **Automation:** `04-Host-Pool-Workspace-Setup.ps1` (PowerShell)
-    *   [View Details](./04-host-pool-workspace/04-Host-Pool-Workspace-Setup.md)
-
-5.  **Golden Image Creation**
-    *   Creates and configures a golden image VM with all necessary applications (Office, Chrome, Adobe, FSLogix, VDOT optimizations).
-    *   **Automation:** Three-script workflow:
-      - `05-Golden-Image-VM-Create.sh` (Bash/Azure CLI) - Create temporary VM
-      - `05-Golden-Image-VM-Configure.ps1` (PowerShell) - Configure inside VM via RDP
-      - `05-Golden-Image-Capture.sh` (Bash/Azure CLI) - Sysprep and capture image
-    *   [View Details](./05-golden-image-updated/05-Golden-Image-Creation.md)
-
-6.  **Session Host Deployment**
-    *   Deploys N session host VMs from golden image and registers to host pool.
-    *   **Automation:** `06-Session-Host-Deployment.ps1` (PowerShell)
-    *   [View Details](./06-session-host-deployment/06-Session-Host-Deployment.md)
-
-7.  **Intune Configuration**
-    *   Creates and assigns Intune configuration policies for FSLogix, RDP transport, and security baselines.
-    *   **Automation:** `07-Intune-Configuration.ps1` (PowerShell)
-    *   [View Details](./07-intune/07-Intune-Configuration.md)
-
-8.  **RBAC Assignments**
-    *   Assigns Role-Based Access Control (RBAC) to Entra ID groups for user access.
-    *   **Automation:** `08-RBAC-Assignments.ps1` (PowerShell) + `08-RBAC-Assignments.Tests.ps1`
-    *   [View Details](./08-rbac/08-RBAC-Assignments.md)
-
-9.  **SSO Configuration**
-    *   Configures Windows Cloud Login for Kerberos SSO and seamless authentication.
-    *   **Automation:** `09-SSO-Configuration.ps1` (PowerShell)
-    *   [View Details](./09-sso/09-SSO-Configuration.md)
-
-10. **Autoscaling Setup**
-    *   Creates scaling plans with time-based schedules to optimize costs by starting/stopping VMs.
-    *   **Automation:** `10-Autoscaling-Setup.ps1` (PowerShell)
-    *   [View Details](./10-autoscaling/10-Autoscaling-Setup.md)
-
-11. **Testing & Validation**
-    *   Comprehensive automated validation of entire AVD infrastructure and configuration.
-    *   **Automation:** `11-Testing-Validation.ps1` (PowerShell)
-    *   [View Details](./11-testing/11-Testing-Validation.md)
-
-12. **VM Cleanup & Migration**
-    *   Automated cleanup of temporary VMs and orphaned resources; migration guide for user transition.
-    *   **Automation:** `12-VM-Cleanup.ps1` (PowerShell)
-    *   [View Details](./12-cleanup-migration/12-VM-Cleanup-Migration.md)
-
-## Function Libraries
-
-The `common/functions/` directory contains reusable libraries for all task scripts:
-
-- **logging-functions.sh** - Unified logging with color-coded output, file management, and operation tracking
-- **config-functions.sh** - Configuration loading, validation, and environment variable handling
-- **azure-functions.sh** - Azure CLI wrappers with retry logic and error handling
-- **string-functions.sh** - String manipulation, JSON handling, security utilities
-
-All task scripts automatically source these libraries. Reference: [Function Libraries Guide](./common/functions/FUNCTIONS-GUIDE.md)
-
-## Shared Utilities
-
-The `common/` directory contains reusable scripts and utilities for debugging, validation, and recovery:
-
-**Prerequisites & Validation:**
-- **`verify_prerequisites.ps1`** - Validates environment prerequisites before deployment
-  - Checks PowerShell version, Azure modules, Microsoft Graph modules
-  - Verifies Azure subscription access and permissions
-  - Validates Entra ID licenses and resource provider registration
-  - **Usage:** `.\verify_prerequisites.ps1` (run before starting deployment)
-
-**Configuration & Documentation:**
-- **`export_deployment_config.ps1`** - Exports all deployed resources and configuration as JSON
-  - Exports: Resource group, VNets, storage accounts, host pools, app groups, workspaces, VMs
-  - **Usage:** `.\export_deployment_config.ps1 -ResourceGroupName "RG-Azure-VDI-01" -OutputFile "avd-config.json"`
-
-**Debugging & Recovery:**
-- **`debug_apps.ps1`** - Diagnostic tool for troubleshooting application installations on golden image
-  - Tests application installation status, registry keys, file permissions
-  - **Usage:** Run on golden image VM to verify installations
-
-- **`recover_vm.sh`** - Recovery script for troubleshooting or recovering sysprep issues
-  - Helps with VM recovery after failed generalization
-  - **Usage:** Use when VM recovery is needed after golden image capture failure
-
-**Reference Documentation:**
-- **`azure-cli-reference.md`** - Comprehensive Azure CLI command reference for AVD deployments
-  - Complete list of relevant `az` commands organized by resource type
-  - Includes networking, storage, VMs, AVD, RBAC, monitoring, and more
-  - Provides command syntax, parameters, and usage examples
-  - **Usage:** AI assistants and developers can reference this when building or modifying infrastructure
-
-## Quick Start
-
-### Option 1: Quick Validation Only
+**Variable substitution fails**:
 ```bash
-# Run prerequisites check
-cd common
-pwsh -ExecutionPolicy Bypass -File verify_prerequisites.ps1
+# Verify config loaded
+source core/config-manager.sh && load_config
+echo $AZURE_RESOURCE_GROUP  # Should not be empty
 ```
 
-### Option 2: Full Automated Deployment
+**Operation timeout**:
 ```bash
-# Step 1: Validate environment
-cd common
-pwsh -ExecutionPolicy Bypass -File verify_prerequisites.ps1
-
-# Step 2: Run each deployment script in order
-cd ../01-networking
-bash 01-Networking-Setup.sh
-
-cd ../02-storage
-pwsh 02-Storage-Setup.ps1
-# ... continue through all 12 steps
-
-# Step 13: Validate complete deployment
-cd ../11-testing
-pwsh 11-Testing-Validation.ps1
+# Adjust timeout in operation YAML
+yq eval '.operation.duration.timeout = 600' -i modules/[module]/operations/[operation].yaml
 ```
 
-### Option 3: Manual Deployment
-Start with Step 1 and proceed sequentially. Navigate into each directory and follow the instructions within the markdown file. Each directory contains an `XX-*.md` file with detailed manual instructions.
+**Resume after failure**:
+```bash
+cat state.json | jq '.current_operation'  # Check current state
+./core/engine.sh resume                    # Resume from checkpoint
+```
 
-## For AI Assistants (Gemini, Claude Code, etc.)
+**View detailed logs**:
+```bash
+# View operation output
+cat artifacts/outputs/[operation-id].json | jq -r '.value[0].message'
 
-This template is specifically designed for AI assistant usage. If you're an AI assistant helping with AVD deployment:
+# Check for errors
+grep '\[ERROR\]' artifacts/logs/deployment_*.jsonl
+```
 
-1. **Start here:** Read [AI-INTERACTION-GUIDE.md](./AI-INTERACTION-GUIDE.md) for comprehensive guidance on using this template
-2. **Key Principles:**
-   - Use existing task templates; don't create new scripts
-   - All configuration goes in `config.env` files, never hardcoded
-   - Source and use function libraries instead of rewriting functionality
-   - Follow established task patterns from `common/templates/task-template.sh`
-3. **Function Libraries:** Before writing new code, check `common/functions/` for reusable functionality
-4. **Command References:** Pre-built Azure CLI commands available in `commands/` subdirectories
-5. **State Tracking:** The orchestrator maintains state in `artifacts/` for debugging and recovery
+## Project Status
 
-See [AI-INTERACTION-GUIDE.md](./AI-INTERACTION-GUIDE.md) for detailed best practices, common task examples, and troubleshooting.
+**Engine Development**:
+- ✅ Phase 1: Foundation (config-manager.sh, template-engine.sh)
+- ✅ Phase 2: Progress & Validation (progress-tracker.sh, logger.sh)
+- ✅ Phase 3: Self-Healing (error-handler.sh)
+- ✅ Module 05: Golden Image (11 operations executed successfully)
+
+**Next Steps**:
+- Convert modules 01-04 to YAML format (reference legacy implementations)
+- Implement modules 06-12 using YAML engine
+
+## Contributing
+
+When creating new modules:
+1. Use `./tools/create-module.sh` for scaffolding
+2. Follow Module 05 as reference implementation
+3. Reference legacy modules for Azure CLI commands
+4. Add configuration to `config.yaml`
+5. Include `[START/PROGRESS/SUCCESS]` markers in PowerShell
+6. Test with `./core/engine.sh run [module]`
+
+## License
+
+This template is provided as-is for Azure Virtual Desktop deployments.
+
+---
+
+**Last Updated**: 2025-12-04
+**Engine Version**: Phase 3 Complete
+**Active Modules**: 1/12 (Module 05: Golden Image ✅)

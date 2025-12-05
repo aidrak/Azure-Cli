@@ -59,19 +59,19 @@ operation:
 
               $result = & $Test
               if ($result) {
-                  Write-Host "[VALIDATE] ✓ PASS: $Name"
+                  Write-Host "[VALIDATE] PASS: $Name"
                   $script:passedChecks++
                   $script:validationResults += "[PASS] $Name"
                   return $true
               }
               else {
                   if ($Required) {
-                      Write-Host "[VALIDATE] ✗ FAIL: $Name"
+                      Write-Host "[VALIDATE] FAIL: $Name"
                       $script:failedChecks += $Name
                       $script:validationResults += "[FAIL] $Name (Path: $Path)"
                   }
                   else {
-                      Write-Host "[VALIDATE] ⚠ OPTIONAL: $Name (not found)"
+                      Write-Host "[VALIDATE] OPTIONAL: $Name (not found)"
                       $script:validationResults += "[OPTIONAL] $Name"
                   }
                   return $false
@@ -103,15 +103,12 @@ operation:
           } -Path "C:\Program Files\Google\Chrome\Application\chrome.exe" -Required $true
 
           # ========================================================================
-          # Step 3: Validate Adobe Reader
+          # Step 3: Validate Adobe Reader - SKIPPED per user request
           # ========================================================================
 
-          Write-Host "[PROGRESS] Step 3/8: Validating Adobe Reader..."
+          Write-Host "[PROGRESS] Step 3/8: Skipping Adobe Reader validation (not installed)..."
 
-          Test-Validation -Name "Adobe Reader Executable" -Test {
-              (Test-Path "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe") -or
-              (Test-Path "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe")
-          } -Path "C:\Program Files\Adobe\...\Acrobat.exe" -Required $true
+          # Adobe Reader validation skipped - not installed per user decision
 
           # ========================================================================
           # Step 4: Validate Microsoft Office 365
@@ -139,7 +136,7 @@ operation:
 
           Test-Validation -Name "Adobe Reader Shortcut" -Test {
               Test-Path "C:\Users\Public\Desktop\Adobe Acrobat Reader.lnk"
-          } -Path "C:\Users\Public\Desktop\Adobe Acrobat Reader.lnk" -Required $true
+          } -Path "C:\Users\Public\Desktop\Adobe Acrobat Reader.lnk" -Required $false
 
           Test-Validation -Name "Chrome Shortcut" -Test {
               Test-Path "C:\Users\Public\Desktop\Google Chrome.lnk"
@@ -195,36 +192,36 @@ operation:
 
           $reportPath = "C:\Temp\golden-image-validation-report.txt"
           $report = @"
-==============================================================================
-Golden Image Validation Report
-==============================================================================
-Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+      ==============================================================================
+      Golden Image Validation Report
+      ==============================================================================
+      Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
-Summary:
---------
-Total Checks: $($validationResults.Count)
-Passed: $passedChecks
-Failed: $($failedChecks.Count)
-Status: $(if ($failedChecks.Count -eq 0) { "ALL PASSED" } else { "FAILED" })
+      Summary:
+      --------
+      Total Checks: $($validationResults.Count)
+      Passed: $passedChecks
+      Failed: $($failedChecks.Count)
+      Status: $(if ($failedChecks.Count -eq 0) { "ALL PASSED" } else { "FAILED" })
 
-Detailed Results:
------------------
-$($validationResults -join "`n")
+      Detailed Results:
+      -----------------
+      $($validationResults -join "`n")
 
-$(if ($failedChecks.Count -gt 0) {
-"
-Failed Checks:
---------------
-$($failedChecks -join "`n")
-"
-} else {
-"
-All validation checks passed successfully!
-"
-})
+      $(if ($failedChecks.Count -gt 0) {
+      "
+      Failed Checks:
+      --------------
+      $($failedChecks -join "`n")
+      "
+      } else {
+      "
+      All validation checks passed successfully!
+      "
+      })
 
-==============================================================================
-"@
+      ==============================================================================
+      "@
 
           $report | Out-File -FilePath $reportPath -Encoding UTF8 -Force
 

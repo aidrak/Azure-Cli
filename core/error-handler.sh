@@ -239,7 +239,12 @@ handle_operation_error() {
     local yaml_file="${4:-}"
     local auto_retry="${5:-false}"
 
-    log_operation_error "$operation_id" "$exit_code" "$(extract_error_info "$log_file")"
+    # Extract error info for logging
+    local error_info
+    error_info=$(extract_error_info "$log_file")
+
+    # Log the error (operation_id, error_message, error_code, elapsed)
+    log_operation_error "$operation_id" "$error_info" "$exit_code" "0"
 
     echo ""
     echo "========================================================================"
@@ -249,10 +254,7 @@ handle_operation_error() {
     echo "Log File: $log_file"
     echo ""
 
-    # Extract and display error information
-    local error_info
-    error_info=$(extract_error_info "$log_file")
-
+    # Display error information (already extracted above)
     if [[ -n "$error_info" ]]; then
         echo "Error Details:"
         echo "$error_info"

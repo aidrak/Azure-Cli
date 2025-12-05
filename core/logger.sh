@@ -45,9 +45,14 @@ log_structured() {
     local operation_id="${3:-}"
     local metadata="${4:-{}}"
 
+    # Ensure metadata is valid JSON
+    if [[ -z "$metadata" ]] || [[ "$metadata" == "null" ]]; then
+        metadata="{}"
+    fi
+
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 
-    local log_entry=$(jq -n \
+    local log_entry=$(jq -cn \
         --arg ts "$timestamp" \
         --arg lvl "$level" \
         --arg msg "$message" \
@@ -59,9 +64,12 @@ log_structured() {
             message: $msg,
             operation_id: $op_id,
             metadata: $meta
-        }')
+        }' 2>/dev/null)
 
-    echo "$log_entry" >> "$STRUCTURED_LOG"
+    # Only write if log entry was generated successfully
+    if [[ -n "$log_entry" ]]; then
+        echo "$log_entry" >> "$STRUCTURED_LOG"
+    fi
 }
 
 # ==============================================================================
