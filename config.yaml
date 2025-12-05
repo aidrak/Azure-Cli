@@ -62,7 +62,7 @@ networking:
         #   destination_address_prefix: "Internet"
         #   destination_port_range: "*"
 
-    # Private Endpoints Subnet
+    # Private Endpoints Subnet (for Storage, Key Vault, etc.)
     - name: "subnet-private-endpoints"
       address_prefix: "10.0.2.0/24"
       service_endpoints: []
@@ -129,10 +129,41 @@ networking:
 # Storage Configuration (Module 02)
 # ==============================================================================
 storage:
+  # Storage Account Settings
   account_name: ""                      # Auto-generated if empty: fslogix<random5>
-  share_name: "fslogix-profiles"
-  quota_gb: 1024
-  tier: "Premium"                       # Premium or Standard
+  sku: "Premium_LRS"                    # Premium_LRS, Premium_ZRS
+  kind: "FileStorage"                   # FileStorage for Premium Files
+  tier: "Premium"                       # Premium or Standard (use Premium for AVD)
+
+  # File Share Settings
+  file_share_name: "fslogix-profiles"   # File share name for FSLogix profiles
+  quota_gb: 1024                        # File share quota in GB (1024 = 1TB)
+  # Quota calculation: (Number of users × 50GB) + 20% buffer
+  # Examples:
+  #   - 20 users: 1024GB (1TB)
+  #   - 100 users: 6144GB (6TB)
+  #   - 400 users: 24576GB (24TB)
+
+  # Authentication Settings
+  enable_entra_kerberos: true           # Enable Entra Kerberos for passwordless access
+  enable_smb_multichannel: true         # Enable SMB Multichannel for performance
+
+  # Network Security
+  public_network_access: "Disabled"     # Disabled = private endpoint only
+  allow_blob_public_access: false       # Block public blob access
+  https_only: true                      # Require HTTPS
+  min_tls_version: "TLS1_2"             # Minimum TLS version
+
+  # Private Endpoint Settings
+  private_endpoint:
+    enabled: true                       # Create private endpoint
+    subnet_name: "{{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME}}"
+    dns_zone_name: "privatelink.file.core.windows.net"
+
+  # Advanced Settings
+  enable_large_file_share: true         # Support for large file shares
+  enable_soft_delete: true              # Enable soft delete for file shares
+  soft_delete_retention_days: 7         # Retention period for deleted shares
 
 # ==============================================================================
 # Entra ID Configuration (Module 03)

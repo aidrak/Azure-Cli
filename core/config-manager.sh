@@ -50,12 +50,25 @@ load_config() {
     export NETWORKING_PEERING_ENABLED=$(yq e '.networking.peering.enabled' "$config_file")
     export NETWORKING_ROUTE_TABLES_ENABLED=$(yq e '.networking.route_tables.enabled' "$config_file")
 
-    # Note: Subnet arrays, NSG rules, DNS zones are parsed dynamically in operations
+    # Commonly used subnet names (extracted from array for convenience)
+    export NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-session-hosts") | .name' "$config_file")
+    export NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-private-endpoints") | .name' "$config_file")
+    export NETWORKING_MANAGEMENT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-management") | .name' "$config_file")
+
+    # Note: Full subnet arrays, NSG rules, DNS zones are parsed dynamically in operations
     # They are too complex for simple environment variables
 
-    # Storage section
+    # Storage section (Module 02)
     export STORAGE_ACCOUNT_NAME=$(yq e '.storage.account_name' "$config_file")
-    export STORAGE_SHARE_NAME=$(yq e '.storage.share_name' "$config_file")
+    export STORAGE_SKU=$(yq e '.storage.sku' "$config_file")
+    export STORAGE_KIND=$(yq e '.storage.kind' "$config_file")
+    export STORAGE_FILE_SHARE_NAME=$(yq e '.storage.file_share_name' "$config_file")
+    export STORAGE_QUOTA_GB=$(yq e '.storage.quota_gb' "$config_file")
+    export STORAGE_ENABLE_ENTRA_KERBEROS=$(yq e '.storage.enable_entra_kerberos' "$config_file")
+    export STORAGE_ENABLE_SMB_MULTICHANNEL=$(yq e '.storage.enable_smb_multichannel' "$config_file")
+    export STORAGE_PUBLIC_NETWORK_ACCESS=$(yq e '.storage.public_network_access' "$config_file")
+    export STORAGE_HTTPS_ONLY=$(yq e '.storage.https_only' "$config_file")
+    export STORAGE_MIN_TLS_VERSION=$(yq e '.storage.min_tls_version' "$config_file")
 
     # Golden Image section
     export GOLDEN_IMAGE_TEMP_VM_NAME=$(yq e '.golden_image.temp_vm_name' "$config_file")
