@@ -32,7 +32,6 @@ STRUCTURED_LOG="${LOGS_DIR}/deployment_$(date +%Y%m%d).jsonl"
 LOG_LEVEL_DEBUG=0
 LOG_LEVEL_INFO=1
 LOG_LEVEL_WARN=2
-LOG_LEVEL_ERROR=3
 
 CURRENT_LOG_LEVEL=${CURRENT_LOG_LEVEL:-$LOG_LEVEL_INFO}
 
@@ -50,9 +49,11 @@ log_structured() {
         metadata="{}"
     fi
 
-    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+    local timestamp
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 
-    local log_entry=$(jq -cn \
+    local log_entry
+    log_entry=$(jq -cn \
         --arg ts "$timestamp" \
         --arg lvl "$level" \
         --arg msg "$message" \
@@ -130,7 +131,8 @@ log_operation_start() {
     local operation_name="${2:-$operation_id}"
     local expected_duration="${3:-60}"
 
-    local metadata=$(jq -n \
+    local metadata
+    metadata=$(jq -n \
         --arg name "$operation_name" \
         --argjson duration "$expected_duration" \
         '{
@@ -154,7 +156,8 @@ log_operation_progress() {
     local progress_message="$2"
     local elapsed="${3:-0}"
 
-    local metadata=$(jq -n \
+    local metadata
+    metadata=$(jq -n \
         --argjson elapsed "$elapsed" \
         '{
             elapsed_seconds: $elapsed
@@ -178,7 +181,8 @@ log_operation_complete() {
         status="failed"
     fi
 
-    local metadata=$(jq -n \
+    local metadata
+    metadata=$(jq -n \
         --argjson duration "$duration" \
         --argjson expected "$expected_duration" \
         --argjson exit_code "$exit_code" \
@@ -209,7 +213,8 @@ log_operation_error() {
     local error_code="${3:-1}"
     local elapsed="${4:-0}"
 
-    local metadata=$(jq -n \
+    local metadata
+    metadata=$(jq -n \
         --arg error "$error_message" \
         --argjson code "$error_code" \
         --argjson elapsed "$elapsed" \
@@ -230,7 +235,8 @@ log_artifact_created() {
     local artifact_path="$2"
     local operation_id="${3:-}"
 
-    local metadata=$(jq -n \
+    local metadata
+    metadata=$(jq -n \
         --arg type "$artifact_type" \
         --arg path "$artifact_path" \
         '{
@@ -287,8 +293,10 @@ get_operation_summary() {
     echo ""
 
     # Get start and end entries
-    local start_entry=$(jq -r "select(.operation_id == \"$operation_id\" and .level == \"OPERATION_START\")" "$STRUCTURED_LOG" 2>/dev/null | head -n 1)
-    local end_entry=$(jq -r "select(.operation_id == \"$operation_id\" and .level == \"OPERATION_COMPLETE\")" "$STRUCTURED_LOG" 2>/dev/null | head -n 1)
+    local start_entry
+    start_entry=$(jq -r "select(.operation_id == \"$operation_id\" and .level == \"OPERATION_START\")" "$STRUCTURED_LOG" 2>/dev/null | head -n 1)
+    local end_entry
+    end_entry=$(jq -r "select(.operation_id == \"$operation_id\" and .level == \"OPERATION_COMPLETE\")" "$STRUCTURED_LOG" 2>/dev/null | head -n 1)
 
     if [[ -z "$start_entry" ]]; then
         echo "[!] No start entry found for operation: $operation_id"

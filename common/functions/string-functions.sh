@@ -27,7 +27,7 @@ sanitize_name() {
     local case_mode="${2:-lowercase}"
 
     # Remove invalid characters (keep alphanumerics, hyphens, underscores)
-    name=$(echo "$name" | sed 's/[^a-zA-Z0-9_-]//g')
+    name="${name//[^a-zA-Z0-9_-]/}"
 
     # Apply case conversion
     case "$case_mode" in
@@ -80,19 +80,23 @@ parse_azure_id() {
 
     case "$part" in
         subscription)
-            echo "$resource_id" | sed 's|.*/subscriptions/\([^/]*\).*|\1|'
+            local sub_part="${resource_id#*subscriptions/}"
+            echo "${sub_part%%/*}"
             ;;
         resource-group)
-            echo "$resource_id" | sed 's|.*/resourceGroups/\([^/]*\).*|\1|'
+            local rg_part="${resource_id#*resourceGroups/}"
+            echo "${rg_part%%/*}"
             ;;
         provider)
-            echo "$resource_id" | sed 's|.*/providers/\([^/]*\).*|\1|'
+            local provider_part="${resource_id#*providers/}"
+            echo "${provider_part%%/*}"
             ;;
         resource-type)
-            echo "$resource_id" | sed 's|.*/providers/[^/]*/\([^/]*\).*|\1|'
+            local type_part="${resource_id#*providers/*/}"
+            echo "${type_part%%/*}"
             ;;
         resource-name)
-            echo "$resource_id" | sed 's|.*/\([^/]*\)$|\1|'
+            echo "${resource_id##*/}"
             ;;
         *)
             log_error "Unknown part: $part"
@@ -161,7 +165,6 @@ escape_json() {
 # Usage: masked=$(mask_secrets "password123secret")
 mask_secrets() {
     local text="$1"
-    local mask_length="${2:-4}"
 
     # Find patterns that look like secrets (long strings of random chars)
     # This is a simple heuristic implementation

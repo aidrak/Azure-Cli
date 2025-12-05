@@ -1,7 +1,7 @@
 {
   "operation_id": "golden-image-create-vm",
   "status": "completed",
-  "duration_seconds": 134,
-  "timestamp": "2025-12-05T22:08:12Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-create-vm_20251205_220558.log"
+  "duration_seconds": 2,
+  "timestamp": "2025-12-05T22:57:48Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-create-vm_20251205_225746.log"
 }

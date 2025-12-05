@@ -1,7 +1,7 @@
 {
   "operation_id": "golden-image-system-prep",
-  "status": "failed",
-  "duration_seconds": 121,
-  "timestamp": "2025-12-05T22:10:13Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-system-prep_20251205_220812.log"
+  "status": "completed",
+  "duration_seconds": 32,
+  "timestamp": "2025-12-05T22:53:37Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-system-prep_20251205_225305.log"
 }

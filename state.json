@@ -1,6 +1,6 @@
 {
   "current_module": "05-golden-image",
-  "updated_at": "2025-12-05T22:10:13Z",
+  "updated_at": "2025-12-05T23:13:31Z",
   "modules": {
     "01-networking": {
       "status": "completed",
@@ -24,11 +24,11 @@
     },
     "05-golden-image": {
       "status": "failed",
-      "timestamp": "2025-12-05T22:10:13Z"
+      "timestamp": "2025-12-05T23:07:53Z"
     }
   },
-  "current_operation": "golden-image-system-prep",
-  "status": "failed",
+  "current_operation": "golden-image-install-apps-parallel",
+  "status": "running",
   "operations": {
     "networking-create-vnet": {
       "status": "completed",
@@ -186,14 +186,39 @@
       "timestamp": "2025-12-05T19:49:23Z"
     },
     "golden-image-system-prep": {
-      "status": "failed",
-      "duration": 121,
-      "timestamp": "2025-12-05T22:10:13Z"
+      "status": "completed",
+      "duration": 32,
+      "timestamp": "2025-12-05T22:53:37Z"
     },
     "golden-image-create-vm": {
       "status": "completed",
-      "duration": 134,
-      "timestamp": "2025-12-05T22:08:12Z"
+      "duration": 2,
+      "timestamp": "2025-12-05T22:57:48Z"
+    },
+    "golden-image-validate-vm": {
+      "status": "completed",
+      "duration": 34,
+      "timestamp": "2025-12-05T22:53:05Z"
+    },
+    "golden-image-install-fslogix": {
+      "status": "completed",
+      "duration": 184,
+      "timestamp": "2025-12-05T22:56:42Z"
+    },
+    "golden-image-install-adobe": {
+      "status": "blocked",
+      "duration": 0,
+      "timestamp": "2025-12-05T23:07:51Z"
+    },
+    "golden-image-install-chrome": {
+      "status": "failed",
+      "duration": 2,
+      "timestamp": "2025-12-05T23:07:53Z"
+    },
+    "golden-image-install-apps-parallel": {
+      "status": "failed",
+      "duration": 2,
+      "timestamp": "2025-12-05T23:13:33Z"
     }
   }
 }

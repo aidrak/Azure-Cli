@@ -139,7 +139,8 @@ find_operation_yaml() {
     local yaml_file
     for file in "${operations_dir}"/*.yaml; do
         if [[ -f "$file" ]]; then
-            local op_id=$(yq e '.operation.id' "$file")
+            local op_id
+            op_id=$(yq e '.operation.id' "$file")
             if [[ "$op_id" == "$operation_id" ]]; then
                 echo "$file"
                 return 0
@@ -189,7 +190,8 @@ execute_single_operation() {
     # Execute with progress tracking
     log_operation_start "$operation_id" "$OPERATION_NAME" "$OPERATION_DURATION_EXPECTED"
 
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
 
     if track_operation \
         "$operation_id" \
@@ -198,7 +200,8 @@ execute_single_operation() {
         "$OPERATION_DURATION_TIMEOUT" \
         "$OPERATION_DURATION_TYPE"; then
 
-        local end_time=$(date +%s)
+        local end_time
+        end_time=$(date +%s)
         local duration=$((end_time - start_time))
 
         log_operation_complete "$operation_id" "$duration" "0" "$OPERATION_DURATION_EXPECTED"
@@ -206,22 +209,23 @@ execute_single_operation() {
         reset_retry_counter "$operation_id"
 
         # Create checkpoint
-        local log_file="${LOGS_DIR}/${operation_id}_$(date +%Y%m%d)*.log"
-        log_file=$(ls -t $log_file 2>/dev/null | head -1)
+        local log_file
+        log_file=$(find "$LOGS_DIR" -name "${operation_id}_*.log" -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
         create_checkpoint "$operation_id" "completed" "$duration" "$log_file"
 
         return 0
     else
         local exit_code=$?
-        local end_time=$(date +%s)
+        local end_time
+        end_time=$(date +%s)
         local duration=$((end_time - start_time))
 
         log_operation_error "$operation_id" "Operation failed" "$exit_code" "$duration"
         update_operation_state "$operation_id" "failed" "$duration"
 
         # Find log file for error analysis
-        local log_file="${LOGS_DIR}/${operation_id}_$(date +%Y%m%d)*.log"
-        log_file=$(ls -t $log_file 2>/dev/null | head -1)
+        local log_file
+        log_file=$(find "$LOGS_DIR" -name "${operation_id}_*.log" -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
 
         if [[ -n "$log_file" ]]; then
             create_checkpoint "$operation_id" "failed" "$duration" "$log_file"
@@ -264,7 +268,7 @@ execute_parallel_group() {
             execute_single_operation "$module_dir" "$operation_id"
             exit $?
         ) &
-        pids+=($!)
+        pids+=("$!")
         echo "[*] Started $operation_id (PID: ${pids[-1]})"
     done
 
@@ -276,9 +280,9 @@ execute_parallel_group() {
     local idx=0
     local failed=0
     for pid in "${pids[@]}"; do
-        wait $pid
+        wait "$pid"
         local exit_code=$?
-        results+=($exit_code)
+        results+=("$exit_code")
 
         if [[ $exit_code -ne 0 ]]; then
             echo "[x] Operation ${operations[$idx]} failed (exit code: $exit_code)"
@@ -319,7 +323,8 @@ execute_module() {
 
     # Get operations list with parallel groups
     local module_yaml="${module_dir}/module.yaml"
-    local total_ops=$(yq e '.module.operations | length' "$module_yaml")
+    local total_ops
+    total_ops=$(yq e '.module.operations | length' "$module_yaml")
     local current_op=0
 
     echo ""
@@ -404,8 +409,10 @@ resume_execution() {
         return 1
     fi
 
-    local current_module=$(jq -r '.current_module // "null"' "$STATE_FILE")
-    local current_status=$(jq -r '.status // "unknown"' "$STATE_FILE")
+    local current_module
+    current_module=$(jq -r '.current_module // "null"' "$STATE_FILE")
+    local current_status
+    current_status=$(jq -r '.status // "unknown"' "$STATE_FILE")
 
     if [[ "$current_module" == "null" ]]; then
         log_info "No module in progress" "engine"
@@ -420,7 +427,8 @@ resume_execution() {
     log_info "Resuming module: $current_module" "engine"
 
     # Find the failed operation
-    local failed_operation=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | head -1)
+    local failed_operation
+    failed_operation=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | head -1)
 
     if [[ -n "$failed_operation" ]]; then
         echo ""
@@ -465,9 +473,12 @@ show_status() {
     echo "========================================================================"
     echo ""
 
-    local status=$(jq -r '.status // "unknown"' "$STATE_FILE")
-    local current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
-    local started_at=$(jq -r '.started_at // "unknown"' "$STATE_FILE")
+    local status
+    status=$(jq -r '.status // "unknown"' "$STATE_FILE")
+    local current_module
+    current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
+    local started_at
+    started_at=$(jq -r '.started_at // "unknown"' "$STATE_FILE")
 
     echo "Status: $status"
     echo "Current Module: $current_module"
@@ -475,8 +486,10 @@ show_status() {
     echo ""
 
     # Show completed operations
-    local completed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "completed") | .key' "$STATE_FILE" | wc -l)
-    local failed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | wc -l)
+    local completed_ops
+    completed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "completed") | .key' "$STATE_FILE" | wc -l)
+    local failed_ops
+    failed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | wc -l)
 
     echo "Operations:"
     echo "  Completed: $completed_ops"
@@ -504,12 +517,15 @@ list_modules() {
 
     for module_dir in "${MODULES_DIR}"/*; do
         if [[ -d "$module_dir" ]]; then
-            local module_name=$(basename "$module_dir")
+            local module_name
+            module_name=$(basename "$module_dir")
             local module_yaml="${module_dir}/module.yaml"
 
             if [[ -f "$module_yaml" ]]; then
-                local module_title=$(yq e '.module.name // "Unknown"' "$module_yaml")
-                local module_desc=$(yq e '.module.description // ""' "$module_yaml")
+                local module_title
+                module_title=$(yq e '.module.name // "Unknown"' "$module_yaml")
+                local module_desc
+                module_desc=$(yq e '.module.description // ""' "$module_yaml")
 
                 echo "Module: $module_name"
                 echo "  Name: $module_title"
@@ -519,12 +535,15 @@ list_modules() {
 
                 # List operations
                 echo "  Operations:"
-                local ops=$(get_module_operations "$module_dir" 2>/dev/null)
+                local ops
+                ops=$(get_module_operations "$module_dir" 2>/dev/null)
                 if [[ -n "$ops" ]]; then
                     while IFS= read -r op_id; do
-                        local op_yaml=$(find_operation_yaml "$module_dir" "$op_id" 2>/dev/null)
+                        local op_yaml
+                        op_yaml=$(find_operation_yaml "$module_dir" "$op_id" 2>/dev/null)
                         if [[ -n "$op_yaml" ]]; then
-                            local op_name=$(yq e '.operation.name // "Unknown"' "$op_yaml")
+                            local op_name
+                            op_name=$(yq e '.operation.name // "Unknown"' "$op_yaml")
                             echo "    - $op_id: $op_name"
                         fi
                     done <<< "$ops"
@@ -578,7 +597,8 @@ main() {
             load_config || exit 1
 
             # For resume, get current module from state and validate for that module
-            local current_module=$(jq -r '.current_module // ""' "$STATE_FILE" 2>/dev/null)
+            local current_module
+            current_module=$(jq -r '.current_module // ""' "$STATE_FILE" 2>/dev/null)
             if [[ -n "$current_module" ]]; then
                 validate_config "$current_module" || exit 1
             else

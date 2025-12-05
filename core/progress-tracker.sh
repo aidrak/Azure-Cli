@@ -38,9 +38,10 @@ track_operation() {
     local timeout="${4:-120}"
     local operation_type="${5:-FAST}"
 
-    local log_file="${LOGS_DIR}/${operation_id}_$(date +%Y%m%d_%H%M%S).log"
-    local output_file="${OUTPUTS_DIR}/${operation_id}.json"
-    local start_time=$(date +%s)
+    local log_file
+    log_file="${LOGS_DIR}/${operation_id}_$(date +%Y%m%d_%H%M%S).log"
+    local start_time
+    start_time=$(date +%s)
 
     echo ""
     echo "========================================================================"
@@ -92,7 +93,8 @@ track_operation() {
     local has_error=false
 
     while kill -0 "$cmd_pid" 2>/dev/null; do
-        local current_time=$(date +%s)
+        local current_time
+        current_time=$(date +%s)
         local elapsed=$((current_time - start_time))
 
         # Check for timeout
@@ -133,7 +135,8 @@ track_operation() {
     wait "$cmd_pid"
     local exit_code=$?
 
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local total_duration=$((end_time - start_time))
 
     echo ""
@@ -200,11 +203,16 @@ parse_progress_markers() {
     echo ""
 
     # Summary
-    local start_count=$(grep -c "\[START\]" "$log_file" || echo "0")
-    local progress_count=$(grep -c "\[PROGRESS\]" "$log_file" || echo "0")
-    local validate_count=$(grep -c "\[VALIDATE\]" "$log_file" || echo "0")
-    local success_count=$(grep -c "\[SUCCESS\]" "$log_file" || echo "0")
-    local error_count=$(grep -c "\[ERROR\]" "$log_file" || echo "0")
+    local start_count
+    start_count=$(grep -c "\[START\]" "$log_file" || echo "0")
+    local progress_count
+    progress_count=$(grep -c "\[PROGRESS\]" "$log_file" || echo "0")
+    local validate_count
+    validate_count=$(grep -c "\[VALIDATE\]" "$log_file" || echo "0")
+    local success_count
+    success_count=$(grep -c "\[SUCCESS\]" "$log_file" || echo "0")
+    local error_count
+    error_count=$(grep -c "\[ERROR\]" "$log_file" || echo "0")
 
     echo "Marker Summary:"
     echo "  [START]: $start_count"
@@ -313,9 +321,12 @@ resume_from_checkpoint() {
 
     echo "[*] Found checkpoint: $checkpoint_file"
 
-    local status=$(jq -r '.status' "$checkpoint_file")
-    local duration=$(jq -r '.duration_seconds' "$checkpoint_file")
-    local timestamp=$(jq -r '.timestamp' "$checkpoint_file")
+    local status
+    status=$(jq -r '.status' "$checkpoint_file")
+    local duration
+    duration=$(jq -r '.duration_seconds' "$checkpoint_file")
+    local timestamp
+    timestamp=$(jq -r '.timestamp' "$checkpoint_file")
 
     echo "  Status: $status"
     echo "  Duration: ${duration}s"

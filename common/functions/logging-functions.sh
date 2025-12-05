@@ -269,7 +269,7 @@ warn_continue() {
 
 # Auto-initialize if ENABLE_LOGGING is set
 if [[ "${ENABLE_LOGGING:-0}" == "1" ]]; then
-    save_log
+    save_log "" ""
 fi
 
 # Export functions for use in subshells

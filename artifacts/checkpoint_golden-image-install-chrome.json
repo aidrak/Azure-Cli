@@ -1,0 +1,7 @@
+{
+  "operation_id": "golden-image-install-chrome",
+  "status": "failed",
+  "duration_seconds": 2,
+  "timestamp": "2025-12-05T23:07:53Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-install-chrome_20251205_230751.log"
+}
