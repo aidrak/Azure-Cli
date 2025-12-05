@@ -25,14 +25,105 @@ azure:
   environment: "prod"                                       # Environment: prod, dev, test
 
 # ==============================================================================
-# Networking Configuration (Module 01)
+# Networking Configuration (Module 01) - Generic & Advanced
 # ==============================================================================
 networking:
-  vnet_name: "avd-vnet"
-  vnet_cidr: "10.0.0.0/16"
-  subnet_name: "avd-subnet"
-  subnet_cidr: "10.0.1.0/24"
-  nsg_name: "avd-nsg"
+  # Virtual Network
+  vnet:
+    name: "avd-vnet"
+    address_space: ["10.0.0.0/16"]           # Array for multiple address spaces
+    location: "{{AZURE_LOCATION}}"           # Inherit from global setting
+    dns_servers: []                          # Optional custom DNS (empty = Azure default)
+
+  # Subnets (User-defined array - add/remove as needed)
+  subnets:
+    # Session Hosts Subnet
+    - name: "subnet-session-hosts"
+      address_prefix: "10.0.1.0/24"
+      service_endpoints:                     # Azure service endpoints
+        - "Microsoft.Storage"                # For Azure Files/Blob
+        - "Microsoft.KeyVault"               # For Key Vault access
+      delegation: ""                         # Subnet delegation (leave empty for none)
+      private_endpoint_network_policies: "Enabled"
+      private_link_service_network_policies: "Enabled"
+      nsg:
+        enabled: true
+        name: ""                             # Auto-generated: nsg-subnet-session-hosts
+        use_defaults: true                   # Smart defaults for AVD session hosts
+        custom_rules: []                     # Add custom rules here to extend defaults
+        # Example custom rule:
+        # - name: "Deny-Internet-Outbound"
+        #   priority: 4000
+        #   direction: "Outbound"
+        #   access: "Deny"
+        #   protocol: "*"
+        #   source_address_prefix: "*"
+        #   source_port_range: "*"
+        #   destination_address_prefix: "Internet"
+        #   destination_port_range: "*"
+
+    # Private Endpoints Subnet
+    - name: "subnet-private-endpoints"
+      address_prefix: "10.0.2.0/24"
+      service_endpoints: []
+      delegation: ""
+      private_endpoint_network_policies: "Disabled"  # Required for private endpoints
+      private_link_service_network_policies: "Enabled"
+      nsg:
+        enabled: true
+        name: ""                             # Auto-generated: nsg-subnet-private-endpoints
+        use_defaults: true                   # Smart defaults for private endpoints
+        custom_rules: []
+
+    # Management Subnet (optional - for Azure Bastion, jump boxes)
+    - name: "subnet-management"
+      address_prefix: "10.0.3.0/27"          # Small subnet (32 IPs)
+      service_endpoints:
+        - "Microsoft.Storage"
+      delegation: ""
+      private_endpoint_network_policies: "Enabled"
+      private_link_service_network_policies: "Enabled"
+      nsg:
+        enabled: true
+        name: ""                             # Auto-generated: nsg-subnet-management
+        use_defaults: true                   # Smart defaults for management subnet
+        custom_rules: []
+
+  # Private DNS Zones (for Azure PaaS services with private endpoints)
+  private_dns:
+    enabled: false                           # Set to true to enable private DNS zones
+    zones:
+      - name: "privatelink.file.core.windows.net"      # Azure Files
+        link_to_vnet: true
+      - name: "privatelink.blob.core.windows.net"      # Azure Blob Storage
+        link_to_vnet: true
+      - name: "privatelink.vaultcore.azure.net"        # Azure Key Vault
+        link_to_vnet: true
+
+  # VNet Peering (Hub-Spoke topology)
+  peering:
+    enabled: false                           # Set to true to enable VNet peering
+    hub_vnet:
+      name: ""                               # Hub VNet name
+      resource_group: ""                     # Hub VNet resource group
+      subscription_id: "{{AZURE_SUBSCRIPTION_ID}}"  # Can be different subscription
+    allow_virtual_network_access: true
+    allow_forwarded_traffic: true
+    allow_gateway_transit: false             # Set true if hub has VPN/ExpressRoute gateway
+    use_remote_gateways: false               # Set true to use hub's gateway
+
+  # Route Tables (for forced tunneling, firewall routing)
+  route_tables:
+    enabled: false                           # Set to true to enable custom routing
+    tables:
+      - name: "rt-session-hosts"
+        routes:
+          - name: "route-to-firewall"
+            address_prefix: "0.0.0.0/0"      # Default route
+            next_hop_type: "VirtualAppliance"  # VirtualAppliance, VnetLocal, Internet, None
+            next_hop_ip_address: "10.1.0.4"  # Firewall IP (if using VirtualAppliance)
+        associated_subnets:
+          - "subnet-session-hosts"           # Subnets to associate this route table with
 
 # ==============================================================================
 # Storage Configuration (Module 02)

@@ -1,0 +1,96 @@
+# ==============================================================================
+# Operation: Configure Service Endpoints
+# ==============================================================================
+operation:
+  id: "networking-configure-service-endpoints"
+  name: "Configure Service Endpoints"
+  description: "Enable Azure service endpoints on subnets (if configured)"
+
+  # Duration expectations
+  duration:
+    expected: 90    # 1.5 minutes
+    timeout: 180    # 3 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "networking-attach-nsgs"  # NSGs should be attached first
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "service_endpoints_configured"
+        description: "Service endpoints configured"
+
+  # Template command
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      # ==============================================================================
+      # Configure Service Endpoints
+      # ==============================================================================
+
+      set -euo pipefail
+
+      echo "[START] Service endpoint configuration: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      # Configuration
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count
+      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
+      CONFIGURED_COUNT=0
+
+      echo "[PROGRESS] Configuring service endpoints for $SUBNET_COUNT subnet(s)..."
+
+      # Iterate through subnets
+      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+
+        # Get service endpoints count for this subnet
+        ENDPOINT_COUNT=$(yq e ".networking.subnets[$i].service_endpoints | length" config.yaml)
+
+        # Skip if no service endpoints configured
+        if [[ "$ENDPOINT_COUNT" -eq 0 ]]; then
+          echo "[INFO] No service endpoints for subnet: $SUBNET_NAME"
+          continue
+        fi
+
+        echo "[PROGRESS] Configuring $ENDPOINT_COUNT endpoint(s) for subnet: $SUBNET_NAME"
+
+        # Build service endpoint list
+        ENDPOINTS=""
+        for j in $(seq 0 $((ENDPOINT_COUNT - 1))); do
+          ENDPOINT=$(yq e ".networking.subnets[$i].service_endpoints[$j]" config.yaml)
+          ENDPOINTS="$ENDPOINTS $ENDPOINT"
+        done
+
+        echo "[PROGRESS]   Endpoints: $ENDPOINTS"
+
+        # Update subnet with service endpoints
+        if ! az network vnet subnet update \
+          --resource-group "$RESOURCE_GROUP" \
+          --vnet-name "$VNET_NAME" \
+          --name "$SUBNET_NAME" \
+          --service-endpoints $ENDPOINTS \
+          --output none; then
+
+          echo "[ERROR] Failed to configure service endpoints for subnet: $SUBNET_NAME"
+          exit 1
+        fi
+
+        echo "[SUCCESS] Service endpoints configured: $SUBNET_NAME"
+        ((CONFIGURED_COUNT++)) || true
+      done
+
+      echo "[SUCCESS] All service endpoints configured successfully"
+      echo "[SUCCESS]   Subnets configured: $CONFIGURED_COUNT"
+
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

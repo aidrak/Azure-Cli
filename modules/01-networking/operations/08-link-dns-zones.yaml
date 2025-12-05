@@ -1,0 +1,79 @@
+# ==============================================================================
+# Operation: Link DNS Zones to VNet
+# ==============================================================================
+operation:
+  id: "networking-link-dns-zones"
+  name: "Link DNS Zones to VNet"
+  description: "Create VNet links for private DNS zones"
+
+  duration:
+    expected: 90
+    timeout: 180
+    type: "FAST"
+
+  requires:
+    - "networking-create-dns-zones"
+
+  validation:
+    enabled: true
+
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] DNS zone linking: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+
+      DNS_ENABLED=$(yq e '.networking.private_dns.enabled' config.yaml)
+
+      if [[ "$DNS_ENABLED" != "true" ]]; then
+        echo "[INFO] Private DNS disabled - skipping"
+        exit 0
+      fi
+
+      ZONE_COUNT=$(yq e '.networking.private_dns.zones | length' config.yaml)
+      echo "[PROGRESS] Linking $ZONE_COUNT DNS zone(s) to VNet..."
+
+      for i in $(seq 0 $((ZONE_COUNT - 1))); do
+        ZONE_NAME=$(yq e ".networking.private_dns.zones[$i].name" config.yaml)
+        LINK_TO_VNET=$(yq e ".networking.private_dns.zones[$i].link_to_vnet" config.yaml)
+
+        if [[ "$LINK_TO_VNET" != "true" ]]; then
+          echo "[INFO] Skipping VNet link for zone: $ZONE_NAME"
+          continue
+        fi
+
+        LINK_NAME="${ZONE_NAME}-vnet-link"
+
+        echo "[PROGRESS] Linking zone to VNet: $ZONE_NAME"
+
+        if az network private-dns link vnet show \
+          --resource-group "$RESOURCE_GROUP" \
+          --zone-name "$ZONE_NAME" \
+          --name "$LINK_NAME" &>/dev/null; then
+          echo "[INFO] VNet link already exists: $LINK_NAME"
+          continue
+        fi
+
+        if ! az network private-dns link vnet create \
+          --resource-group "$RESOURCE_GROUP" \
+          --zone-name "$ZONE_NAME" \
+          --name "$LINK_NAME" \
+          --virtual-network "$VNET_NAME" \
+          --registration-enabled false \
+          --output none; then
+          echo "[ERROR] Failed to link zone: $ZONE_NAME"
+          exit 1
+        fi
+
+        echo "[SUCCESS] Zone linked: $ZONE_NAME"
+      done
+
+      echo "[SUCCESS] All DNS zones linked to VNet"
+      exit 0
+
+  fixes: []

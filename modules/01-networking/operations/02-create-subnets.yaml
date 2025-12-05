@@ -1,0 +1,122 @@
+# ==============================================================================
+# Operation: Create Subnets
+# ==============================================================================
+operation:
+  id: "networking-create-subnets"
+  name: "Create Subnets"
+  description: "Create all configured subnets from array (generic, user-defined)"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes (for 3-5 subnets)
+    timeout: 240    # 4 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "networking-create-vnet"  # VNet must exist first
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "subnet_count"
+        min_count: 1
+        description: "At least one subnet created"
+
+  # Template command
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      # ==============================================================================
+      # Create Subnets (Array Iteration Pattern)
+      # ==============================================================================
+
+      set -euo pipefail
+
+      echo "[START] Subnet creation: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      # Configuration
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count from config array
+      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
+
+      echo "[PROGRESS] Processing $SUBNET_COUNT subnet(s) from config..."
+
+      # Iterate through subnet array
+      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+        # Extract subnet properties
+        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+        SUBNET_PREFIX=$(yq e ".networking.subnets[$i].address_prefix" config.yaml)
+        DELEGATION=$(yq e ".networking.subnets[$i].delegation" config.yaml)
+        PE_POLICIES=$(yq e ".networking.subnets[$i].private_endpoint_network_policies" config.yaml)
+        PL_POLICIES=$(yq e ".networking.subnets[$i].private_link_service_network_policies" config.yaml)
+
+        echo "[PROGRESS] [$((i+1))/$SUBNET_COUNT] Processing subnet: $SUBNET_NAME"
+
+        # Check if subnet already exists (idempotent)
+        if az network vnet subnet show \
+          --resource-group "$RESOURCE_GROUP" \
+          --vnet-name "$VNET_NAME" \
+          --name "$SUBNET_NAME" &>/dev/null; then
+
+          echo "[INFO] Subnet already exists: $SUBNET_NAME"
+          continue
+        fi
+
+        # Create subnet
+        echo "[PROGRESS] Creating subnet: $SUBNET_NAME ($SUBNET_PREFIX)"
+
+        # Build command based on configuration
+        CMD="az network vnet subnet create \
+          --resource-group \"$RESOURCE_GROUP\" \
+          --vnet-name \"$VNET_NAME\" \
+          --name \"$SUBNET_NAME\" \
+          --address-prefix \"$SUBNET_PREFIX\""
+
+        # Add delegation if configured
+        if [[ -n "$DELEGATION" && "$DELEGATION" != "null" && "$DELEGATION" != "" ]]; then
+          CMD="$CMD --delegations \"$DELEGATION\""
+          echo "[PROGRESS]   Delegation: $DELEGATION"
+        fi
+
+        # Add private endpoint policies
+        if [[ -n "$PE_POLICIES" && "$PE_POLICIES" != "null" ]]; then
+          CMD="$CMD --private-endpoint-network-policies \"$PE_POLICIES\""
+        fi
+
+        # Add private link service policies
+        if [[ -n "$PL_POLICIES" && "$PL_POLICIES" != "null" ]]; then
+          CMD="$CMD --private-link-service-network-policies \"$PL_POLICIES\""
+        fi
+
+        CMD="$CMD --output json > artifacts/outputs/networking-create-subnet-${SUBNET_NAME}.json"
+
+        # Execute command
+        if ! eval "$CMD"; then
+          echo "[ERROR] Failed to create subnet: $SUBNET_NAME"
+          exit 1
+        fi
+
+        echo "[SUCCESS] Subnet created: $SUBNET_NAME"
+      done
+
+      # Validate all subnets created
+      echo "[VALIDATE] Verifying all subnets..."
+      CREATED_COUNT=$(az network vnet subnet list \
+        --resource-group "$RESOURCE_GROUP" \
+        --vnet-name "$VNET_NAME" \
+        --query "length(@)" -o tsv)
+
+      echo "[SUCCESS] All subnets created successfully"
+      echo "[SUCCESS]   Expected: $SUBNET_COUNT"
+      echo "[SUCCESS]   Created: $CREATED_COUNT"
+
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

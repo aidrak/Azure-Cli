@@ -42,12 +42,16 @@ load_config() {
     export AZURE_LOCATION=$(yq e '.azure.location' "$config_file")
     export AZURE_RESOURCE_GROUP=$(yq e '.azure.resource_group' "$config_file")
 
-    # Networking section
-    export NETWORKING_VNET_NAME=$(yq e '.networking.vnet_name' "$config_file")
-    export NETWORKING_VNET_CIDR=$(yq e '.networking.vnet_cidr' "$config_file")
-    export NETWORKING_SUBNET_NAME=$(yq e '.networking.subnet_name' "$config_file")
-    export NETWORKING_SUBNET_CIDR=$(yq e '.networking.subnet_cidr' "$config_file")
-    export NETWORKING_NSG_NAME=$(yq e '.networking.nsg_name' "$config_file")
+    # Networking section (Module 01 - Advanced Networking)
+    export NETWORKING_VNET_NAME=$(yq e '.networking.vnet.name' "$config_file")
+    export NETWORKING_VNET_ADDRESS_SPACE=$(yq e '.networking.vnet.address_space | join(" ")' "$config_file")
+    export NETWORKING_VNET_LOCATION=$(yq e '.networking.vnet.location' "$config_file")
+    export NETWORKING_DNS_ENABLED=$(yq e '.networking.private_dns.enabled' "$config_file")
+    export NETWORKING_PEERING_ENABLED=$(yq e '.networking.peering.enabled' "$config_file")
+    export NETWORKING_ROUTE_TABLES_ENABLED=$(yq e '.networking.route_tables.enabled' "$config_file")
+
+    # Note: Subnet arrays, NSG rules, DNS zones are parsed dynamically in operations
+    # They are too complex for simple environment variables
 
     # Storage section
     export STORAGE_ACCOUNT_NAME=$(yq e '.storage.account_name' "$config_file")

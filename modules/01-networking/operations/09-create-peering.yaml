@@ -1,0 +1,76 @@
+# ==============================================================================
+# Operation: Create VNet Peering
+# ==============================================================================
+operation:
+  id: "networking-create-peering"
+  name: "Create VNet Peering"
+  description: "Establish VNet peering to hub (if configured)"
+
+  duration:
+    expected: 120
+    timeout: 240
+    type: "FAST"
+
+  requires:
+    - "networking-link-dns-zones"
+
+  validation:
+    enabled: true
+
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] VNet peering creation: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+
+      PEERING_ENABLED=$(yq e '.networking.peering.enabled' config.yaml)
+
+      if [[ "$PEERING_ENABLED" != "true" ]]; then
+        echo "[INFO] VNet peering disabled - skipping"
+        exit 0
+      fi
+
+      HUB_VNET_NAME=$(yq e '.networking.peering.hub_vnet.name' config.yaml)
+      HUB_VNET_RG=$(yq e '.networking.peering.hub_vnet.resource_group' config.yaml)
+      HUB_SUBSCRIPTION=$(yq e '.networking.peering.hub_vnet.subscription_id' config.yaml)
+      ALLOW_VNET_ACCESS=$(yq e '.networking.peering.allow_virtual_network_access' config.yaml)
+      ALLOW_FORWARDED=$(yq e '.networking.peering.allow_forwarded_traffic' config.yaml)
+      ALLOW_GATEWAY_TRANSIT=$(yq e '.networking.peering.allow_gateway_transit' config.yaml)
+      USE_REMOTE_GATEWAYS=$(yq e '.networking.peering.use_remote_gateways' config.yaml)
+
+      REMOTE_VNET_ID="/subscriptions/${HUB_SUBSCRIPTION}/resourceGroups/${HUB_VNET_RG}/providers/Microsoft.Network/virtualNetworks/${HUB_VNET_NAME}"
+      PEERING_NAME="${VNET_NAME}-to-${HUB_VNET_NAME}"
+
+      echo "[PROGRESS] Creating peering: $PEERING_NAME"
+
+      if az network vnet peering show \
+        --resource-group "$RESOURCE_GROUP" \
+        --vnet-name "$VNET_NAME" \
+        --name "$PEERING_NAME" &>/dev/null; then
+        echo "[INFO] Peering already exists: $PEERING_NAME"
+        exit 0
+      fi
+
+      if ! az network vnet peering create \
+        --resource-group "$RESOURCE_GROUP" \
+        --vnet-name "$VNET_NAME" \
+        --name "$PEERING_NAME" \
+        --remote-vnet "$REMOTE_VNET_ID" \
+        --allow-vnet-access "$ALLOW_VNET_ACCESS" \
+        --allow-forwarded-traffic "$ALLOW_FORWARDED" \
+        --allow-gateway-transit "$ALLOW_GATEWAY_TRANSIT" \
+        --use-remote-gateways "$USE_REMOTE_GATEWAYS" \
+        --output json > artifacts/outputs/networking-peering.json; then
+        echo "[ERROR] Failed to create peering"
+        exit 1
+      fi
+
+      echo "[SUCCESS] VNet peering created: $PEERING_NAME"
+      exit 0
+
+  fixes: []
