@@ -239,6 +239,67 @@ execute_single_operation() {
 }
 
 # ==============================================================================
+# Execute Operations in Parallel Group
+# ==============================================================================
+execute_parallel_group() {
+    local module_dir="$1"
+    shift
+    local operations=("$@")
+    local pids=()
+    local results=()
+    local op_count=${#operations[@]}
+
+    echo ""
+    echo "========================================================================"
+    echo "  Parallel Group: ${op_count} operations"
+    echo "========================================================================"
+    for op_id in "${operations[@]}"; do
+        echo "  - $op_id"
+    done
+    echo ""
+
+    # Launch all operations in background
+    for operation_id in "${operations[@]}"; do
+        (
+            execute_single_operation "$module_dir" "$operation_id"
+            exit $?
+        ) &
+        pids+=($!)
+        echo "[*] Started $operation_id (PID: ${pids[-1]})"
+    done
+
+    echo ""
+    echo "[*] Waiting for ${op_count} parallel operations to complete..."
+    echo ""
+
+    # Wait for all operations and collect results
+    local idx=0
+    local failed=0
+    for pid in "${pids[@]}"; do
+        wait $pid
+        local exit_code=$?
+        results+=($exit_code)
+
+        if [[ $exit_code -ne 0 ]]; then
+            echo "[x] Operation ${operations[$idx]} failed (exit code: $exit_code)"
+            failed=1
+        else
+            echo "[v] Operation ${operations[$idx]} completed successfully"
+        fi
+        idx=$((idx + 1))
+    done
+
+    echo ""
+    if [[ $failed -eq 1 ]]; then
+        echo "[x] Parallel group failed - one or more operations failed"
+        return 1
+    else
+        echo "[v] All parallel operations completed successfully"
+        return 0
+    fi
+}
+
+# ==============================================================================
 # Execute Module
 # ==============================================================================
 execute_module() {
@@ -256,11 +317,9 @@ execute_module() {
     update_state "current_module" "$module_name"
     update_module_state "$module_name" "running"
 
-    # Get operations list
-    local operations
-    operations=$(get_module_operations "$module_dir") || return 1
-
-    local total_ops=$(echo "$operations" | wc -l)
+    # Get operations list with parallel groups
+    local module_yaml="${module_dir}/module.yaml"
+    local total_ops=$(yq e '.module.operations | length' "$module_yaml")
     local current_op=0
 
     echo ""
@@ -270,24 +329,60 @@ execute_module() {
     echo "Operations: $total_ops"
     echo ""
 
-    # Execute each operation in sequence
-    while IFS= read -r operation_id; do
-        current_op=$((current_op + 1))  # Increment safely (avoids set -e issue with ((current_op++)))
+    # Group operations by parallel_group
+    # Get list of unique parallel groups (empty string for operations without group)
+    local groups
+    groups=$(yq e '.module.operations[] | .parallel_group // "seq_" + (.id | sub("^.*-", ""))' "$module_yaml" | sort -u)
 
-        echo ""
-        echo "========================================================================"
-        echo "  Operation $current_op of $total_ops"
-        echo "========================================================================"
-        echo ""
-
-        if ! execute_single_operation "$module_dir" "$operation_id"; then
-            log_error "Module failed at operation: $operation_id" "engine"
-            update_module_state "$module_name" "failed"
-            update_state "status" "failed"
-            return 1
+    # Execute each group
+    while IFS= read -r group_id; do
+        # Get operations in this group
+        local group_ops=()
+        if [[ "$group_id" == seq_* ]]; then
+            # Sequential operation (no parallel_group defined)
+            local op_id="${group_id#seq_}"
+            # Find the actual operation ID
+            op_id=$(yq e ".module.operations[] | select(.parallel_group == null) | select(.id | test(\"${op_id}$\")) | .id" "$module_yaml")
+            group_ops=("$op_id")
+        else
+            # Parallel group - get all operations with this group number
+            while IFS= read -r op_id; do
+                [[ -n "$op_id" ]] && group_ops+=("$op_id")
+            done < <(yq e ".module.operations[] | select(.parallel_group == ${group_id}) | .id" "$module_yaml")
         fi
 
-    done <<< "$operations"
+        # Skip if no operations in group
+        [[ ${#group_ops[@]} -eq 0 ]] && continue
+
+        current_op=$((current_op + ${#group_ops[@]}))
+
+        echo ""
+        echo "========================================================================"
+        echo "  Operations $((current_op - ${#group_ops[@]} + 1)) to $current_op of $total_ops"
+        if [[ ${#group_ops[@]} -gt 1 ]]; then
+            echo "  Parallel Group: $group_id"
+        fi
+        echo "========================================================================"
+        echo ""
+
+        # Execute operations in parallel if more than one, otherwise sequential
+        if [[ ${#group_ops[@]} -gt 1 ]]; then
+            if ! execute_parallel_group "$module_dir" "${group_ops[@]}"; then
+                log_error "Module failed at parallel group: $group_id" "engine"
+                update_module_state "$module_name" "failed"
+                update_state "status" "failed"
+                return 1
+            fi
+        else
+            if ! execute_single_operation "$module_dir" "${group_ops[0]}"; then
+                log_error "Module failed at operation: ${group_ops[0]}" "engine"
+                update_module_state "$module_name" "failed"
+                update_state "status" "failed"
+                return 1
+            fi
+        fi
+
+    done <<< "$groups"
 
     # Module completed successfully
     log_success "Module completed: $module_name" "engine"

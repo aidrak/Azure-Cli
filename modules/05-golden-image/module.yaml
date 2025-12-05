@@ -12,12 +12,19 @@ module:
     resource_group: "{{AZURE_RESOURCE_GROUP}}"
     location: "{{AZURE_LOCATION}}"
 
-  # Operations in this module (executed in order)
+  # Operations in this module (executed in order or parallel groups)
+  # parallel_group: Operations with same group number run in parallel
   operations:
     - id: "golden-image-create-vm"
       name: "Create Temporary VM"
       description: "Create temporary Windows 11 VM for golden image preparation"
       duration: 420  # 7 minutes
+      type: "WAIT"
+
+    - id: "golden-image-validate-vm"
+      name: "Validate VM Ready"
+      description: "Wait for VM agent to be ready"
+      duration: 180  # 3 minutes
       type: "WAIT"
 
     - id: "golden-image-system-prep"
@@ -26,42 +33,44 @@ module:
       duration: 60  # 1 minute
       type: "FAST"
 
-    - id: "golden-image-install-fslogix"
-      name: "Install FSLogix"
-      description: "Download and install FSLogix agent"
-      duration: 180  # 3 minutes
-      type: "FAST"
-
+    # Parallel Group 1: Install Chrome and Adobe simultaneously
     - id: "golden-image-install-chrome"
       name: "Install Google Chrome"
       description: "Download and install Chrome Enterprise"
       duration: 180  # 3 minutes
       type: "FAST"
+      parallel_group: 1
 
     - id: "golden-image-install-adobe"
       name: "Install Adobe Reader"
       description: "Download and install Adobe Acrobat Reader DC"
       duration: 300  # 5 minutes
       type: "FAST"
+      parallel_group: 1
 
+    # Office runs alone (largest install)
     - id: "golden-image-install-office"
       name: "Install Office 365"
       description: "Download and install Office 365 with ODT"
       duration: 1800  # 30 minutes
       type: "WAIT"
 
+    # Parallel Group 2: Configure defaults and run VDOT simultaneously
     - id: "golden-image-configure-defaults"
       name: "Configure Default Applications"
       description: "Set default apps and create desktop shortcuts"
       duration: 120  # 2 minutes
       type: "FAST"
+      parallel_group: 2
 
     - id: "golden-image-run-vdot"
       name: "Run VDOT Optimizations"
       description: "Download and run Virtual Desktop Optimization Tool"
       duration: 300  # 5 minutes
       type: "FAST"
+      parallel_group: 2
 
+    # Sequential final configuration steps
     - id: "golden-image-registry-avd"
       name: "Configure AVD Registry"
       description: "Configure RDP, FSLogix exclusions, OOBE settings"
@@ -91,10 +100,6 @@ module:
     enabled: true
     checks:
       - type: "file_exists"
-        path: "C:\\Program Files\\FSLogix\\Apps\\frx.exe"
-        description: "FSLogix installed"
-
-      - type: "file_exists"
         path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
         description: "Chrome installed"
 
@@ -107,14 +112,24 @@ module:
         path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
         description: "Office 365 installed"
 
+      - type: "file_exists"
+        path: "C:\\Program Files\\FSLogix\\Apps\\frx.exe"
+        description: "FSLogix available (pre-installed on Win11 multi-session)"
+
       - type: "registry_key"
         path: "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server"
         description: "RDP registry configured"
 
-  # Expected total duration
+  # Expected total duration (with parallel execution)
+  # Sequential: VM(7m) + Validate(3m) + Prep(1m) = 11m
+  # Parallel Group 1: max(Chrome 3m, Adobe 5m) = 5m
+  # Office: 30m
+  # Parallel Group 2: max(Defaults 2m, VDOT 5m) = 5m
+  # Sequential: Registry(2m) + Profile(1m) + Cleanup(1m) + Validate(2m) = 6m
+  # Total: 11 + 5 + 30 + 5 + 6 = 57 minutes (vs 65 minutes sequential)
   total_duration:
-    expected: 3000  # 50 minutes (sum of all operations including VM creation)
-    timeout: 6000   # 100 minutes (2x expected)
+    expected: 3420  # 57 minutes (with parallel execution optimization)
+    timeout: 6840   # 114 minutes (2x expected)
 
   # Module state file
   state_file: "modules/05-golden-image/state.json"
