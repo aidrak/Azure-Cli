@@ -1,0 +1,201 @@
+# ==============================================================================
+# Operation: Install Applications with Parallel Downloads
+# ==============================================================================
+operation:
+  id: "golden-image-install-apps-parallel"
+  name: "Install Chrome and Adobe (Optimized)"
+  description: "Download installers in parallel, then install Chrome and Adobe"
+
+  # Duration expectations
+  duration:
+    expected: 360  # 6 minutes (parallel downloads + sequential installs)
+    timeout: 600   # 10 minutes
+    type: "FAST"
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "golden-image-system-prep"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        description: "Chrome executable installed"
+
+      - type: "file_exists"
+        path: "C:\\Program Files (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe"
+        description: "Adobe Reader executable installed"
+        alternative_path: "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe"
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "az-vm-run-command"
+    command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@modules/05-golden-image/operations/02.5-install-apps-parallel.ps1" \
+        --output json > artifacts/outputs/golden-image-install-apps-parallel.json
+
+  # PowerShell script with parallel download optimization
+  powershell:
+    file: "02.5-install-apps-parallel.ps1"
+    content: |
+      [START]
+      Write-Host "[START] Optimized Application Installation"
+      Write-Host "[INFO] Using parallel downloads for improved performance"
+
+      # Configuration
+      $chromeUrl = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
+      $adobeUrl = "https://ardownload2.adobe.com/pub/adobe/reader/win/AcrobatDC/2300320201/AcroRdrDC2300320201_en_US.exe"
+      $tempPath = "C:\Temp"
+      $chromeMsi = "$tempPath\Chrome.msi"
+      $adobeExe = "$tempPath\AdobeReader.exe"
+
+      try {
+          # ==============================================================================
+          # Phase 1: Parallel Downloads
+          # ==============================================================================
+          Write-Host "[PROGRESS] Phase 1/3: Downloading installers in parallel..."
+
+          $downloads = @(
+              @{ Name = "Chrome"; Url = $chromeUrl; OutFile = $chromeMsi; Timeout = 120 }
+              @{ Name = "Adobe Reader"; Url = $adobeUrl; OutFile = $adobeExe; Timeout = 180 }
+          )
+
+          # Use Start-Job for PowerShell 5.1 compatibility (Windows Server 2019/2022)
+          $jobs = @()
+          foreach ($dl in $downloads) {
+              # Check if already downloaded (cached)
+              if (Test-Path $dl.OutFile) {
+                  Write-Host "[PROGRESS] $($dl.Name) already cached, skipping download"
+                  continue
+              }
+
+              Write-Host "[PROGRESS] Starting download job for $($dl.Name)..."
+              $job = Start-Job -ScriptBlock {
+                  param($url, $outFile, $timeout, $name)
+
+                  try {
+                      Write-Host "[INFO] Downloading $name..."
+                      Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing -TimeoutSec $timeout -ErrorAction Stop
+
+                      if (Test-Path $outFile) {
+                          $sizeMB = [math]::Round((Get-Item $outFile).Length / 1MB, 2)
+                          Write-Host "[SUCCESS] Downloaded $name ($sizeMB MB)"
+                          return @{ Success = $true; Name = $name; Size = $sizeMB }
+                      } else {
+                          Write-Host "[ERROR] $name download failed - file not found"
+                          return @{ Success = $false; Name = $name; Error = "File not found after download" }
+                      }
+                  } catch {
+                      Write-Host "[ERROR] $name download exception: $($_.Exception.Message)"
+                      return @{ Success = $false; Name = $name; Error = $_.Exception.Message }
+                  }
+              } -ArgumentList $dl.Url, $dl.OutFile, $dl.Timeout, $dl.Name
+
+              $jobs += @{ Job = $job; Name = $dl.Name }
+          }
+
+          # Wait for all download jobs to complete
+          if ($jobs.Count -gt 0) {
+              Write-Host "[INFO] Waiting for $($jobs.Count) download(s) to complete..."
+
+              foreach ($jobInfo in $jobs) {
+                  $result = Receive-Job -Job $jobInfo.Job -Wait
+                  Remove-Job -Job $jobInfo.Job
+
+                  if ($result.Success -eq $false) {
+                      Write-Host "[ERROR] Failed to download $($jobInfo.Name): $($result.Error)"
+                      exit 1
+                  }
+              }
+
+              Write-Host "[SUCCESS] All downloads completed"
+          } else {
+              Write-Host "[INFO] All installers already cached"
+          }
+
+          # ==============================================================================
+          # Phase 2: Install Chrome (MSI)
+          # ==============================================================================
+          Write-Host "[PROGRESS] Phase 2/3: Installing Google Chrome..."
+
+          if (-not (Test-Path $chromeMsi)) {
+              Write-Host "[ERROR] Chrome installer not found at: $chromeMsi"
+              exit 1
+          }
+
+          $process = Start-Process -FilePath "msiexec.exe" `
+              -ArgumentList "/i `"$chromeMsi`" /quiet /norestart" `
+              -Wait -PassThru -ErrorAction Stop
+
+          if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
+              Write-Host "[ERROR] Chrome installation failed (exit code: $($process.ExitCode))"
+              exit 1
+          }
+
+          Write-Host "[VALIDATE] Verifying Chrome installation..."
+          if (-not (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe")) {
+              Write-Host "[ERROR] Chrome executable not found after installation"
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] Google Chrome installed successfully"
+
+          # ==============================================================================
+          # Phase 3: Install Adobe Reader (EXE)
+          # ==============================================================================
+          Write-Host "[PROGRESS] Phase 3/3: Installing Adobe Reader DC..."
+
+          if (-not (Test-Path $adobeExe)) {
+              Write-Host "[ERROR] Adobe installer not found at: $adobeExe"
+              exit 1
+          }
+
+          $process = Start-Process -FilePath $adobeExe `
+              -ArgumentList "/sAll /rs /msi EULA_ACCEPT=YES" `
+              -Wait -PassThru -ErrorAction Stop
+
+          if ($process.ExitCode -ne 0) {
+              Write-Host "[ERROR] Adobe installation failed (exit code: $($process.ExitCode))"
+              exit 1
+          }
+
+          Write-Host "[VALIDATE] Verifying Adobe installation..."
+          $adobePath1 = "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+          $adobePath2 = "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"
+
+          if (-not ((Test-Path $adobePath1) -or (Test-Path $adobePath2))) {
+              Write-Host "[ERROR] Adobe Reader executable not found"
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] Adobe Reader installed successfully"
+
+          # ==============================================================================
+          # Summary
+          # ==============================================================================
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Installation Summary"
+          Write-Host "========================================"
+          Write-Host "[SUCCESS] Google Chrome - Installed"
+          Write-Host "[SUCCESS] Adobe Reader DC - Installed"
+          Write-Host ""
+          Write-Host "[SUCCESS] All applications installed successfully"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Fatal exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

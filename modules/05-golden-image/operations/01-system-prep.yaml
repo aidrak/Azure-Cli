@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - "golden-image-create-vm"  # VM must be created first
+    - "golden-image-validate-vm"  # VM must be ready and accepting commands
 
   # Validation checks (run after operation completes)
   validation:
