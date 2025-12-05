@@ -60,10 +60,25 @@ track_operation() {
         progress_interval=60  # Update every 60s for wait operations
     fi
 
-    # Execute command in background, tee output to log file and stdout
-    {
-        eval "$command" 2>&1 | tee "$log_file"
-    } &
+    # Check if command is a multi-line bash script
+    local script_file=""
+    if [[ "$command" =~ ^#!/bin/bash || "$command" =~ $'\n' ]]; then
+        # Write script to temp file and execute with bash
+        script_file="${LOGS_DIR}/${operation_id}_$(date +%Y%m%d_%H%M%S).sh"
+        echo "$command" > "$script_file"
+        chmod +x "$script_file"
+        echo "[*] Executing script: $script_file"
+
+        # Execute script in background
+        {
+            bash "$script_file" 2>&1 | tee "$log_file"
+        } &
+    else
+        # Execute command directly with eval
+        {
+            eval "$command" 2>&1 | tee "$log_file"
+        } &
+    fi
 
     local cmd_pid=$!
 
