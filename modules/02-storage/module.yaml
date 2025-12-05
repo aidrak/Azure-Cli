@@ -1,0 +1,54 @@
+module:
+  id: "02-storage"
+  name: "Storage Setup for FSLogix"
+  description: "Create Azure Premium Files storage account with Entra Kerberos authentication and private endpoint connectivity"
+  version: "1.0.0"
+
+  dependencies:
+    - "01-networking"  # Requires VNet and private endpoint subnet
+
+  operations:
+    - id: "storage-create-account"
+      name: "Create Storage Account"
+      description: "Create Azure Premium FileStorage account"
+      duration: 90
+      type: "NORMAL"
+
+    - id: "storage-enable-kerberos"
+      name: "Enable Entra Kerberos"
+      description: "Enable Microsoft Entra Kerberos authentication"
+      duration: 60
+      type: "FAST"
+
+    - id: "storage-create-file-share"
+      name: "Create File Share"
+      description: "Create FSLogix profiles file share"
+      duration: 60
+      type: "FAST"
+
+    - id: "storage-disable-public-access"
+      name: "Disable Public Access"
+      description: "Disable public network access"
+      duration: 30
+      type: "FAST"
+
+    - id: "storage-create-private-dns"
+      name: "Create Private DNS Zone"
+      description: "Create and configure private DNS zone for Azure Files"
+      duration: 60
+      type: "FAST"
+
+    - id: "storage-create-private-endpoint"
+      name: "Create Private Endpoint"
+      description: "Create private endpoint for secure storage access"
+      duration: 120
+      type: "NORMAL"
+
+  total_duration:
+    expected: 420   # 7 minutes (sum of all operations)
+    timeout: 840    # 14 minutes (2x expected)
+
+  metadata:
+    author: "AVD Deployment Team"
+    created: "2025-12-05"
+    complexity: "medium"

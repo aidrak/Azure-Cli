@@ -1,0 +1,184 @@
+operation:
+  id: "storage-create-private-endpoint"
+  name: "Create Private Endpoint for Storage"
+  description: "Create private endpoint for secure, non-internet-routable access to FSLogix storage"
+
+  duration:
+    expected: 120      # 120 seconds (2 minutes)
+    timeout: 240       # 4 minutes
+    type: "NORMAL"
+
+  template:
+    type: "az-cli"
+    command: |
+      # Get storage account name (from previous operation or config)
+      if [ -f /tmp/storage-account-name.txt ]; then
+        STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
+      else
+        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
+      fi
+
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      SUBNET_NAME="{{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME}}"
+      PE_NAME="${STORAGE_NAME}-file-pe"
+      DNS_ZONE_NAME="privatelink.file.core.windows.net"
+
+      echo "[START] Creating private endpoint at $(date +%H:%M:%S)"
+      echo "  Storage account: $STORAGE_NAME"
+      echo "  VNet: $VNET_NAME"
+      echo "  Subnet: $SUBNET_NAME"
+      echo "  Private endpoint: $PE_NAME"
+
+      # Check if private endpoint already exists
+      echo "[PROGRESS] Checking if private endpoint exists..."
+
+      if az network private-endpoint show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$PE_NAME" &>/dev/null; then
+
+        echo "[SUCCESS] Private endpoint already exists: $PE_NAME"
+
+        # Get private IP
+        NIC_ID=$(az network private-endpoint show \
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+          --name "$PE_NAME" \
+          --query "networkInterfaces[0].id" -o tsv)
+
+        PRIVATE_IP=$(az network nic show \
+          --ids "$NIC_ID" \
+          --query "ipConfigurations[0].privateIpAddress" -o tsv)
+
+        echo "  Private IP: $PRIVATE_IP"
+        exit 0
+      fi
+
+      # Get storage account resource ID
+      echo "[PROGRESS] Getting storage account resource ID..."
+
+      STORAGE_ID=$(az storage account show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$STORAGE_NAME" \
+        --query id -o tsv)
+
+      if [ -z "$STORAGE_ID" ]; then
+        echo "[ERROR] Storage account not found: $STORAGE_NAME"
+        exit 1
+      fi
+
+      # Get subnet ID
+      echo "[PROGRESS] Getting subnet ID..."
+
+      SUBNET_ID=$(az network vnet subnet show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "$VNET_NAME" \
+        --name "$SUBNET_NAME" \
+        --query id -o tsv)
+
+      if [ -z "$SUBNET_ID" ]; then
+        echo "[ERROR] Subnet not found: $SUBNET_NAME"
+        exit 1
+      fi
+
+      # Create private endpoint
+      echo "[PROGRESS] Creating private endpoint for Azure Files..."
+
+      if az network private-endpoint create \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$PE_NAME" \
+        --vnet-name "$VNET_NAME" \
+        --subnet "$SUBNET_NAME" \
+        --private-connection-resource-id "$STORAGE_ID" \
+        --group-ids file \
+        --connection-name "${STORAGE_NAME}-file-connection" \
+        --location "{{AZURE_LOCATION}}" \
+        --output json > /tmp/private-endpoint.json; then
+
+        echo "[SUCCESS] Private endpoint created: $PE_NAME"
+      else
+        echo "[ERROR] Failed to create private endpoint"
+        cat /tmp/private-endpoint.json
+        exit 1
+      fi
+
+      # Wait for private endpoint to be fully provisioned
+      echo "[PROGRESS] Waiting for private endpoint provisioning..."
+      sleep 10
+
+      # Get private endpoint details
+      echo "[VALIDATE] Retrieving private endpoint details..."
+
+      PE_ID=$(az network private-endpoint show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$PE_NAME" \
+        --query id -o tsv)
+
+      NIC_ID=$(az network private-endpoint show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$PE_NAME" \
+        --query "networkInterfaces[0].id" -o tsv)
+
+      PRIVATE_IP=$(az network nic show \
+        --ids "$NIC_ID" \
+        --query "ipConfigurations[0].privateIpAddress" -o tsv)
+
+      # Create DNS zone group (integrates private endpoint with DNS zone)
+      echo "[PROGRESS] Integrating private endpoint with DNS zone..."
+
+      if az network private-endpoint dns-zone-group create \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --endpoint-name "$PE_NAME" \
+        --name "default" \
+        --private-dns-zone "$DNS_ZONE_NAME" \
+        --zone-name "file" \
+        --output json > /tmp/dns-zone-group.json 2>&1; then
+
+        echo "[SUCCESS] DNS zone integration complete"
+      else
+        echo "[WARNING] DNS zone group creation had issues (may already exist)"
+        # This is non-critical, continue
+      fi
+
+      # Verify private endpoint connection
+      echo "[VALIDATE] Verifying private endpoint connection..."
+
+      CONNECTION_STATE=$(az network private-endpoint show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$PE_NAME" \
+        --query "privateLinkServiceConnections[0].privateLinkServiceConnectionState.status" -o tsv)
+
+      if [[ "$CONNECTION_STATE" == "Approved" ]]; then
+        echo "[SUCCESS] Private endpoint configured successfully"
+        echo ""
+        echo "=== Private Endpoint Details ==="
+        echo "  Name: $PE_NAME"
+        echo "  Resource ID: $PE_ID"
+        echo "  Private IP: $PRIVATE_IP"
+        echo "  Connection state: $CONNECTION_STATE"
+        echo "  Subnet: $SUBNET_NAME"
+        echo "  DNS zone: $DNS_ZONE_NAME"
+        echo ""
+        echo "=== FSLogix Access ==="
+        echo "  UNC path: \\\\${STORAGE_NAME}.file.core.windows.net\\{{STORAGE_FILE_SHARE_NAME}}"
+        echo "  Resolves to: $PRIVATE_IP (private)"
+        echo "  Access: VNet only (no public internet)"
+        echo "  Authentication: Entra Kerberos"
+        echo ""
+        echo "[INFO] Storage account is now accessible only via private endpoint"
+        echo "[INFO] Session hosts in the VNet can mount file shares using domain credentials"
+        exit 0
+      else
+        echo "[ERROR] Private endpoint connection state is not 'Approved': $CONNECTION_STATE"
+        exit 1
+      fi
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "private_endpoint"
+        name: "{{STORAGE_ACCOUNT_NAME}}-file-pe"
+      - type: "connection_state"
+        expected: "Approved"
+
+  fixes:
+    # Auto-populated by error handler on failures

@@ -1,0 +1,86 @@
+operation:
+  id: "storage-disable-public-access"
+  name: "Disable Public Network Access"
+  description: "Disable public network access to force all traffic through private endpoint"
+
+  duration:
+    expected: 30       # 30 seconds
+    timeout: 60        # 1 minute
+    type: "FAST"
+
+  template:
+    type: "az-cli"
+    command: |
+      # Get storage account name (from previous operation or config)
+      if [ -f /tmp/storage-account-name.txt ]; then
+        STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
+      else
+        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
+      fi
+
+      echo "[START] Disabling public network access at $(date +%H:%M:%S)"
+      echo "  Storage account: $STORAGE_NAME"
+
+      # Check current public network access setting
+      echo "[PROGRESS] Checking current network access configuration..."
+
+      CURRENT_ACCESS=$(az storage account show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$STORAGE_NAME" \
+        --query publicNetworkAccess \
+        -o tsv 2>/dev/null || echo "Enabled")
+
+      if [[ "$CURRENT_ACCESS" == "Disabled" ]]; then
+        echo "[SUCCESS] Public network access already disabled"
+        exit 0
+      fi
+
+      echo "[PROGRESS] Disabling public network access..."
+      echo "[WARNING] After this operation, storage will only be accessible via private endpoint"
+
+      # Disable public network access
+      if az storage account update \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$STORAGE_NAME" \
+        --public-network-access Disabled \
+        --output json > /tmp/public-access.json; then
+
+        echo "[VALIDATE] Verifying network access configuration..."
+
+        # Wait 3 seconds for configuration to propagate
+        sleep 3
+
+        # Verify public access is disabled
+        NEW_ACCESS=$(az storage account show \
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+          --name "$STORAGE_NAME" \
+          --query publicNetworkAccess \
+          -o tsv)
+
+        if [[ "$NEW_ACCESS" == "Disabled" ]]; then
+          echo "[SUCCESS] Public network access disabled"
+          echo "  Network access: Private endpoint only"
+          echo "  Public internet: Blocked"
+          echo "  Security: Enhanced (zero-trust networking)"
+          exit 0
+        else
+          echo "[ERROR] Network access configuration verification failed"
+          echo "  Expected: Disabled"
+          echo "  Got: $NEW_ACCESS"
+          exit 1
+        fi
+      else
+        echo "[ERROR] Failed to disable public network access"
+        cat /tmp/public-access.json
+        exit 1
+      fi
+
+  validation:
+    enabled: true
+    checks:
+      - type: "property_equals"
+        property: "publicNetworkAccess"
+        expected: "Disabled"
+
+  fixes:
+    # Auto-populated by error handler on failures
