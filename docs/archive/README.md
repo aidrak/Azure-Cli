@@ -24,6 +24,11 @@ These scripts were used to validate each phase during development. The engine no
 
 These tracked early development progress. Current status is reflected in the main documentation.
 
+### Legacy Documentation
+- **COMMANDS-README.md** - Command reference guide for old 12-step directory structure
+
+This referenced the old task-based system with step directories (`01-networking/`, `07-intune/`, `11-testing/`, etc.) and COMMANDS.md files. The current system uses YAML operation templates in `modules/` instead.
+
 ## Current Documentation
 
 For up-to-date information, see:
