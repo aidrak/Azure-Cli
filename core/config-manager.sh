@@ -70,6 +70,20 @@ load_config() {
     export STORAGE_HTTPS_ONLY=$(yq e '.storage.https_only' "$config_file")
     export STORAGE_MIN_TLS_VERSION=$(yq e '.storage.min_tls_version' "$config_file")
 
+    # Entra ID section (Module 03)
+    export ENTRA_GROUP_USERS_STANDARD=$(yq e '.entra_id.group_users_standard' "$config_file")
+    export ENTRA_GROUP_USERS_STANDARD_DESCRIPTION=$(yq e '.entra_id.group_users_standard_description' "$config_file")
+    export ENTRA_GROUP_USERS_ADMINS=$(yq e '.entra_id.group_users_admins' "$config_file")
+    export ENTRA_GROUP_USERS_ADMINS_DESCRIPTION=$(yq e '.entra_id.group_users_admins_description' "$config_file")
+    export ENTRA_GROUP_DEVICES_SSO=$(yq e '.entra_id.group_devices_sso' "$config_file")
+    export ENTRA_GROUP_DEVICES_SSO_DESCRIPTION=$(yq e '.entra_id.group_devices_sso_description' "$config_file")
+    export ENTRA_GROUP_DEVICES_FSLOGIX=$(yq e '.entra_id.group_devices_fslogix' "$config_file")
+    export ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION=$(yq e '.entra_id.group_devices_fslogix_description' "$config_file")
+    export ENTRA_GROUP_DEVICES_NETWORK=$(yq e '.entra_id.group_devices_network' "$config_file")
+    export ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION=$(yq e '.entra_id.group_devices_network_description' "$config_file")
+    export ENTRA_GROUP_DEVICES_SECURITY=$(yq e '.entra_id.group_devices_security' "$config_file")
+    export ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION=$(yq e '.entra_id.group_devices_security_description' "$config_file")
+
     # Golden Image section
     export GOLDEN_IMAGE_TEMP_VM_NAME=$(yq e '.golden_image.temp_vm_name' "$config_file")
     export GOLDEN_IMAGE_VM_SIZE=$(yq e '.golden_image.vm_size' "$config_file")

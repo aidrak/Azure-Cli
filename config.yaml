@@ -171,13 +171,19 @@ storage:
 entra_id:
   # User groups
   group_users_standard: "AVD-Users-Standard"
+  group_users_standard_description: "Standard users with access to AVD resources"
   group_users_admins: "AVD-Users-Admins"
+  group_users_admins_description: "Administrative users with elevated AVD access"
 
-  # Device groups
+  # Device groups (for Intune/Conditional Access policies)
   group_devices_sso: "AVD-Devices-Pooled-SSO"
+  group_devices_sso_description: "Device group for SSO configuration policies"
   group_devices_fslogix: "AVD-Devices-Pooled-FSLogix"
+  group_devices_fslogix_description: "Device group for FSLogix profile management"
   group_devices_network: "AVD-Devices-Pooled-Network"
+  group_devices_network_description: "Device group for network configuration policies"
   group_devices_security: "AVD-Devices-Pooled-Security"
+  group_devices_security_description: "Device group for security baseline policies"
 
 # ==============================================================================
 # Host Pool Configuration (Module 04)
