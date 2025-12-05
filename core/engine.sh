@@ -450,14 +450,6 @@ main() {
 
     case "$command" in
         run)
-            # Load configuration
-            log_info "Loading configuration" "engine"
-            load_config || exit 1
-            validate_config || exit 1
-
-            # Initialize state
-            init_state
-
             local module_name="${2:-}"
             local operation_id="${3:-}"
 
@@ -466,6 +458,16 @@ main() {
                 echo "Usage: $0 run <module> [operation]"
                 exit 1
             fi
+
+            # Load configuration
+            log_info "Loading configuration" "engine"
+            load_config || exit 1
+
+            # Validate configuration for specific module
+            validate_config "$module_name" || exit 1
+
+            # Initialize state
+            init_state
 
             if [[ -n "$operation_id" ]]; then
                 # Execute single operation
@@ -479,7 +481,15 @@ main() {
         resume)
             # Load configuration
             load_config || exit 1
-            validate_config || exit 1
+
+            # For resume, get current module from state and validate for that module
+            local current_module=$(jq -r '.current_module // ""' "$STATE_FILE" 2>/dev/null)
+            if [[ -n "$current_module" ]]; then
+                validate_config "$current_module" || exit 1
+            else
+                # If no current module in state, do full validation
+                validate_config || exit 1
+            fi
 
             resume_execution
             ;;

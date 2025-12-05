@@ -1,0 +1,48 @@
+# ==============================================================================
+# Module: Resource Group Setup
+# ==============================================================================
+module:
+  id: "00-resource-group"
+  name: "Resource Group Setup"
+  description: "Create Azure resource group - foundation for all other modules"
+
+  # Module-level configuration
+  config:
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    location: "{{AZURE_LOCATION}}"
+
+  # Operations in this module
+  operations:
+    - id: "resource-group-create"
+      name: "Create Resource Group"
+      description: "Create or verify Azure resource group exists"
+      duration: 30
+      type: "FAST"
+
+    - id: "resource-group-validate"
+      name: "Validate Resource Group"
+      description: "Verify resource group is accessible and in correct location"
+      duration: 15
+      type: "FAST"
+
+  # Module-level validation
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Resources/resourceGroups"
+        resource_name: "{{AZURE_RESOURCE_GROUP}}"
+        description: "Resource group exists"
+
+  # Expected total duration
+  total_duration:
+    expected: 45
+    timeout: 90
+
+  # Module state file
+  state_file: "modules/00-resource-group/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"

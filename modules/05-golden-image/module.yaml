@@ -14,6 +14,12 @@ module:
 
   # Operations in this module (executed in order)
   operations:
+    - id: "golden-image-create-vm"
+      name: "Create Temporary VM"
+      description: "Create temporary Windows 11 VM for golden image preparation"
+      duration: 420  # 7 minutes
+      type: "WAIT"
+
     - id: "golden-image-system-prep"
       name: "System Preparation"
       description: "Disable BitLocker, create temp directory"
@@ -107,8 +113,8 @@ module:
 
   # Expected total duration
   total_duration:
-    expected: 2580  # 43 minutes (sum of all operations)
-    timeout: 5160   # 86 minutes (2x expected)
+    expected: 3000  # 50 minutes (sum of all operations including VM creation)
+    timeout: 6000   # 100 minutes (2x expected)
 
   # Module state file
   state_file: "modules/05-golden-image/state.json"

@@ -82,10 +82,36 @@ substitute_variables() {
     result="${result//\{\{NETWORKING_SUBNET_NAME\}\}/${NETWORKING_SUBNET_NAME:-}}"
     result="${result//\{\{NETWORKING_SUBNET_CIDR\}\}/${NETWORKING_SUBNET_CIDR:-}}"
     result="${result//\{\{NETWORKING_NSG_NAME\}\}/${NETWORKING_NSG_NAME:-}}"
+    result="${result//\{\{NETWORKING_SESSION_HOST_SUBNET_NAME\}\}/${NETWORKING_SESSION_HOST_SUBNET_NAME:-}}"
+    result="${result//\{\{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME\}\}/${NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME:-}}"
+    result="${result//\{\{NETWORKING_MANAGEMENT_SUBNET_NAME\}\}/${NETWORKING_MANAGEMENT_SUBNET_NAME:-}}"
 
     # Storage variables
     result="${result//\{\{STORAGE_ACCOUNT_NAME\}\}/${STORAGE_ACCOUNT_NAME:-}}"
     result="${result//\{\{STORAGE_SHARE_NAME\}\}/${STORAGE_SHARE_NAME:-}}"
+    result="${result//\{\{STORAGE_FILE_SHARE_NAME\}\}/${STORAGE_FILE_SHARE_NAME:-}}"
+    result="${result//\{\{STORAGE_QUOTA_GB\}\}/${STORAGE_QUOTA_GB:-}}"
+    result="${result//\{\{STORAGE_SKU\}\}/${STORAGE_SKU:-}}"
+    result="${result//\{\{STORAGE_KIND\}\}/${STORAGE_KIND:-}}"
+    result="${result//\{\{STORAGE_ENABLE_ENTRA_KERBEROS\}\}/${STORAGE_ENABLE_ENTRA_KERBEROS:-}}"
+    result="${result//\{\{STORAGE_ENABLE_SMB_MULTICHANNEL\}\}/${STORAGE_ENABLE_SMB_MULTICHANNEL:-}}"
+    result="${result//\{\{STORAGE_PUBLIC_NETWORK_ACCESS\}\}/${STORAGE_PUBLIC_NETWORK_ACCESS:-}}"
+    result="${result//\{\{STORAGE_HTTPS_ONLY\}\}/${STORAGE_HTTPS_ONLY:-}}"
+    result="${result//\{\{STORAGE_MIN_TLS_VERSION\}\}/${STORAGE_MIN_TLS_VERSION:-}}"
+
+    # Entra ID variables
+    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD\}\}/${ENTRA_GROUP_USERS_STANDARD:-}}"
+    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_STANDARD_DESCRIPTION:-}}"
+    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS\}\}/${ENTRA_GROUP_USERS_ADMINS:-}}"
+    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_ADMINS_DESCRIPTION:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO\}\}/${ENTRA_GROUP_DEVICES_SSO:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SSO_DESCRIPTION:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK\}\}/${ENTRA_GROUP_DEVICES_NETWORK:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY\}\}/${ENTRA_GROUP_DEVICES_SECURITY:-}}"
+    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION:-}}"
 
     # Golden Image variables
     result="${result//\{\{GOLDEN_IMAGE_TEMP_VM_NAME\}\}/${GOLDEN_IMAGE_TEMP_VM_NAME:-}}"

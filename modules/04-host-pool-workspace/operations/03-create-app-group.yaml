@@ -36,7 +36,7 @@ operation:
       fi
 
       echo "[PROGRESS] Application group '$APP_GROUP_NAME' not found. Creating..."
-      HOST_POOL_ID=$(az desktopvirtualization host-pool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv)
+      HOST_POOL_ID=$(az desktopvirtualization hostpool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv)
 
       az desktopvirtualization applicationgroup create \
         --name "$APP_GROUP_NAME" \

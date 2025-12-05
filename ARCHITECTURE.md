@@ -1,3 +1,9 @@
+---
+title: "System Architecture"
+description: "The complete technical reference for the YAML-based deployment engine, detailing the system flow, core components, directory structure, and development patterns."
+tags: ["architecture", "technical", "engine", "design", "development"]
+last_updated: "2025-12-05"
+---
 # Azure VDI Deployment - System Architecture
 
 Complete technical reference for the YAML-based deployment engine.
@@ -5,6 +11,7 @@ Complete technical reference for the YAML-based deployment engine.
 ## Quick Reference
 
 - **Active System**: YAML engine (`core/` + `modules/`)
+- **User Guide & Ops**: See the main [.claude/CLAUDE.md](.claude/CLAUDE.md) for operational guides.
 - **Configuration**: `config.yaml` (single source of truth)
 - **Execution**: `./core/engine.sh run [module] [operation]`
 - **State**: `state.json` (centralized tracking)
@@ -545,7 +552,7 @@ grep '\[ERROR\]' artifacts/logs/*.jsonl
 ## Additional Resources
 
 - **Quick Start**: [README.md](README.md)
-- **AI Instructions**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
+- **Main Hub & User Guide**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
 - **Remote Execution**: [AZURE-VM-REMOTE-EXECUTION.md](AZURE-VM-REMOTE-EXECUTION.md)
 - **Configuration**: [config.yaml](config.yaml)
 - **Legacy Reference**: [legacy/README.md](legacy/README.md)

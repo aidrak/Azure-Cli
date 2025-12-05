@@ -29,7 +29,7 @@ operation:
 
       echo "[PROGRESS] Applying RDP properties to host pool '$HOST_POOL_NAME'..."
 
-      az desktopvirtualization host-pool update \
+      az desktopvirtualization hostpool update \
         --name "$HOST_POOL_NAME" \
         --resource-group "$RESOURCE_GROUP" \
         --custom-rdp-property "$RDP_PROPERTIES" \

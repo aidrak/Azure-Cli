@@ -109,26 +109,11 @@ operation:
 
 The template engine extracts PowerShell to `artifacts/scripts/[operation].ps1` and executes via `az vm run-command`.
 
-### Progress Markers (Required)
+### Progress Markers
 
-All PowerShell scripts **must** include:
+All PowerShell scripts executed via the run-command pattern must include standardized progress markers for the engine's progress tracker to function correctly.
 
-```powershell
-Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
-Write-Host "[PROGRESS] Step 1/4: Downloading..."
-Write-Host "[PROGRESS] Step 2/4: Installing..."
-Write-Host "[VALIDATE] Checking installation..."
-Write-Host "[SUCCESS] Operation completed"
-exit 0  # Required for success detection
-```
-
-**Supported Markers**:
-- `[START]` - Operation begins
-- `[PROGRESS]` - Step update (numbered: "Step X/Y")
-- `[VALIDATE]` - Validation check
-- `[SUCCESS]` - Completed successfully
-- `[ERROR]` - Error occurred
-- `[WARNING]` - Non-fatal issue
+For the canonical list of markers (`[START]`, `[PROGRESS]`, etc.) and implementation rules, see the main [**Development Rules Guide**](./.claude/docs/03-development-rules.md).
 
 ## Common Use Cases
 
