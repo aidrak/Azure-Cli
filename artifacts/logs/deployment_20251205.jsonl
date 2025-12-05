@@ -448,3 +448,19 @@
 {"timestamp":"2025-12-05T23:13:31.454Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T23:14:28.761Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T23:35:31.180Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:38:51.409Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:05.787Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:06.067Z","level":"INFO","message":"Executing operation: golden-image-install-apps-parallel","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:06.096Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02.5-install-apps-parallel.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:06.165Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:06.194Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:24.908Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:25.176Z","level":"INFO","message":"Executing operation: golden-image-install-apps-parallel","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:25.204Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02.5-install-apps-parallel.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:25.267Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:25.295Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:39.548Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:39.813Z","level":"INFO","message":"Executing operation: golden-image-install-apps-parallel","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:39.841Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02.5-install-apps-parallel.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:39.906Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T23:39:39.932Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
