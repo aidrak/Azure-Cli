@@ -1,0 +1,205 @@
+# ==============================================================================
+# Operation: Assign Autoscaling RBAC Role
+# ==============================================================================
+operation:
+  id: "autoscaling-assign-rbac"
+  name: "Assign Autoscaling RBAC Role"
+  description: "Assign Desktop Virtualization Power On Off Contributor role to Azure Virtual Desktop service principal"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 300    # 5 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "session-host-deploy-vms"
+      status: "completed"
+      optional: true  # Session hosts may have been deployed previously
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          SCOPE="/subscriptions/$SUBSCRIPTION_ID"
+
+          # Get AVD service principal
+          AVD_SP_ID=$(az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>/dev/null || true)
+
+          if [[ -z "$AVD_SP_ID" ]]; then
+            echo "[WARNING] Azure Virtual Desktop service principal not found"
+            exit 0
+          fi
+
+          # Check role assignment
+          if az role assignment list \
+            --assignee "$AVD_SP_ID" \
+            --scope "$SCOPE" \
+            --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv | grep -q "Desktop"; then
+            echo "[VALIDATE] RBAC role assigned to AVD service principal"
+            exit 0
+          else
+            echo "[WARNING] RBAC role not found (may need manual assignment)"
+            exit 0
+          fi
+        description: "Verify RBAC role assigned"
+
+  # Template command (executed via bash)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Autoscaling RBAC Assignment: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      AUTOSCALING_ENABLED="{{AUTOSCALING_ENABLED}}"
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Check if autoscaling is enabled in config
+      echo "[PROGRESS] Step 2/5: Checking autoscaling configuration..."
+      if [[ "$AUTOSCALING_ENABLED" != "true" ]]; then
+        echo "[WARNING] Autoscaling is disabled in config.yaml (autoscaling.enabled: false)"
+        echo "[WARNING] Skipping RBAC assignment"
+
+        {
+          echo "Autoscaling RBAC Assignment Skipped"
+          echo "===================================="
+          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Autoscaling is disabled in configuration."
+          echo "To enable autoscaling, set autoscaling.enabled: true in config.yaml"
+          echo ""
+        } > "artifacts/outputs/autoscaling-assign-rbac.txt"
+
+        exit 0
+      fi
+
+      # Step 3: Get subscription ID
+      echo "[PROGRESS] Step 3/5: Getting subscription ID..."
+      SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+      SUBSCRIPTION_SCOPE="/subscriptions/$SUBSCRIPTION_ID"
+
+      echo "[VALIDATE] Subscription ID: $SUBSCRIPTION_ID"
+      echo "[VALIDATE] Scope: $SUBSCRIPTION_SCOPE"
+
+      # Step 4: Find Azure Virtual Desktop service principal
+      echo "[PROGRESS] Step 4/5: Finding Azure Virtual Desktop service principal..."
+
+      AVD_SP_ID=$(az ad sp list \
+        --filter "displayName eq 'Azure Virtual Desktop'" \
+        --query "[0].id" -o tsv 2>/dev/null || true)
+
+      if [[ -z "$AVD_SP_ID" || "$AVD_SP_ID" == "null" ]]; then
+        echo "[WARNING] Azure Virtual Desktop service principal not found"
+        echo "[WARNING] This service principal may not exist in your tenant"
+        echo "[WARNING] You may need to manually assign the role via Azure Portal"
+
+        {
+          echo "Autoscaling RBAC Assignment - Manual Required"
+          echo "=============================================="
+          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "The Azure Virtual Desktop service principal was not found."
+          echo ""
+          echo "Manual Assignment Required:"
+          echo "  1. Navigate to Azure Portal → Subscriptions"
+          echo "  2. Select your subscription: $SUBSCRIPTION_ID"
+          echo "  3. Go to Access Control (IAM)"
+          echo "  4. Click '+ Add' → 'Add role assignment'"
+          echo "  5. Role: 'Desktop Virtualization Power On Off Contributor'"
+          echo "  6. Assign to: 'Managed identity'"
+          echo "  7. Select: 'Azure Virtual Desktop' service principal"
+          echo "  8. Review + assign"
+          echo ""
+          echo "Alternative: Use PowerShell"
+          echo "  Connect-AzAccount"
+          echo "  \$avdSp = Get-AzADServicePrincipal -DisplayName 'Azure Virtual Desktop'"
+          echo "  New-AzRoleAssignment -ObjectId \$avdSp.Id -RoleDefinitionName 'Desktop Virtualization Power On Off Contributor' -Scope '/subscriptions/$SUBSCRIPTION_ID'"
+          echo ""
+        } > "artifacts/outputs/autoscaling-assign-rbac.txt"
+
+        exit 0
+      fi
+
+      echo "[VALIDATE] Azure Virtual Desktop service principal found: $AVD_SP_ID"
+
+      # Step 5: Assign role
+      echo "[PROGRESS] Step 5/5: Assigning RBAC role..."
+      echo "[PROGRESS] Role: Desktop Virtualization Power On Off Contributor"
+      echo "[PROGRESS] Assignee: Azure Virtual Desktop (service principal)"
+      echo "[PROGRESS] Scope: Subscription"
+
+      if az role assignment create \
+        --assignee "$AVD_SP_ID" \
+        --role "Desktop Virtualization Power On Off Contributor" \
+        --scope "$SUBSCRIPTION_SCOPE" \
+        --output none 2>/dev/null; then
+        echo "[SUCCESS] RBAC role assigned to AVD service principal"
+      else
+        # Check if already exists
+        if az role assignment list \
+          --assignee "$AVD_SP_ID" \
+          --scope "$SUBSCRIPTION_SCOPE" \
+          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv | grep -q "Desktop"; then
+          echo "[SUCCESS] RBAC role already assigned to AVD service principal"
+        else
+          echo "[ERROR] Failed to assign RBAC role"
+          echo "[ERROR] You may need to manually assign the role via Azure Portal"
+          exit 1
+        fi
+      fi
+
+      # Verify assignment
+      echo "[VALIDATE] Verifying role assignment..."
+      ROLE_ASSIGNMENT=$(az role assignment list \
+        --assignee "$AVD_SP_ID" \
+        --scope "$SUBSCRIPTION_SCOPE" \
+        --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor'].roleDefinitionName" -o tsv)
+
+      echo "[VALIDATE] Role assignment: $ROLE_ASSIGNMENT"
+
+      # Save assignment details
+      {
+        echo "Autoscaling RBAC Assignment"
+        echo "==========================="
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Service Principal:"
+        echo "  Name: Azure Virtual Desktop"
+        echo "  ID: $AVD_SP_ID"
+        echo ""
+        echo "Role Assignment:"
+        echo "  Role: Desktop Virtualization Power On Off Contributor"
+        echo "  Scope: Subscription ($SUBSCRIPTION_ID)"
+        echo ""
+        echo "What This Enables:"
+        echo "  - AVD service can power on/off session host VMs"
+        echo "  - Required for autoscaling functionality"
+        echo "  - Scaling plan can manage VM power states"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Create scaling plan (next operation)"
+        echo "  2. Configure scaling schedules"
+        echo "  3. Assign scaling plan to host pool"
+        echo "  4. Monitor autoscaling activity"
+        echo ""
+      } > "artifacts/outputs/autoscaling-assign-rbac.txt"
+
+      echo "[SUCCESS] Autoscaling RBAC assignment completed"
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

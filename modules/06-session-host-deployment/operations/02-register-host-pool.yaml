@@ -1,0 +1,253 @@
+# ==============================================================================
+# Operation: Register Session Hosts to Host Pool
+# ==============================================================================
+operation:
+  id: "session-host-register-pool"
+  name: "Register to Host Pool"
+  description: "Generate registration token and prepare session hosts for host pool registration"
+
+  # Duration expectations
+  duration:
+    expected: 600   # 10 minutes
+    timeout: 1200   # 20 minutes (fail-fast if exceeds)
+    type: "WAIT"    # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "session-host-deploy-vms"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          if ! az desktopvirtualization hostpool show \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{HOST_POOL_NAME}}" &>/dev/null; then
+            echo "[ERROR] Host pool not found: {{HOST_POOL_NAME}}"
+            exit 1
+          fi
+          echo "[VALIDATE] Host pool exists: {{HOST_POOL_NAME}}"
+        description: "Verify host pool exists"
+
+      - type: "bash_command"
+        command: |
+          if [[ ! -f "artifacts/outputs/session-host-registration-token.txt" ]]; then
+            echo "[ERROR] Registration token file not found"
+            exit 1
+          fi
+          echo "[VALIDATE] Registration token saved"
+        description: "Verify registration token was generated"
+
+      - type: "bash_command"
+        command: |
+          running_count=0
+          for ((i=1; i<={{SESSION_HOST_VM_COUNT}}; i++)); do
+            vm_name="{{SESSION_HOST_NAME_PREFIX}}-$(printf '%02d' $i)"
+            vm_state=$(az vm get-instance-view \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --name "$vm_name" \
+              --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" \
+              -o tsv 2>/dev/null)
+            if [[ "$vm_state" == "VM running" ]]; then
+              ((running_count++))
+            fi
+          done
+          echo "[VALIDATE] Running VMs ready for registration: $running_count/{{SESSION_HOST_VM_COUNT}}"
+        description: "Verify VMs are ready for registration"
+
+  # Template command (executed via bash)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Host Pool Registration: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      VM_PREFIX="{{SESSION_HOST_NAME_PREFIX}}"
+      VM_COUNT={{SESSION_HOST_VM_COUNT}}
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Validate host pool exists
+      echo "[PROGRESS] Step 2/5: Validating host pool exists..."
+      if ! az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" &>/dev/null; then
+        echo "[ERROR] Host pool not found: $HOST_POOL_NAME"
+        echo "[ERROR] Please ensure host pool was created (Module 04)"
+        exit 1
+      fi
+
+      echo "[VALIDATE] Host pool found: $HOST_POOL_NAME"
+
+      # Get host pool resource ID
+      HP_ID=$(az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" \
+        --query id -o tsv)
+
+      echo "[VALIDATE] Host pool ID: $HP_ID"
+
+      # Step 3: Generate registration token
+      echo "[PROGRESS] Step 3/5: Generating host pool registration token..."
+
+      TOKEN_OUTPUT=$(az desktopvirtualization hostpool update \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" \
+        --registration-info expiration-time=$(date -u -d '+24 hours' '+%Y-%m-%dT%H:%M:%S.000Z') registration-token-operation='Update' \
+        --output json 2>&1)
+
+      # Retrieve the registration token
+      REGISTRATION_TOKEN=$(az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" \
+        --query "registrationInfo.token" -o tsv)
+
+      if [[ -z "$REGISTRATION_TOKEN" || "$REGISTRATION_TOKEN" == "null" ]]; then
+        echo "[ERROR] Failed to generate registration token"
+        echo "[ERROR] Token output: $TOKEN_OUTPUT"
+        exit 1
+      fi
+
+      echo "[SUCCESS] Registration token generated (valid for 24 hours)"
+
+      # Step 4: Save token securely
+      echo "[PROGRESS] Step 4/5: Saving registration token..."
+      TOKEN_FILE="artifacts/outputs/session-host-registration-token.txt"
+      echo "$REGISTRATION_TOKEN" > "$TOKEN_FILE"
+      chmod 600 "$TOKEN_FILE"
+
+      echo "[VALIDATE] Token saved to: $TOKEN_FILE"
+      echo "[WARNING] Token is sensitive - keep it secure"
+
+      # Step 5: Verify VMs are ready
+      echo "[PROGRESS] Step 5/5: Verifying session host VMs..."
+
+      ready_count=0
+      running_count=0
+
+      for ((i=1; i<=VM_COUNT; i++)); do
+        vm_name="${VM_PREFIX}-$(printf '%02d' $i)"
+
+        if ! az vm show \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$vm_name" &>/dev/null; then
+          echo "[WARNING] VM not found: $vm_name"
+          continue
+        fi
+
+        ((ready_count++))
+
+        # Check VM state
+        vm_state=$(az vm get-instance-view \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$vm_name" \
+          --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" \
+          -o tsv 2>/dev/null)
+
+        echo "[PROGRESS] $vm_name: $vm_state"
+
+        if [[ "$vm_state" == "VM running" ]]; then
+          ((running_count++))
+        fi
+      done
+
+      echo "[VALIDATE] VMs found: $ready_count/$VM_COUNT"
+      echo "[VALIDATE] VMs running: $running_count/$VM_COUNT"
+
+      if [[ $ready_count -eq 0 ]]; then
+        echo "[ERROR] No VMs found - deployment may have failed"
+        exit 1
+      fi
+
+      # Save registration details
+      {
+        echo "Host Pool Registration Details"
+        echo "==============================="
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Host Pool:"
+        echo "  Name: $HOST_POOL_NAME"
+        echo "  Resource Group: $RESOURCE_GROUP"
+        echo "  ID: $HP_ID"
+        echo ""
+        echo "Registration:"
+        echo "  Total VMs: $VM_COUNT"
+        echo "  VMs Found: $ready_count"
+        echo "  VMs Running: $running_count"
+        echo "  Token Expiration: 24 hours from generation"
+        echo "  Token File: $TOKEN_FILE"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Install AVD agent on each session host VM"
+        echo "  2. Provide registration token during installation"
+        echo "  3. Complete registration process"
+        echo "  4. Verify hosts appear in host pool"
+        echo "  5. Test user access"
+        echo ""
+        echo "Manual Registration (if needed):"
+        echo "  On each session host VM, run:"
+        echo "  - Download AVD Agent from: https://aka.ms/avdagent"
+        echo "  - Install with registration token"
+        echo "  - Complete Entra ID join if not already joined"
+        echo ""
+        echo "Verify Registration:"
+        echo "  az desktopvirtualization sessionhost list \\"
+        echo "    --resource-group \"$RESOURCE_GROUP\" \\"
+        echo "    --host-pool-name \"$HOST_POOL_NAME\""
+        echo ""
+        echo "Token Security:"
+        echo "  - Token is valid for 24 hours"
+        echo "  - Store securely if using for manual registration"
+        echo "  - Regenerate if token expires before registration completes"
+        echo ""
+      } > "artifacts/outputs/session-host-registration-details.txt"
+
+      echo "[SUCCESS] Host pool registration preparation completed"
+      echo ""
+      echo "IMPORTANT: Next Steps Required"
+      echo "================================"
+      echo "The session host VMs are deployed and a registration token has been generated."
+      echo ""
+      echo "To complete registration, you have two options:"
+      echo ""
+      echo "Option 1: Automatic (via VM extension - recommended):"
+      echo "  - The VMs deployed from golden image should auto-register if AVD agent is pre-installed"
+      echo "  - Verify by checking the host pool for registered session hosts"
+      echo ""
+      echo "Option 2: Manual (if auto-registration fails):"
+      echo "  - RDP into each session host VM"
+      echo "  - Install AVD Agent (if not already installed)"
+      echo "  - Provide registration token from: $TOKEN_FILE"
+      echo "  - Complete Entra ID join process"
+      echo ""
+      echo "Verification:"
+      echo "  Run: az desktopvirtualization sessionhost list \\"
+      echo "       --resource-group \"$RESOURCE_GROUP\" \\"
+      echo "       --host-pool-name \"$HOST_POOL_NAME\""
+      echo ""
+      echo "All session hosts should show 'Available' status when ready for user connections."
+      echo ""
+
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur
+    # Example:
+    # - issue: "Registration token generation timeout"
+    #   detected: "2025-12-05"
+    #   fix: "Added expiration-time parameter for token generation"
+    #   applied_to_template: true

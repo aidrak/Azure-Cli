@@ -1,0 +1,308 @@
+# ==============================================================================
+# Operation: Verify Autoscaling Configuration
+# ==============================================================================
+operation:
+  id: "autoscaling-verify-configuration"
+  name: "Verify Autoscaling Configuration"
+  description: "Verify autoscaling plan is properly configured and assigned to host pool"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 180    # 3 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "autoscaling-create-plan"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          if [[ -f "artifacts/outputs/autoscaling-verification-complete.txt" ]]; then
+            echo "[VALIDATE] Autoscaling verification completed"
+            exit 0
+          else
+            echo "[ERROR] Autoscaling verification file not found"
+            exit 1
+          fi
+        description: "Verify autoscaling verification completed"
+
+  # Template command (executed via bash)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Autoscaling Configuration Verification: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
+      AUTOSCALING_ENABLED="{{AUTOSCALING_ENABLED}}"
+
+      # Scaling plan name
+      SCALING_PLAN_NAME="ScalingPlan-${HOST_POOL_NAME}"
+
+      # Counters
+      TOTAL_CHECKS=0
+      PASSED_CHECKS=0
+      FAILED_CHECKS=0
+      WARNING_CHECKS=0
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/4: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Check if autoscaling is enabled in config
+      echo "[PROGRESS] Step 2/4: Checking autoscaling configuration..."
+      if [[ "$AUTOSCALING_ENABLED" != "true" ]]; then
+        echo "[WARNING] Autoscaling is disabled in configuration"
+        echo "[WARNING] Skipping verification"
+
+        {
+          echo "Autoscaling Verification Skipped"
+          echo "================================="
+          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Autoscaling is disabled in configuration."
+          echo ""
+        } > "artifacts/outputs/autoscaling-verification-complete.txt"
+
+        exit 0
+      fi
+
+      # Step 3: Verify autoscaling configuration
+      echo "[PROGRESS] Step 3/4: Verifying autoscaling configuration..."
+
+      # Check if host pool exists
+      ((TOTAL_CHECKS++))
+      if az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" &>/dev/null; then
+        echo "[SUCCESS] ✓ Host pool exists: $HOST_POOL_NAME"
+        ((PASSED_CHECKS++))
+      else
+        echo "[ERROR] ✗ Host pool not found: $HOST_POOL_NAME"
+        ((FAILED_CHECKS++))
+      fi
+
+      # Check if scaling plan exists
+      ((TOTAL_CHECKS++))
+      if az desktopvirtualization scaling-plan show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$SCALING_PLAN_NAME" &>/dev/null; then
+        echo "[SUCCESS] ✓ Scaling plan exists: $SCALING_PLAN_NAME"
+        ((PASSED_CHECKS++))
+      else
+        echo "[ERROR] ✗ Scaling plan not found: $SCALING_PLAN_NAME"
+        ((FAILED_CHECKS++))
+      fi
+
+      # Check RBAC role assignment
+      ((TOTAL_CHECKS++))
+      echo "[PROGRESS] Checking RBAC assignments..."
+
+      AVD_SP_ID=$(az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>/dev/null || true)
+
+      if [[ -n "$AVD_SP_ID" && "$AVD_SP_ID" != "null" ]]; then
+        SUBSCRIPTION_SCOPE="/subscriptions/$SUBSCRIPTION_ID"
+
+        if az role assignment list \
+          --assignee "$AVD_SP_ID" \
+          --scope "$SUBSCRIPTION_SCOPE" \
+          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv | grep -q "Desktop"; then
+          echo "[SUCCESS] ✓ RBAC role assigned to AVD service principal"
+          ((PASSED_CHECKS++))
+        else
+          echo "[WARNING] ⚠ RBAC role not found (may need manual assignment)"
+          ((WARNING_CHECKS++))
+        fi
+      else
+        echo "[WARNING] ⚠ Azure Virtual Desktop service principal not found"
+        ((WARNING_CHECKS++))
+      fi
+
+      # Check session hosts exist
+      ((TOTAL_CHECKS++))
+      SESSION_HOST_COUNT=$(az desktopvirtualization sessionhost list \
+        --resource-group "$RESOURCE_GROUP" \
+        --host-pool-name "$HOST_POOL_NAME" \
+        --query "length(@)" -o tsv 2>/dev/null || echo "0")
+
+      if [[ $SESSION_HOST_COUNT -gt 0 ]]; then
+        echo "[SUCCESS] ✓ Session hosts exist: $SESSION_HOST_COUNT host(s)"
+        ((PASSED_CHECKS++))
+      else
+        echo "[WARNING] ⚠ No session hosts found (autoscaling will have no VMs to manage)"
+        ((WARNING_CHECKS++))
+      fi
+
+      # Step 4: Summary
+      echo "[PROGRESS] Step 4/4: Generating verification summary..."
+      echo ""
+      echo "=========================================="
+      echo "AUTOSCALING VERIFICATION SUMMARY"
+      echo "=========================================="
+      echo "Total Checks: $TOTAL_CHECKS"
+      echo "Passed: $PASSED_CHECKS"
+      echo "Failed: $FAILED_CHECKS"
+      echo "Warnings: $WARNING_CHECKS"
+      echo "=========================================="
+
+      # Determine overall status
+      if [[ $FAILED_CHECKS -eq 0 ]]; then
+        echo "[SUCCESS] Autoscaling configuration verification passed!"
+        VERIFICATION_STATUS="PASSED"
+        EXIT_CODE=0
+      else
+        echo "[ERROR] Some autoscaling configuration checks failed"
+        echo "[ERROR] Please review the failed checks above"
+        VERIFICATION_STATUS="FAILED"
+        EXIT_CODE=1
+      fi
+
+      # Save detailed verification report
+      {
+        echo "Autoscaling Configuration Verification Report"
+        echo "=============================================="
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Overall Status: $VERIFICATION_STATUS"
+        echo ""
+        echo "Summary:"
+        echo "  Total Checks: $TOTAL_CHECKS"
+        echo "  Passed: $PASSED_CHECKS"
+        echo "  Failed: $FAILED_CHECKS"
+        echo "  Warnings: $WARNING_CHECKS"
+        echo ""
+        echo "Host Pool: $HOST_POOL_NAME"
+        echo "Scaling Plan: $SCALING_PLAN_NAME"
+        echo "Resource Group: $RESOURCE_GROUP"
+        echo ""
+        echo "Automated Checks:"
+        echo "  1. Host pool exists"
+        echo "  2. Scaling plan exists"
+        echo "  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)"
+        echo "  4. Session hosts registered"
+        echo ""
+        echo "Manual Configuration Required:"
+        echo "=============================="
+        echo ""
+        echo "The scaling plan was created but schedules must be configured manually:"
+        echo ""
+        echo "1. Configure Scaling Schedules (via Azure Portal)"
+        echo "   - Navigate to: Azure Virtual Desktop → Scaling plans"
+        echo "   - Select: $SCALING_PLAN_NAME"
+        echo "   - Click: 'Schedules' → '+ Add schedule'"
+        echo ""
+        echo "   Recommended Weekday Schedule:"
+        echo "     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)"
+        echo "     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)"
+        echo "     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)"
+        echo "     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)"
+        echo ""
+        echo "   Recommended Weekend Schedule:"
+        echo "     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)"
+        echo ""
+        echo "2. Test Autoscaling Behavior"
+        echo "   - Monitor session host power states"
+        echo "   - Verify VMs power on/off according to schedule"
+        echo "   - Check scaling behavior during different load scenarios"
+        echo ""
+        echo "3. Monitor and Adjust"
+        echo "   - Review Azure Activity Log for scaling events"
+        echo "   - Check host pool Insights tab for metrics"
+        echo "   - Adjust thresholds based on usage patterns"
+        echo ""
+        echo "Expected Behavior:"
+        echo "=================="
+        echo ""
+        echo "Ramp-Up Phase:"
+        echo "  - VMs power on 10-15 minutes before users arrive"
+        echo "  - Minimum percentage of hosts powered on"
+        echo "  - Additional VMs start based on capacity threshold"
+        echo ""
+        echo "Peak Hours:"
+        echo "  - Scale up/down based on session load"
+        echo "  - Capacity threshold determines when to start new VMs"
+        echo "  - Load balancing distributes sessions"
+        echo ""
+        echo "Ramp-Down Phase:"
+        echo "  - Depth-first balancing consolidates sessions"
+        echo "  - Lightly-loaded hosts drain and shut down"
+        echo "  - Users receive warning before forced logoff"
+        echo ""
+        echo "Off-Peak Hours:"
+        echo "  - Only minimum hosts remain powered on"
+        echo "  - Significant cost savings (60-75%)"
+        echo "  - Weekend: Minimum hosts only"
+        echo ""
+        echo "Cost Optimization:"
+        echo "=================="
+        echo ""
+        echo "Typical Savings:"
+        echo "  - Without autoscaling: 100% VM uptime = High cost"
+        echo "  - With autoscaling: 25-40% average uptime = 60-75% savings"
+        echo ""
+        echo "Example (40 VMs × \$1/hour):"
+        echo "  - Before: 40 VMs × 24h × 30d = \$28,800/month"
+        echo "  - After: ~8-12 VMs average × 24h × 30d = \$7,000-9,000/month"
+        echo "  - Savings: ~\$20,000/month (65-75%)"
+        echo ""
+        echo "Troubleshooting:"
+        echo "================"
+        echo ""
+        echo "Issue: VMs not powering on/off"
+        echo "  - Verify RBAC role assigned"
+        echo "  - Check scaling plan is enabled"
+        echo "  - Verify schedules are configured"
+        echo "  - Wait 15-20 minutes for first cycle"
+        echo "  - Review Azure Activity Log for errors"
+        echo ""
+        echo "Issue: Too many/few VMs running"
+        echo "  - Adjust capacity thresholds"
+        echo "  - Change minimum host percentages"
+        echo "  - Review session load patterns"
+        echo "  - Modify schedule times"
+        echo ""
+        echo "Issue: Users complaining about forced logoff"
+        echo "  - Increase wait time (20→30 minutes)"
+        echo "  - Adjust ramp-down start time"
+        echo "  - Customize notification message"
+        echo "  - Consider excluding certain users"
+        echo ""
+        if [[ $FAILED_CHECKS -gt 0 ]]; then
+          echo "Action Required:"
+          echo "  Review failed checks above and re-run autoscaling configuration operations"
+          echo ""
+        fi
+      } > "artifacts/outputs/autoscaling-verification-complete.txt"
+
+      if [[ $EXIT_CODE -eq 0 ]]; then
+        echo "[SUCCESS] Autoscaling verification completed successfully"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Configure scaling schedules in Azure Portal"
+        echo "  2. Monitor autoscaling activity for 1 week"
+        echo "  3. Adjust schedules based on usage patterns"
+        echo "  4. Review cost savings in Azure Cost Management"
+        echo ""
+      else
+        echo "[ERROR] Autoscaling verification failed - see report for details"
+      fi
+
+      exit $EXIT_CODE
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

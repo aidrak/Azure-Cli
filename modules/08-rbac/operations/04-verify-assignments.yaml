@@ -1,0 +1,310 @@
+# ==============================================================================
+# Operation: Verify RBAC Assignments
+# ==============================================================================
+operation:
+  id: "rbac-verify-assignments"
+  name: "Verify RBAC Assignments"
+  description: "Verify all RBAC role assignments are correctly configured"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 180    # 3 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "rbac-app-group-permissions"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          # Final validation that verification file was created
+          if [[ -f "artifacts/outputs/rbac-verification-complete.txt" ]]; then
+            echo "[VALIDATE] RBAC verification completed"
+            exit 0
+          else
+            echo "[ERROR] RBAC verification file not found"
+            exit 1
+          fi
+        description: "Verify RBAC verification completed"
+
+  # Template command (executed via bash)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] RBAC Verification: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
+      STD_GROUP_NAME="{{ENTRA_GROUP_USERS_STANDARD}}"
+      ADMIN_GROUP_NAME="{{ENTRA_GROUP_USERS_ADMINS}}"
+
+      # Counters
+      TOTAL_CHECKS=0
+      PASSED_CHECKS=0
+      FAILED_CHECKS=0
+      WARNING_CHECKS=0
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/7: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Get group IDs
+      echo "[PROGRESS] Step 2/7: Getting user group IDs..."
+
+      STD_GROUP_ID=$(az ad group list \
+        --filter "displayName eq '${STD_GROUP_NAME}'" \
+        --query "[0].id" -o tsv)
+
+      ADMIN_GROUP_ID=$(az ad group list \
+        --filter "displayName eq '${ADMIN_GROUP_NAME}'" \
+        --query "[0].id" -o tsv)
+
+      if [[ -z "$STD_GROUP_ID" || -z "$ADMIN_GROUP_ID" ]]; then
+        echo "[ERROR] Failed to get user group IDs"
+        exit 1
+      fi
+
+      echo "[VALIDATE] Standard users group ID: $STD_GROUP_ID"
+      echo "[VALIDATE] Admin users group ID: $ADMIN_GROUP_ID"
+
+      # Step 3: Get resource IDs
+      echo "[PROGRESS] Step 3/7: Getting resource IDs..."
+
+      RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
+
+      # Find storage account
+      STORAGE_ACCOUNT=$(az storage account list \
+        --resource-group "$RESOURCE_GROUP" \
+        --query "[?starts_with(name, 'fslogix')] | [0].name" -o tsv)
+
+      if [[ -n "$STORAGE_ACCOUNT" && "$STORAGE_ACCOUNT" != "null" ]]; then
+        STORAGE_ID=$(az storage account show \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$STORAGE_ACCOUNT" \
+          --query id -o tsv)
+        FILE_SHARE_ID="${STORAGE_ID}/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
+      else
+        echo "[WARNING] Storage account not found - skipping storage checks"
+        FILE_SHARE_ID=""
+      fi
+
+      # Find application group
+      APP_GROUP_ID=$(az desktopvirtualization applicationgroup list \
+        --resource-group "$RESOURCE_GROUP" \
+        --query "[0].id" -o tsv 2>/dev/null || true)
+
+      if [[ -z "$APP_GROUP_ID" || "$APP_GROUP_ID" == "null" ]]; then
+        echo "[WARNING] Application group not found - skipping app group checks"
+        APP_GROUP_ID=""
+      fi
+
+      # Step 4: Verify storage permissions
+      echo "[PROGRESS] Step 4/7: Verifying storage permissions..."
+
+      if [[ -n "$FILE_SHARE_ID" ]]; then
+        # Standard users - Storage File Data SMB Share Contributor
+        ((TOTAL_CHECKS++))
+        if az role assignment list \
+          --assignee "$STD_GROUP_ID" \
+          --scope "$FILE_SHARE_ID" \
+          --query "[?roleDefinitionName=='Storage File Data SMB Share Contributor']" -o tsv | grep -q "Storage"; then
+          echo "[SUCCESS] ✓ Standard users: Storage File Data SMB Share Contributor"
+          ((PASSED_CHECKS++))
+        else
+          echo "[ERROR] ✗ Standard users: Storage File Data SMB Share Contributor MISSING"
+          ((FAILED_CHECKS++))
+        fi
+
+        # Admin users - Storage File Data SMB Share Elevated Contributor
+        ((TOTAL_CHECKS++))
+        if az role assignment list \
+          --assignee "$ADMIN_GROUP_ID" \
+          --scope "$FILE_SHARE_ID" \
+          --query "[?roleDefinitionName=='Storage File Data SMB Share Elevated Contributor']" -o tsv | grep -q "Storage"; then
+          echo "[SUCCESS] ✓ Admin users: Storage File Data SMB Share Elevated Contributor"
+          ((PASSED_CHECKS++))
+        else
+          echo "[ERROR] ✗ Admin users: Storage File Data SMB Share Elevated Contributor MISSING"
+          ((FAILED_CHECKS++))
+        fi
+      else
+        echo "[WARNING] ⚠ Storage checks skipped (no storage account found)"
+      fi
+
+      # Step 5: Verify VM login permissions
+      echo "[PROGRESS] Step 5/7: Verifying VM login permissions..."
+
+      # Standard users - Virtual Machine User Login
+      ((TOTAL_CHECKS++))
+      if az role assignment list \
+        --assignee "$STD_GROUP_ID" \
+        --scope "$RG_ID" \
+        --query "[?roleDefinitionName=='Virtual Machine User Login']" -o tsv | grep -q "Virtual"; then
+        echo "[SUCCESS] ✓ Standard users: Virtual Machine User Login"
+        ((PASSED_CHECKS++))
+      else
+        echo "[ERROR] ✗ Standard users: Virtual Machine User Login MISSING"
+        ((FAILED_CHECKS++))
+      fi
+
+      # Admin users - Virtual Machine Administrator Login
+      ((TOTAL_CHECKS++))
+      if az role assignment list \
+        --assignee "$ADMIN_GROUP_ID" \
+        --scope "$RG_ID" \
+        --query "[?roleDefinitionName=='Virtual Machine Administrator Login']" -o tsv | grep -q "Virtual"; then
+        echo "[SUCCESS] ✓ Admin users: Virtual Machine Administrator Login"
+        ((PASSED_CHECKS++))
+      else
+        echo "[ERROR] ✗ Admin users: Virtual Machine Administrator Login MISSING"
+        ((FAILED_CHECKS++))
+      fi
+
+      # Admin users - Desktop Virtualization Power On Off Contributor (optional)
+      ((TOTAL_CHECKS++))
+      if az role assignment list \
+        --assignee "$ADMIN_GROUP_ID" \
+        --scope "$RG_ID" \
+        --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv | grep -q "Desktop"; then
+        echo "[SUCCESS] ✓ Admin users: Desktop Virtualization Power On Off Contributor"
+        ((PASSED_CHECKS++))
+      else
+        echo "[WARNING] ⚠ Admin users: Desktop Virtualization Power On Off Contributor (optional)"
+        ((WARNING_CHECKS++))
+      fi
+
+      # Step 6: Verify application group permissions
+      echo "[PROGRESS] Step 6/7: Verifying application group permissions..."
+
+      if [[ -n "$APP_GROUP_ID" ]]; then
+        # Standard users - Desktop Virtualization User
+        ((TOTAL_CHECKS++))
+        if az role assignment list \
+          --assignee "$STD_GROUP_ID" \
+          --scope "$APP_GROUP_ID" \
+          --query "[?roleDefinitionName=='Desktop Virtualization User']" -o tsv | grep -q "Desktop"; then
+          echo "[SUCCESS] ✓ Standard users: Desktop Virtualization User"
+          ((PASSED_CHECKS++))
+        else
+          echo "[ERROR] ✗ Standard users: Desktop Virtualization User MISSING"
+          ((FAILED_CHECKS++))
+        fi
+
+        # Admin users - Desktop Virtualization User
+        ((TOTAL_CHECKS++))
+        if az role assignment list \
+          --assignee "$ADMIN_GROUP_ID" \
+          --scope "$APP_GROUP_ID" \
+          --query "[?roleDefinitionName=='Desktop Virtualization User']" -o tsv | grep -q "Desktop"; then
+          echo "[SUCCESS] ✓ Admin users: Desktop Virtualization User"
+          ((PASSED_CHECKS++))
+        else
+          echo "[ERROR] ✗ Admin users: Desktop Virtualization User MISSING"
+          ((FAILED_CHECKS++))
+        fi
+      else
+        echo "[WARNING] ⚠ Application group checks skipped (no app group found)"
+      fi
+
+      # Step 7: Summary
+      echo "[PROGRESS] Step 7/7: Generating summary..."
+      echo ""
+      echo "=========================================="
+      echo "RBAC VERIFICATION SUMMARY"
+      echo "=========================================="
+      echo "Total Checks: $TOTAL_CHECKS"
+      echo "Passed: $PASSED_CHECKS"
+      echo "Failed: $FAILED_CHECKS"
+      echo "Warnings: $WARNING_CHECKS"
+      echo "=========================================="
+
+      # Determine overall status
+      if [[ $FAILED_CHECKS -eq 0 ]]; then
+        echo "[SUCCESS] All RBAC assignments verified successfully!"
+        VERIFICATION_STATUS="PASSED"
+        EXIT_CODE=0
+      else
+        echo "[ERROR] Some RBAC assignments are missing or incorrect"
+        echo "[ERROR] Please review the failed checks above"
+        VERIFICATION_STATUS="FAILED"
+        EXIT_CODE=1
+      fi
+
+      # Save detailed verification report
+      {
+        echo "RBAC Verification Report"
+        echo "========================"
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Overall Status: $VERIFICATION_STATUS"
+        echo ""
+        echo "Summary:"
+        echo "  Total Checks: $TOTAL_CHECKS"
+        echo "  Passed: $PASSED_CHECKS"
+        echo "  Failed: $FAILED_CHECKS"
+        echo "  Warnings: $WARNING_CHECKS"
+        echo ""
+        echo "Resource Group: $RESOURCE_GROUP ($RG_ID)"
+        echo ""
+        echo "Standard Users Group:"
+        echo "  Name: $STD_GROUP_NAME"
+        echo "  ID: $STD_GROUP_ID"
+        echo ""
+        echo "Admin Users Group:"
+        echo "  Name: $ADMIN_GROUP_NAME"
+        echo "  ID: $ADMIN_GROUP_ID"
+        echo ""
+        echo "Required Permissions (Standard Users):"
+        echo "  - Storage File Data SMB Share Contributor (file share scope)"
+        echo "  - Virtual Machine User Login (resource group scope)"
+        echo "  - Desktop Virtualization User (application group scope)"
+        echo ""
+        echo "Required Permissions (Admin Users):"
+        echo "  - Storage File Data SMB Share Elevated Contributor (file share scope)"
+        echo "  - Virtual Machine Administrator Login (resource group scope)"
+        echo "  - Desktop Virtualization User (application group scope)"
+        echo "  - Desktop Virtualization Power On Off Contributor (optional)"
+        echo ""
+        if [[ $FAILED_CHECKS -gt 0 ]]; then
+          echo "Action Required:"
+          echo "  Review failed checks above and re-run RBAC assignment operations"
+          echo ""
+        else
+          echo "Next Steps:"
+          echo "  1. Add users to appropriate security groups in Entra ID"
+          echo "  2. Test user access to AVD desktops"
+          echo "  3. Verify FSLogix profile creation"
+          echo "  4. Confirm admin users have elevated access"
+          echo ""
+        fi
+        echo "Troubleshooting:"
+        echo "  - RBAC changes can take 5-10 minutes to propagate"
+        echo "  - Users may need to sign out and back in"
+        echo "  - Check Azure Portal IAM for role assignments"
+        echo ""
+      } > "artifacts/outputs/rbac-verification-complete.txt"
+
+      if [[ $EXIT_CODE -eq 0 ]]; then
+        echo "[SUCCESS] RBAC verification completed successfully"
+      else
+        echo "[ERROR] RBAC verification failed - see report for details"
+      fi
+
+      exit $EXIT_CODE
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur
