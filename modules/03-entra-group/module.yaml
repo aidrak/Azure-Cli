@@ -1,0 +1,98 @@
+# ==============================================================================
+# Module: Entra ID Security Groups
+# ==============================================================================
+module:
+  id: "03-entra-group"
+  name: "Entra ID Security Groups"
+  description: "Create Entra ID (Azure AD) security groups for AVD users, administrators, and device management"
+  version: "1.0.0"
+
+  dependencies: []  # No Azure resource dependencies (Entra ID is global)
+
+  # Operations in this module (executed in order)
+  operations:
+    - id: "entra-create-users-group"
+      name: "Create AVD Users Group"
+      description: "Create security group for standard AVD users"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-create-admins-group"
+      name: "Create AVD Admins Group"
+      description: "Create security group for AVD administrators"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-create-sso-group"
+      name: "Create SSO Device Group"
+      description: "Create device group for SSO configuration"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-create-fslogix-group"
+      name: "Create FSLogix Device Group"
+      description: "Create device group for FSLogix configuration"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-create-network-group"
+      name: "Create Network Device Group"
+      description: "Create device group for network configuration"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-create-security-group"
+      name: "Create Security Device Group"
+      description: "Create device group for security configuration"
+      duration: 30
+      type: "FAST"
+
+    - id: "entra-validate-groups"
+      name: "Validate All Groups"
+      description: "Verify all security groups were created successfully"
+      duration: 30
+      type: "FAST"
+
+  # Module-level validation (run after all operations complete)
+  validation:
+    enabled: true
+    checks:
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
+        description: "Users group exists"
+
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_USERS_ADMINS}}"
+        description: "Admins group exists"
+
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_DEVICES_SSO}}"
+        description: "SSO device group exists"
+
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_DEVICES_FSLOGIX}}"
+        description: "FSLogix device group exists"
+
+  # Expected total duration
+  total_duration:
+    expected: 210      # 3.5 minutes (7 operations × 30 seconds)
+    timeout: 420       # 7 minutes (2x expected)
+
+  # Module state file
+  state_file: "modules/03-entra-group/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"
+
+  metadata:
+    author: "AVD Deployment Team"
+    created: "2025-12-05"
+    complexity: "low"
+    notes: |
+      Entra ID security groups are used for:
+      - User access management (standard users and admins)
+      - Device configuration policies (SSO, FSLogix, network, security)
+      - RBAC role assignments
+      - Application group assignments
