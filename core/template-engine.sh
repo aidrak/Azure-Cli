@@ -77,46 +77,46 @@ substitute_variables() {
     result="${result//\{\{AZURE_RESOURCE_GROUP\}\}/$AZURE_RESOURCE_GROUP}"
 
     # Networking variables
-    result="${result//\{\{NETWORKING_VNET_NAME\}\}/$NETWORKING_VNET_NAME}"
-    result="${result//\{\{NETWORKING_VNET_CIDR\}\}/$NETWORKING_VNET_CIDR}"
-    result="${result//\{\{NETWORKING_SUBNET_NAME\}\}/$NETWORKING_SUBNET_NAME}"
-    result="${result//\{\{NETWORKING_SUBNET_CIDR\}\}/$NETWORKING_SUBNET_CIDR}"
-    result="${result//\{\{NETWORKING_NSG_NAME\}\}/$NETWORKING_NSG_NAME}"
+    result="${result//\{\{NETWORKING_VNET_NAME\}\}/${NETWORKING_VNET_NAME:-}}"
+    result="${result//\{\{NETWORKING_VNET_CIDR\}\}/${NETWORKING_VNET_CIDR:-}}"
+    result="${result//\{\{NETWORKING_SUBNET_NAME\}\}/${NETWORKING_SUBNET_NAME:-}}"
+    result="${result//\{\{NETWORKING_SUBNET_CIDR\}\}/${NETWORKING_SUBNET_CIDR:-}}"
+    result="${result//\{\{NETWORKING_NSG_NAME\}\}/${NETWORKING_NSG_NAME:-}}"
 
     # Storage variables
-    result="${result//\{\{STORAGE_ACCOUNT_NAME\}\}/$STORAGE_ACCOUNT_NAME}"
-    result="${result//\{\{STORAGE_SHARE_NAME\}\}/$STORAGE_SHARE_NAME}"
+    result="${result//\{\{STORAGE_ACCOUNT_NAME\}\}/${STORAGE_ACCOUNT_NAME:-}}"
+    result="${result//\{\{STORAGE_SHARE_NAME\}\}/${STORAGE_SHARE_NAME:-}}"
 
     # Golden Image variables
-    result="${result//\{\{GOLDEN_IMAGE_TEMP_VM_NAME\}\}/$GOLDEN_IMAGE_TEMP_VM_NAME}"
-    result="${result//\{\{GOLDEN_IMAGE_VM_SIZE\}\}/$GOLDEN_IMAGE_VM_SIZE}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_PUBLISHER\}\}/$GOLDEN_IMAGE_IMAGE_PUBLISHER}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_OFFER\}\}/$GOLDEN_IMAGE_IMAGE_OFFER}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_SKU\}\}/$GOLDEN_IMAGE_IMAGE_SKU}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_VERSION\}\}/$GOLDEN_IMAGE_IMAGE_VERSION}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_USERNAME\}\}/$GOLDEN_IMAGE_ADMIN_USERNAME}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_PASSWORD\}\}/$GOLDEN_IMAGE_ADMIN_PASSWORD}"
-    result="${result//\{\{GOLDEN_IMAGE_GALLERY_NAME\}\}/$GOLDEN_IMAGE_GALLERY_NAME}"
-    result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/$GOLDEN_IMAGE_DEFINITION_NAME}"
+    result="${result//\{\{GOLDEN_IMAGE_TEMP_VM_NAME\}\}/${GOLDEN_IMAGE_TEMP_VM_NAME:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_VM_SIZE\}\}/${GOLDEN_IMAGE_VM_SIZE:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_IMAGE_PUBLISHER\}\}/${GOLDEN_IMAGE_IMAGE_PUBLISHER:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_IMAGE_OFFER\}\}/${GOLDEN_IMAGE_IMAGE_OFFER:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_IMAGE_SKU\}\}/${GOLDEN_IMAGE_IMAGE_SKU:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_IMAGE_VERSION\}\}/${GOLDEN_IMAGE_IMAGE_VERSION:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_ADMIN_USERNAME\}\}/${GOLDEN_IMAGE_ADMIN_USERNAME:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_ADMIN_PASSWORD\}\}/${GOLDEN_IMAGE_ADMIN_PASSWORD:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_GALLERY_NAME\}\}/${GOLDEN_IMAGE_GALLERY_NAME:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/${GOLDEN_IMAGE_DEFINITION_NAME:-}}"
 
     # Host Pool variables
-    result="${result//\{\{HOST_POOL_NAME\}\}/$HOST_POOL_NAME}"
-    result="${result//\{\{HOST_POOL_TYPE\}\}/$HOST_POOL_TYPE}"
-    result="${result//\{\{HOST_POOL_MAX_SESSIONS\}\}/$HOST_POOL_MAX_SESSIONS}"
-    result="${result//\{\{HOST_POOL_LOAD_BALANCER\}\}/$HOST_POOL_LOAD_BALANCER}"
+    result="${result//\{\{HOST_POOL_NAME\}\}/${HOST_POOL_NAME:-}}"
+    result="${result//\{\{HOST_POOL_TYPE\}\}/${HOST_POOL_TYPE:-}}"
+    result="${result//\{\{HOST_POOL_MAX_SESSIONS\}\}/${HOST_POOL_MAX_SESSIONS:-}}"
+    result="${result//\{\{HOST_POOL_LOAD_BALANCER\}\}/${HOST_POOL_LOAD_BALANCER:-}}"
 
     # Workspace variables
-    result="${result//\{\{WORKSPACE_NAME\}\}/$WORKSPACE_NAME}"
-    result="${result//\{\{WORKSPACE_FRIENDLY_NAME\}\}/$WORKSPACE_FRIENDLY_NAME}"
+    result="${result//\{\{WORKSPACE_NAME\}\}/${WORKSPACE_NAME:-}}"
+    result="${result//\{\{WORKSPACE_FRIENDLY_NAME\}\}/${WORKSPACE_FRIENDLY_NAME:-}}"
 
     # App Group variables
-    result="${result//\{\{APP_GROUP_NAME\}\}/$APP_GROUP_NAME}"
-    result="${result//\{\{APP_GROUP_TYPE\}\}/$APP_GROUP_TYPE}"
+    result="${result//\{\{APP_GROUP_NAME\}\}/${APP_GROUP_NAME:-}}"
+    result="${result//\{\{APP_GROUP_TYPE\}\}/${APP_GROUP_TYPE:-}}"
 
     # Session Host variables
-    result="${result//\{\{SESSION_HOST_VM_COUNT\}\}/$SESSION_HOST_VM_COUNT}"
-    result="${result//\{\{SESSION_HOST_VM_SIZE\}\}/$SESSION_HOST_VM_SIZE}"
-    result="${result//\{\{SESSION_HOST_NAME_PREFIX\}\}/$SESSION_HOST_NAME_PREFIX}"
+    result="${result//\{\{SESSION_HOST_VM_COUNT\}\}/${SESSION_HOST_VM_COUNT:-}}"
+    result="${result//\{\{SESSION_HOST_VM_SIZE\}\}/${SESSION_HOST_VM_SIZE:-}}"
+    result="${result//\{\{SESSION_HOST_NAME_PREFIX\}\}/${SESSION_HOST_NAME_PREFIX:-}}"
 
     # Project paths
     result="${result//\{\{PROJECT_ROOT\}\}/$PROJECT_ROOT}"
@@ -157,7 +157,8 @@ extract_powershell_script() {
         return 0
     else
         echo "[!] WARNING: No PowerShell script defined" >&2
-        return 1
+        echo ""  # Return empty string for bash-only operations
+        return 0  # Success - not all operations need PowerShell
     fi
 }
 
@@ -170,17 +171,18 @@ render_command() {
     # Parse operation
     parse_operation_yaml "$yaml_file" || return 1
 
-    # Extract PowerShell script
+    # Extract PowerShell script (if exists)
     local ps_script
-    ps_script=$(extract_powershell_script "$yaml_file") || return 1
+    ps_script=$(extract_powershell_script "$yaml_file")  # Don't fail if no PowerShell
+    local ps_script_status=$?
 
     # Substitute variables in template command
     local command
     command=$(substitute_variables "$TEMPLATE_COMMAND")
 
-    # Replace @script.ps1 placeholder with actual path
+    # Replace @script.ps1 placeholder with actual path (only if PowerShell script exists)
     # Handle both "@filename.ps1" and "@modules/.../filename.ps1" patterns
-    if [[ -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
+    if [[ $ps_script_status -eq 0 && -n "$ps_script" && -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
         # Replace any path ending with the PowerShell filename using bash pattern substitution
         # Match "@" followed by any characters, ending with the PowerShell filename
         local pattern="@"
