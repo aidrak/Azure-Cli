@@ -4,13 +4,13 @@
 operation:
   id: "golden-image-install-apps-parallel"
   name: "Install Chrome and Adobe (Optimized)"
-  description: "Download installers in parallel, then install Chrome and Adobe"
+  description: "Download and install applications in parallel with heartbeat monitoring"
 
   # Duration expectations
   duration:
-    expected: 360  # 6 minutes (parallel downloads + sequential installs)
-    timeout: 600   # 10 minutes
-    type: "FAST"
+    expected: 480  # 8 minutes (more robust monitoring adds some overhead)
+    timeout: 900   # 15 minutes
+    type: "HEARTBEAT" # New type for progress tracker
 
   # Prerequisites (check state.json)
   requires:
@@ -34,7 +34,7 @@ operation:
   template:
     type: "az-vm-run-command"
     command: |
-      az vm run-command invoke \
+      az vm run-command create \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
@@ -46,148 +46,216 @@ operation:
     file: "02.5-install-apps-parallel.ps1"
     content: |
       [START]
-      Write-Host "[START] Optimized Application Installation"
-      Write-Host "[INFO] Using parallel downloads for improved performance"
+      # ============================================================================== 
+      # Helper Functions
+      # ============================================================================== 
+      function Start-Heartbeat {
+          param(
+              [string]$AppName,
+              [int]$ParentProcessId
+          )
+          $scriptBlock = {
+              param($AppName, $ParentProcessId)
+
+              $logDir = "C:\DeployLogs"
+              if (-not (Test-Path $logDir)) {
+                  New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+              }
+              $heartbeatFile = "$logDir\$($AppName).heartbeat"
+              $parentProcess = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+
+              while ($parentProcess) {
+                  $timestamp = [datetime]::UtcNow.ToString("o")
+                  Set-Content -Path $heartbeatFile -Value $timestamp
+                  Start-Sleep -Seconds 30
+                  $parentProcess = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+              }
+          }
+          return Start-Job -ScriptBlock $scriptBlock -ArgumentList $AppName, $ParentProcessId
+      }
+
+      # ============================================================================== 
+      # Main Execution
+      # ============================================================================== 
+      Write-Host "[START] Parallel Application Installation with Heartbeat"
 
       # Configuration
-      $chromeUrl = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
-      $adobeUrl = "https://ardownload2.adobe.com/pub/adobe/reader/win/AcrobatDC/2300320201/AcroRdrDC2300320201_en_US.exe"
-      $tempPath = "C:\Temp"
-      $chromeMsi = "$tempPath\Chrome.msi"
-      $adobeExe = "$tempPath\AdobeReader.exe"
+      $config = @{
+          LogDir = "C:\DeployLogs"
+          TempDir = "C:\Temp"
+          Apps = @(
+              @{
+                  Name = "Chrome"
+                  Type = "Download"
+                  Url = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
+                  OutFile = "C:\Temp\Chrome.msi"
+              },
+              @{
+                  Name = "AdobeReader"
+                  Type = "Download"
+                  Url = "https://ardownload2.adobe.com/pub/adobe/reader/win/AcrobatDC/2300320201/AcroRdrDC2300320201_en_US.exe"
+                  OutFile = "C:\Temp\AdobeReader.exe"
+              },
+              @{
+                  Name = "ChromeInstall"
+                  Type = "Install"
+                  DependsOn = "Chrome" # Depends on the download
+                  FilePath = "msiexec.exe"
+                  Arguments = "/i `"C:\Temp\Chrome.msi`" /quiet /norestart /log `"C:\DeployLogs\ChromeInstall.log`""
+                  SuccessCodes = @(0, 3010)
+              },
+              @{
+                  Name = "AdobeReaderInstall"
+                  Type = "Install"
+                  DependsOn = "AdobeReader"
+                  FilePath = "C:\Temp\AdobeReader.exe"
+                  Arguments = "/sAll /rs /msi EULA_ACCEPT=YES"
+                  SuccessCodes = @(0)
+              }
+          )
+      }
+
+      # Initialize directories
+      if (-not (Test-Path $config.LogDir)) { New-Item -Path $config.LogDir -ItemType Directory -Force | Out-Null }
+      if (-not (Test-Path $config.TempDir)) { New-Item -Path $config.TempDir -ItemType Directory -Force | Out-Null }
+
+      $allJobs = @{} # Hashtable to store all job info
 
       try {
-          # ==============================================================================
-          # Phase 1: Parallel Downloads
-          # ==============================================================================
-          Write-Host "[PROGRESS] Phase 1/3: Downloading installers in parallel..."
+          # ============================================================================== 
+          # Phase 1: Start All Parallel Jobs (Downloads and Installations)
+          # ============================================================================== 
+          Write-Host "[PROGRESS] Phase 1: Starting all jobs..."
 
-          $downloads = @(
-              @{ Name = "Chrome"; Url = $chromeUrl; OutFile = $chromeMsi; Timeout = 120 }
-              @{ Name = "Adobe Reader"; Url = $adobeUrl; OutFile = $adobeExe; Timeout = 180 }
-          )
+          foreach ($app in $config.Apps) {
+              # If it's an install job, skip it for now. We handle it after downloads.
+              if ($app.Type -eq "Install") { continue }
 
-          # Use Start-Job for PowerShell 5.1 compatibility (Windows Server 2019/2022)
-          $jobs = @()
-          foreach ($dl in $downloads) {
-              # Check if already downloaded (cached)
-              if (Test-Path $dl.OutFile) {
-                  Write-Host "[PROGRESS] $($dl.Name) already cached, skipping download"
+              # --- DOWNLOAD JOBS ---
+              $job = Start-Job -ScriptBlock {
+                  param($app, $parentPid)
+                  $hbJob = . "Start-Heartbeat" -AppName $app.Name -ParentProcessId $parentPid
+
+                  try {
+                      Write-Host "[$($app.Name)] Starting download from $($app.Url)"
+                      Invoke-WebRequest -Uri $app.Url -OutFile $app.OutFile -UseBasicParsing -TimeoutSec 300 -ErrorAction Stop
+                      Write-Host "[$($app.Name)] Download completed."
+                      return @{ Status = 'Success' }
+                  } catch {
+                      Write-Host "[$($app.Name)] ERROR: $($_.Exception.Message)"
+                      return @{ Status = 'Failed'; Error = $_.Exception.Message }
+                  } finally {
+                      Stop-Job -Job $hbJob
+                      Remove-Job -Job $hbJob
+                  }
+              } -ArgumentList $app, $PID
+              # Pass heartbeat function definition to the job's scope
+              $job.PSJobTypeName = 'BackgroundJob'
+              $job.InitializationScript = ${function:Start-Heartbeat}
+
+              $allJobs[$app.Name] = @{ Job = $job; Type = $app.Type }
+          }
+
+          # ============================================================================== 
+          # Phase 2: Monitor Downloads, then start Installations
+          # ============================================================================== 
+          Write-Host "[PROGRESS] Phase 2: Monitoring downloads..."
+          $downloadJobs = $allJobs.GetEnumerator() | Where-Object { $_.Value.Type -eq "Download" }
+          
+          while($downloadJobs | Where-Object { $_.Value.Job.State -eq 'Running' }) {
+              Start-Sleep -Seconds 15
+              Write-Host "[MONITOR] Waiting for $($downloadJobs.Count) download(s) to complete..."
+          }
+
+          $failedDownloads = @()
+          foreach($item in $downloadJobs) {
+              $result = Receive-Job -Job $item.Value.Job
+              if($result.Status -ne 'Success') {
+                  Write-Host "[ERROR] Download job $($item.Name) failed: $($result.Error)"
+                  $failedDownloads += $item.Name
+              } else {
+                  Write-Host "[SUCCESS] Download job $($item.Name) completed."
+              }
+              Remove-Job -Job $item.Value.Job
+          }
+          
+          if ($failedDownloads.Count -gt 0) {
+              throw "One or more downloads failed: $($failedDownloads -join ', ')"
+          }
+          Write-Host "[SUCCESS] All downloads completed."
+
+
+          Write-Host "[PROGRESS] Starting install jobs..."
+          foreach ($app in $config.Apps) {
+              if ($app.Type -eq "Download") { continue }
+
+              # Check dependency
+              if ($app.DependsOn -and $failedDownloads.Contains($app.DependsOn)) {
+                  Write-Host "[SKIP] Skipping install for $($app.Name) because dependency $($app.DependsOn) failed to download."
                   continue
               }
 
-              Write-Host "[PROGRESS] Starting download job for $($dl.Name)..."
+              # --- INSTALL JOBS ---
               $job = Start-Job -ScriptBlock {
-                  param($url, $outFile, $timeout, $name)
-
+                  param($app, $parentPid)
+                  $hbJob = . "Start-Heartbeat" -AppName $app.Name -ParentProcessId $parentPid
+                  
                   try {
-                      Write-Host "[INFO] Downloading $name..."
-                      Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing -TimeoutSec $timeout -ErrorAction Stop
-
-                      if (Test-Path $outFile) {
-                          $sizeMB = [math]::Round((Get-Item $outFile).Length / 1MB, 2)
-                          Write-Host "[SUCCESS] Downloaded $name ($sizeMB MB)"
-                          return @{ Success = $true; Name = $name; Size = $sizeMB }
+                      Write-Host "[$($app.Name)] Starting installation..."
+                      $process = Start-Process -FilePath $app.FilePath -ArgumentList $app.Arguments -Wait -PassThru -ErrorAction Stop
+                      
+                      if ($app.SuccessCodes -contains $process.ExitCode) {
+                          Write-Host "[$($app.Name)] Installation completed with success code: $($process.ExitCode)."
+                          return @{ Status = 'Success' }
                       } else {
-                          Write-Host "[ERROR] $name download failed - file not found"
-                          return @{ Success = $false; Name = $name; Error = "File not found after download" }
+                          Write-Host "[$($app.Name)] ERROR: Installation failed with exit code: $($process.ExitCode)."
+                          return @{ Status = 'Failed'; Error = "Exit code $($process.ExitCode)" }
                       }
                   } catch {
-                      Write-Host "[ERROR] $name download exception: $($_.Exception.Message)"
-                      return @{ Success = $false; Name = $name; Error = $_.Exception.Message }
+                      Write-Host "[$($app.Name)] ERROR: $($_.Exception.Message)"
+                      return @{ Status = 'Failed'; Error = $_.Exception.Message }
+                  } finally {
+                      Stop-Job -Job $hbJob
+                      Remove-Job -Job $hbJob
                   }
-              } -ArgumentList $dl.Url, $dl.OutFile, $dl.Timeout, $dl.Name
+              } -ArgumentList $app, $PID
+              $job.PSJobTypeName = 'BackgroundJob'
+              $job.InitializationScript = ${function:Start-Heartbeat}
 
-              $jobs += @{ Job = $job; Name = $dl.Name }
+              $allJobs[$app.Name] = @{ Job = $job; Type = $app.Type }
           }
 
-          # Wait for all download jobs to complete
-          if ($jobs.Count -gt 0) {
-              Write-Host "[INFO] Waiting for $($jobs.Count) download(s) to complete..."
+          # ============================================================================== 
+          # Phase 3: Monitor Installations
+          # ============================================================================== 
+          Write-Host "[PROGRESS] Phase 3: Monitoring installations..."
+          $installJobs = $allJobs.GetEnumerator() | Where-Object { $_.Value.Type -eq "Install" }
 
-              foreach ($jobInfo in $jobs) {
-                  $result = Receive-Job -Job $jobInfo.Job -Wait
-                  Remove-Job -Job $jobInfo.Job
+          while($installJobs | Where-Object { $_.Value.Job.State -eq 'Running' }) {
+              Start-Sleep -Seconds 15
+              Write-Host "[MONITOR] Waiting for $($installJobs.Count) installation(s) to complete..."
+          }
 
-                  if ($result.Success -eq $false) {
-                      Write-Host "[ERROR] Failed to download $($jobInfo.Name): $($result.Error)"
-                      exit 1
-                  }
+          $failedInstalls = @()
+          foreach($item in $installJobs) {
+              $result = Receive-Job -Job $item.Value.Job
+              if($result.Status -ne 'Success') {
+                  Write-Host "[ERROR] Install job $($item.Name) failed: $($result.Error)"
+                  $failedInstalls += $item.Name
+              } else {
+                  Write-Host "[SUCCESS] Install job $($item.Name) completed."
               }
-
-              Write-Host "[SUCCESS] All downloads completed"
-          } else {
-              Write-Host "[INFO] All installers already cached"
+              Remove-Job -Job $item.Value.Job
           }
 
-          # ==============================================================================
-          # Phase 2: Install Chrome (MSI)
-          # ==============================================================================
-          Write-Host "[PROGRESS] Phase 2/3: Installing Google Chrome..."
-
-          if (-not (Test-Path $chromeMsi)) {
-              Write-Host "[ERROR] Chrome installer not found at: $chromeMsi"
-              exit 1
+          if ($failedInstalls.Count -gt 0) {
+              throw "One or more installations failed: $($failedInstalls -join ', ')"
           }
 
-          $process = Start-Process -FilePath "msiexec.exe" `
-              -ArgumentList "/i `"$chromeMsi`" /quiet /norestart" `
-              -Wait -PassThru -ErrorAction Stop
-
-          if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
-              Write-Host "[ERROR] Chrome installation failed (exit code: $($process.ExitCode))"
-              exit 1
-          }
-
-          Write-Host "[VALIDATE] Verifying Chrome installation..."
-          if (-not (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe")) {
-              Write-Host "[ERROR] Chrome executable not found after installation"
-              exit 1
-          }
-
-          Write-Host "[SUCCESS] Google Chrome installed successfully"
-
-          # ==============================================================================
-          # Phase 3: Install Adobe Reader (EXE)
-          # ==============================================================================
-          Write-Host "[PROGRESS] Phase 3/3: Installing Adobe Reader DC..."
-
-          if (-not (Test-Path $adobeExe)) {
-              Write-Host "[ERROR] Adobe installer not found at: $adobeExe"
-              exit 1
-          }
-
-          $process = Start-Process -FilePath $adobeExe `
-              -ArgumentList "/sAll /rs /msi EULA_ACCEPT=YES" `
-              -Wait -PassThru -ErrorAction Stop
-
-          if ($process.ExitCode -ne 0) {
-              Write-Host "[ERROR] Adobe installation failed (exit code: $($process.ExitCode))"
-              exit 1
-          }
-
-          Write-Host "[VALIDATE] Verifying Adobe installation..."
-          $adobePath1 = "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
-          $adobePath2 = "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"
-
-          if (-not ((Test-Path $adobePath1) -or (Test-Path $adobePath2))) {
-              Write-Host "[ERROR] Adobe Reader executable not found"
-              exit 1
-          }
-
-          Write-Host "[SUCCESS] Adobe Reader installed successfully"
-
-          # ==============================================================================
+          # ============================================================================== 
           # Summary
-          # ==============================================================================
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Installation Summary"
-          Write-Host "========================================"
-          Write-Host "[SUCCESS] Google Chrome - Installed"
-          Write-Host "[SUCCESS] Adobe Reader DC - Installed"
-          Write-Host ""
-          Write-Host "[SUCCESS] All applications installed successfully"
+          # ============================================================================== 
+          Write-Host "[SUCCESS] All applications installed successfully."
           exit 0
 
       } catch {
@@ -195,7 +263,6 @@ operation:
           Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
           exit 1
       }
-
   # Self-healing: Previous fixes applied to this template
   fixes:
     # Fixes will be added here automatically when errors occur
