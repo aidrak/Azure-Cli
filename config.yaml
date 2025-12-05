@@ -206,7 +206,7 @@ golden_image:
   image_version: "latest"
   # VM credentials (password should be set via environment variable)
   admin_username: "entra-admin"
-  admin_password: "klsdf0j2;3s(fjls" # TESTING ONLY - use secrets.yaml or env var in production
+  admin_password: "" # Set in secrets.yaml (NEVER commit passwords here!)
   # Azure Compute Gallery
   gallery_name: "avd_gallery"
   definition_name: "windows11-golden-image"
