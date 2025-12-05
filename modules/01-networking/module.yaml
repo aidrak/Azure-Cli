@@ -1,0 +1,111 @@
+# ==============================================================================
+# Module: Advanced Networking for Azure Virtual Desktop
+# ==============================================================================
+module:
+  id: "01-networking"
+  name: "Advanced Networking"
+  description: "Create VNet, subnets, NSGs, private DNS zones, and VNet peering for AVD deployment"
+
+  # Module-level configuration
+  config:
+    vnet_name: "{{NETWORKING_VNET_NAME}}"
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    location: "{{AZURE_LOCATION}}"
+
+  # Operations in this module (executed in order)
+  operations:
+    - id: "networking-create-vnet"
+      name: "Create Virtual Network"
+      description: "Create VNet with configured address space"
+      duration: 60        # 1 minute
+      type: "FAST"
+
+    - id: "networking-create-subnets"
+      name: "Create Subnets"
+      description: "Create all configured subnets from array"
+      duration: 120       # 2 minutes (iterates through array)
+      type: "FAST"
+
+    - id: "networking-create-nsgs"
+      name: "Create Network Security Groups"
+      description: "Create NSGs for each subnet (from config)"
+      duration: 120       # 2 minutes
+      type: "FAST"
+
+    - id: "networking-configure-nsg-rules"
+      name: "Configure NSG Rules (Defaults + Custom)"
+      description: "Apply smart default and custom security rules to NSGs"
+      duration: 180       # 3 minutes (multiple rules)
+      type: "FAST"
+
+    - id: "networking-attach-nsgs"
+      name: "Attach NSGs to Subnets"
+      description: "Associate NSGs with their respective subnets"
+      duration: 60        # 1 minute
+      type: "FAST"
+
+    - id: "networking-configure-service-endpoints"
+      name: "Configure Service Endpoints"
+      description: "Enable service endpoints on subnets (if configured)"
+      duration: 90        # 1.5 minutes
+      type: "FAST"
+
+    - id: "networking-create-dns-zones"
+      name: "Create Private DNS Zones"
+      description: "Create private DNS zones for Azure services (if enabled)"
+      duration: 120       # 2 minutes
+      type: "FAST"
+
+    - id: "networking-link-dns-zones"
+      name: "Link DNS Zones to VNet"
+      description: "Create VNet links for private DNS zones"
+      duration: 90        # 1.5 minutes
+      type: "FAST"
+
+    - id: "networking-create-peering"
+      name: "Create VNet Peering"
+      description: "Establish VNet peering to hub (if configured)"
+      duration: 120       # 2 minutes
+      type: "FAST"
+
+    - id: "networking-configure-route-tables"
+      name: "Configure Route Tables"
+      description: "Create and associate route tables (if enabled)"
+      duration: 90        # 1.5 minutes
+      type: "FAST"
+
+    - id: "networking-validate-all"
+      name: "Validate Network Configuration"
+      description: "Comprehensive validation of all networking components"
+      duration: 120       # 2 minutes
+      type: "FAST"
+
+  # Module-level validation (run after all operations complete)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks"
+        resource_name: "{{NETWORKING_VNET_NAME}}"
+        description: "VNet exists"
+
+      - type: "subnet_count"
+        min_count: 1
+        description: "At least one subnet created"
+
+      - type: "nsg_attached"
+        description: "NSGs attached to subnets"
+
+  # Expected total duration
+  total_duration:
+    expected: 1140      # 19 minutes (sum of all operations)
+    timeout: 2280       # 38 minutes (2x expected)
+
+  # Module state file
+  state_file: "modules/01-networking/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"
+    scripts: "artifacts/scripts/"

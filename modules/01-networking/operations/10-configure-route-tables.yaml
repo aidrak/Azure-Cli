@@ -1,0 +1,120 @@
+# ==============================================================================
+# Operation: Configure Route Tables
+# ==============================================================================
+operation:
+  id: "networking-configure-route-tables"
+  name: "Configure Route Tables"
+  description: "Create and associate route tables (if enabled)"
+
+  duration:
+    expected: 90
+    timeout: 180
+    type: "FAST"
+
+  requires:
+    - "networking-create-peering"
+
+  validation:
+    enabled: true
+
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Route table configuration: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      VNET_NAME="{{NETWORKING_VNET_NAME}}"
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      LOCATION="{{AZURE_LOCATION}}"
+
+      RT_ENABLED=$(yq e '.networking.route_tables.enabled' config.yaml)
+
+      if [[ "$RT_ENABLED" != "true" ]]; then
+        echo "[INFO] Route tables disabled - skipping"
+        exit 0
+      fi
+
+      RT_COUNT=$(yq e '.networking.route_tables.tables | length' config.yaml)
+      echo "[PROGRESS] Processing $RT_COUNT route table(s)..."
+
+      for i in $(seq 0 $((RT_COUNT - 1))); do
+        RT_NAME=$(yq e ".networking.route_tables.tables[$i].name" config.yaml)
+
+        echo "[PROGRESS] Processing route table: $RT_NAME"
+
+        if ! az network route-table show \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$RT_NAME" &>/dev/null; then
+
+          az network route-table create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$RT_NAME" \
+            --location "$LOCATION" \
+            --output none
+
+          echo "[SUCCESS] Route table created: $RT_NAME"
+        else
+          echo "[INFO] Route table already exists: $RT_NAME"
+        fi
+
+        # Add routes
+        ROUTE_COUNT=$(yq e ".networking.route_tables.tables[$i].routes | length" config.yaml)
+
+        for j in $(seq 0 $((ROUTE_COUNT - 1))); do
+          ROUTE_NAME=$(yq e ".networking.route_tables.tables[$i].routes[$j].name" config.yaml)
+          ADDR_PREFIX=$(yq e ".networking.route_tables.tables[$i].routes[$j].address_prefix" config.yaml)
+          NEXT_HOP_TYPE=$(yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_type" config.yaml)
+          NEXT_HOP_IP=$(yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_ip_address" config.yaml)
+
+          if az network route-table route show \
+            --resource-group "$RESOURCE_GROUP" \
+            --route-table-name "$RT_NAME" \
+            --name "$ROUTE_NAME" &>/dev/null; then
+            continue
+          fi
+
+          if [[ "$NEXT_HOP_TYPE" == "VirtualAppliance" ]]; then
+            az network route-table route create \
+              --resource-group "$RESOURCE_GROUP" \
+              --route-table-name "$RT_NAME" \
+              --name "$ROUTE_NAME" \
+              --address-prefix "$ADDR_PREFIX" \
+              --next-hop-type "$NEXT_HOP_TYPE" \
+              --next-hop-ip-address "$NEXT_HOP_IP" \
+              --output none
+          else
+            az network route-table route create \
+              --resource-group "$RESOURCE_GROUP" \
+              --route-table-name "$RT_NAME" \
+              --name "$ROUTE_NAME" \
+              --address-prefix "$ADDR_PREFIX" \
+              --next-hop-type "$NEXT_HOP_TYPE" \
+              --output none
+          fi
+
+          echo "[SUCCESS] Route added: $ROUTE_NAME"
+        done
+
+        # Associate with subnets
+        ASSOC_COUNT=$(yq e ".networking.route_tables.tables[$i].associated_subnets | length" config.yaml)
+
+        for k in $(seq 0 $((ASSOC_COUNT - 1))); do
+          SUBNET_NAME=$(yq e ".networking.route_tables.tables[$i].associated_subnets[$k]" config.yaml)
+
+          az network vnet subnet update \
+            --resource-group "$RESOURCE_GROUP" \
+            --vnet-name "$VNET_NAME" \
+            --name "$SUBNET_NAME" \
+            --route-table "$RT_NAME" \
+            --output none
+
+          echo "[SUCCESS] Route table associated with subnet: $SUBNET_NAME"
+        done
+      done
+
+      echo "[SUCCESS] All route tables configured"
+      exit 0
+
+  fixes: []

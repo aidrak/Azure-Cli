@@ -1,0 +1,196 @@
+# ==============================================================================
+# Operation: Configure NSG Rules (Smart Defaults + Custom)
+# ==============================================================================
+operation:
+  id: "networking-configure-nsg-rules"
+  name: "Configure NSG Rules (Defaults + Custom)"
+  description: "Apply smart default and custom security rules to NSGs based on subnet type"
+
+  # Duration expectations
+  duration:
+    expected: 180   # 3 minutes (multiple rules)
+    timeout: 360    # 6 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "networking-create-nsgs"  # NSGs must exist first
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "nsg_rules_configured"
+        description: "NSG rules applied"
+
+  # Template command
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      # ==============================================================================
+      # Configure NSG Rules with Smart Defaults
+      # ==============================================================================
+
+      set -euo pipefail
+
+      echo "[START] NSG rule configuration: $(date '+%Y-%m-%d %H:%M:%S')"
+
+      # Configuration
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count
+      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
+      RULE_COUNT=0
+
+      echo "[PROGRESS] Configuring NSG rules for $SUBNET_COUNT subnet(s)..."
+
+      # Function to create NSG rule
+      create_nsg_rule() {
+        local NSG_NAME=$1
+        local RULE_NAME=$2
+        local PRIORITY=$3
+        local DIRECTION=$4
+        local ACCESS=$5
+        local PROTOCOL=$6
+        local SRC_PREFIX=$7
+        local SRC_PORT=$8
+        local DST_PREFIX=$9
+        local DST_PORT=${10}
+
+        # Check if rule already exists
+        if az network nsg rule show \
+          --resource-group "$RESOURCE_GROUP" \
+          --nsg-name "$NSG_NAME" \
+          --name "$RULE_NAME" &>/dev/null; then
+
+          echo "[INFO] Rule already exists: $RULE_NAME"
+          return 0
+        fi
+
+        # Create rule
+        if ! az network nsg rule create \
+          --resource-group "$RESOURCE_GROUP" \
+          --nsg-name "$NSG_NAME" \
+          --name "$RULE_NAME" \
+          --priority "$PRIORITY" \
+          --direction "$DIRECTION" \
+          --access "$ACCESS" \
+          --protocol "$PROTOCOL" \
+          --source-address-prefixes "$SRC_PREFIX" \
+          --source-port-ranges "$SRC_PORT" \
+          --destination-address-prefixes "$DST_PREFIX" \
+          --destination-port-ranges "$DST_PORT" \
+          --output none; then
+
+          echo "[ERROR] Failed to create rule: $RULE_NAME"
+          return 1
+        fi
+
+        echo "[SUCCESS] Rule created: $RULE_NAME (Priority: $PRIORITY)"
+        ((RULE_COUNT++)) || true
+        return 0
+      }
+
+      # Iterate through subnets
+      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+        # Check if NSG enabled
+        NSG_ENABLED=$(yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+
+        if [[ "$NSG_ENABLED" != "true" ]]; then
+          continue
+        fi
+
+        # Get subnet and NSG names
+        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+        NSG_NAME=$(yq e ".networking.subnets[$i].nsg.name" config.yaml)
+
+        # Auto-generate NSG name if empty
+        if [[ -z "$NSG_NAME" || "$NSG_NAME" == "null" || "$NSG_NAME" == "" ]]; then
+          NSG_NAME="nsg-${SUBNET_NAME}"
+        fi
+
+        # Check if using defaults
+        USE_DEFAULTS=$(yq e ".networking.subnets[$i].nsg.use_defaults" config.yaml)
+
+        echo "[PROGRESS] Configuring NSG: $NSG_NAME (for subnet: $SUBNET_NAME)"
+
+        # Apply smart defaults based on subnet name pattern
+        if [[ "$USE_DEFAULTS" == "true" ]]; then
+          echo "[PROGRESS]   Applying smart default rules..."
+
+          case "$SUBNET_NAME" in
+            *session-host*)
+              echo "[PROGRESS]   Detected: Session Hosts subnet"
+
+              # Allow RDP from VNet
+              create_nsg_rule "$NSG_NAME" "Allow-RDP-From-VNet" 100 "Inbound" "Allow" "Tcp" "VirtualNetwork" "*" "VirtualNetwork" "3389"
+
+              # Allow AVD control plane (outbound)
+              create_nsg_rule "$NSG_NAME" "Allow-AVD-Control-Plane" 110 "Outbound" "Allow" "Tcp" "*" "*" "WindowsVirtualDesktop" "443"
+
+              # Allow Azure Monitor (outbound)
+              create_nsg_rule "$NSG_NAME" "Allow-Azure-Monitor" 120 "Outbound" "Allow" "Tcp" "*" "*" "AzureMonitor" "443"
+              ;;
+
+            *private-endpoint*)
+              echo "[PROGRESS]   Detected: Private Endpoints subnet"
+
+              # Allow VNet inbound
+              create_nsg_rule "$NSG_NAME" "Allow-VNet-Inbound" 100 "Inbound" "Allow" "*" "VirtualNetwork" "*" "VirtualNetwork" "*"
+
+              # Allow VNet outbound
+              create_nsg_rule "$NSG_NAME" "Allow-VNet-Outbound" 100 "Outbound" "Allow" "*" "VirtualNetwork" "*" "VirtualNetwork" "*"
+              ;;
+
+            *management*)
+              echo "[PROGRESS]   Detected: Management subnet"
+
+              # Allow Bastion inbound (SSH + RDP)
+              create_nsg_rule "$NSG_NAME" "Allow-Bastion-Inbound" 100 "Inbound" "Allow" "Tcp" "AzureBastion" "*" "*" "22,3389"
+
+              # Allow HTTPS outbound
+              create_nsg_rule "$NSG_NAME" "Allow-HTTPS-Outbound" 100 "Outbound" "Allow" "Tcp" "*" "*" "*" "443"
+              ;;
+
+            *)
+              echo "[INFO]   No pattern match - skipping default rules (subnet: $SUBNET_NAME)"
+              ;;
+          esac
+        else
+          echo "[INFO]   Smart defaults disabled for this subnet"
+        fi
+
+        # Apply custom rules (if defined)
+        CUSTOM_RULE_COUNT=$(yq e ".networking.subnets[$i].nsg.custom_rules | length" config.yaml)
+
+        if [[ "$CUSTOM_RULE_COUNT" -gt 0 ]]; then
+          echo "[PROGRESS]   Applying $CUSTOM_RULE_COUNT custom rule(s)..."
+
+          for j in $(seq 0 $((CUSTOM_RULE_COUNT - 1))); do
+            RULE_NAME=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].name" config.yaml)
+            PRIORITY=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].priority" config.yaml)
+            DIRECTION=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].direction" config.yaml)
+            ACCESS=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].access" config.yaml)
+            PROTOCOL=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].protocol" config.yaml)
+            SRC_PREFIX=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].source_address_prefix" config.yaml)
+            SRC_PORT=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].source_port_range" config.yaml)
+            DST_PREFIX=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].destination_address_prefix" config.yaml)
+            DST_PORT=$(yq e ".networking.subnets[$i].nsg.custom_rules[$j].destination_port_range" config.yaml)
+
+            echo "[PROGRESS]   Creating custom rule: $RULE_NAME"
+            create_nsg_rule "$NSG_NAME" "$RULE_NAME" "$PRIORITY" "$DIRECTION" "$ACCESS" "$PROTOCOL" "$SRC_PREFIX" "$SRC_PORT" "$DST_PREFIX" "$DST_PORT"
+          done
+        fi
+
+        echo "[SUCCESS] NSG rules configured: $NSG_NAME"
+      done
+
+      echo "[SUCCESS] All NSG rules configured successfully"
+      echo "[SUCCESS]   Total rules created: $RULE_COUNT"
+
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur
