@@ -1,0 +1,12 @@
+{
+  "addressPrefix": "10.0.3.0/27",
+  "delegations": [],
+  "etag": "W/\"61b8248d-5730-4180-9f9c-7a0435014104\"",
+  "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Network/virtualNetworks/avd-vnet/subnets/subnet-management",
+  "name": "subnet-management",
+  "privateEndpointNetworkPolicies": "Enabled",
+  "privateLinkServiceNetworkPolicies": "Enabled",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "RG-Azure-VDI-01",
+  "type": "Microsoft.Network/virtualNetworks/subnets"
+}

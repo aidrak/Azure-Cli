@@ -13,3 +13,18 @@
 {"timestamp":"2025-12-05T04:16:46.197Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/01-create-vnet.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T04:16:46.263Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T04:16:46.274Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:17:22.081Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:17:22.368Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:17:36.323Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:17:36.596Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:13.274Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:13.557Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:48.353Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:48.625Z","level":"INFO","message":"Executing operation: networking-create-subnets","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:48.639Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/02-create-subnets.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:18:48.707Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:19:22.973Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:19:23.251Z","level":"INFO","message":"Executing operation: networking-create-subnets","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:19:23.270Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/02-create-subnets.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:19:23.337Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:19:23.361Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}

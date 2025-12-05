@@ -219,11 +219,23 @@ validate_prerequisites() {
     local i=0
     while [[ $i -lt $requires_count ]]; do
         local required_operation
-        required_operation=$(yq e ".operation.requires[$i].operation" "$yaml_file")
         local required_status
-        required_status=$(yq e ".operation.requires[$i].status" "$yaml_file")
 
-        echo "[*] Checking prerequisite: $required_operation (status: $required_status)"
+        # Check if requires entry is a string or an object
+        local entry_type
+        entry_type=$(yq e ".operation.requires[$i] | type" "$yaml_file")
+
+        if [[ "$entry_type" == "!!str" ]]; then
+            # Simple string format: just operation ID
+            required_operation=$(yq e ".operation.requires[$i]" "$yaml_file")
+            required_status="completed"  # Default to completed
+        else
+            # Object format: operation and status fields
+            required_operation=$(yq e ".operation.requires[$i].operation" "$yaml_file")
+            required_status=$(yq e ".operation.requires[$i].status" "$yaml_file")
+        fi
+
+        echo "[*] Checking prerequisite: $required_operation (expected status: $required_status)"
 
         # Check state file for prerequisite completion
         local state_file="${PROJECT_ROOT}/state.json"
