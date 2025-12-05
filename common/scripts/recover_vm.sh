@@ -22,7 +22,7 @@ echo "Creating new VM from OS Disk..."
 az vm create \
   --resource-group $RESOURCE_GROUP \
   --name $NEW_VM_NAME \
-  --attach-os-disk $OS_DISK_ID \
+  --attach-os-disk "$OS_DISK_ID" \
   --os-type Windows \
   --size "Standard_D4s_v6" \
   --location $LOCATION \

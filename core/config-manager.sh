@@ -37,86 +37,86 @@ load_config() {
     # Format: SECTION_KEY="value"
 
     # Azure section
-    export AZURE_SUBSCRIPTION_ID=$(yq e '.azure.subscription_id' "$config_file")
-    export AZURE_TENANT_ID=$(yq e '.azure.tenant_id' "$config_file")
-    export AZURE_LOCATION=$(yq e '.azure.location' "$config_file")
-    export AZURE_RESOURCE_GROUP=$(yq e '.azure.resource_group' "$config_file")
+    AZURE_SUBSCRIPTION_ID=$(yq e '.azure.subscription_id' "$config_file"); export AZURE_SUBSCRIPTION_ID
+    AZURE_TENANT_ID=$(yq e '.azure.tenant_id' "$config_file"); export AZURE_TENANT_ID
+    AZURE_LOCATION=$(yq e '.azure.location' "$config_file"); export AZURE_LOCATION
+    AZURE_RESOURCE_GROUP=$(yq e '.azure.resource_group' "$config_file"); export AZURE_RESOURCE_GROUP
 
     # Networking section (Module 01 - Advanced Networking)
-    export NETWORKING_VNET_NAME=$(yq e '.networking.vnet.name' "$config_file")
-    export NETWORKING_VNET_ADDRESS_SPACE=$(yq e '.networking.vnet.address_space | join(" ")' "$config_file")
-    export NETWORKING_VNET_LOCATION=$(yq e '.networking.vnet.location' "$config_file")
-    export NETWORKING_DNS_ENABLED=$(yq e '.networking.private_dns.enabled' "$config_file")
-    export NETWORKING_PEERING_ENABLED=$(yq e '.networking.peering.enabled' "$config_file")
-    export NETWORKING_ROUTE_TABLES_ENABLED=$(yq e '.networking.route_tables.enabled' "$config_file")
+    NETWORKING_VNET_NAME=$(yq e '.networking.vnet.name' "$config_file"); export NETWORKING_VNET_NAME
+    NETWORKING_VNET_ADDRESS_SPACE=$(yq e '.networking.vnet.address_space | join(" ")' "$config_file"); export NETWORKING_VNET_ADDRESS_SPACE
+    NETWORKING_VNET_LOCATION=$(yq e '.networking.vnet.location' "$config_file"); export NETWORKING_VNET_LOCATION
+    NETWORKING_DNS_ENABLED=$(yq e '.networking.private_dns.enabled' "$config_file"); export NETWORKING_DNS_ENABLED
+    NETWORKING_PEERING_ENABLED=$(yq e '.networking.peering.enabled' "$config_file"); export NETWORKING_PEERING_ENABLED
+    NETWORKING_ROUTE_TABLES_ENABLED=$(yq e '.networking.route_tables.enabled' "$config_file"); export NETWORKING_ROUTE_TABLES_ENABLED
 
     # Commonly used subnet names (extracted from array for convenience)
-    export NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-session-hosts") | .name' "$config_file")
-    export NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-private-endpoints") | .name' "$config_file")
-    export NETWORKING_MANAGEMENT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-management") | .name' "$config_file")
+    NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-session-hosts") | .name' "$config_file"); export NETWORKING_SESSION_HOST_SUBNET_NAME
+    NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-private-endpoints") | .name' "$config_file"); export NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME
+    NETWORKING_MANAGEMENT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-management") | .name' "$config_file"); export NETWORKING_MANAGEMENT_SUBNET_NAME
 
     # Note: Full subnet arrays, NSG rules, DNS zones are parsed dynamically in operations
     # They are too complex for simple environment variables
 
     # Storage section (Module 02)
-    export STORAGE_ACCOUNT_NAME=$(yq e '.storage.account_name' "$config_file")
-    export STORAGE_SKU=$(yq e '.storage.sku' "$config_file")
-    export STORAGE_KIND=$(yq e '.storage.kind' "$config_file")
-    export STORAGE_FILE_SHARE_NAME=$(yq e '.storage.file_share_name' "$config_file")
-    export STORAGE_QUOTA_GB=$(yq e '.storage.quota_gb' "$config_file")
-    export STORAGE_ENABLE_ENTRA_KERBEROS=$(yq e '.storage.enable_entra_kerberos' "$config_file")
-    export STORAGE_ENABLE_SMB_MULTICHANNEL=$(yq e '.storage.enable_smb_multichannel' "$config_file")
-    export STORAGE_PUBLIC_NETWORK_ACCESS=$(yq e '.storage.public_network_access' "$config_file")
-    export STORAGE_HTTPS_ONLY=$(yq e '.storage.https_only' "$config_file")
-    export STORAGE_MIN_TLS_VERSION=$(yq e '.storage.min_tls_version' "$config_file")
+    STORAGE_ACCOUNT_NAME=$(yq e '.storage.account_name' "$config_file"); export STORAGE_ACCOUNT_NAME
+    STORAGE_SKU=$(yq e '.storage.sku' "$config_file"); export STORAGE_SKU
+    STORAGE_KIND=$(yq e '.storage.kind' "$config_file"); export STORAGE_KIND
+    STORAGE_FILE_SHARE_NAME=$(yq e '.storage.file_share_name' "$config_file"); export STORAGE_FILE_SHARE_NAME
+    STORAGE_QUOTA_GB=$(yq e '.storage.quota_gb' "$config_file"); export STORAGE_QUOTA_GB
+    STORAGE_ENABLE_ENTRA_KERBEROS=$(yq e '.storage.enable_entra_kerberos' "$config_file"); export STORAGE_ENABLE_ENTRA_KERBEROS
+    STORAGE_ENABLE_SMB_MULTICHANNEL=$(yq e '.storage.enable_smb_multichannel' "$config_file"); export STORAGE_ENABLE_SMB_MULTICHANNEL
+    STORAGE_PUBLIC_NETWORK_ACCESS=$(yq e '.storage.public_network_access' "$config_file"); export STORAGE_PUBLIC_NETWORK_ACCESS
+    STORAGE_HTTPS_ONLY=$(yq e '.storage.https_only' "$config_file"); export STORAGE_HTTPS_ONLY
+    STORAGE_MIN_TLS_VERSION=$(yq e '.storage.min_tls_version' "$config_file"); export STORAGE_MIN_TLS_VERSION
 
     # Entra ID section (Module 03)
-    export ENTRA_GROUP_USERS_STANDARD=$(yq e '.entra_id.group_users_standard' "$config_file")
-    export ENTRA_GROUP_USERS_STANDARD_DESCRIPTION=$(yq e '.entra_id.group_users_standard_description' "$config_file")
-    export ENTRA_GROUP_USERS_ADMINS=$(yq e '.entra_id.group_users_admins' "$config_file")
-    export ENTRA_GROUP_USERS_ADMINS_DESCRIPTION=$(yq e '.entra_id.group_users_admins_description' "$config_file")
-    export ENTRA_GROUP_DEVICES_SSO=$(yq e '.entra_id.group_devices_sso' "$config_file")
-    export ENTRA_GROUP_DEVICES_SSO_DESCRIPTION=$(yq e '.entra_id.group_devices_sso_description' "$config_file")
-    export ENTRA_GROUP_DEVICES_FSLOGIX=$(yq e '.entra_id.group_devices_fslogix' "$config_file")
-    export ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION=$(yq e '.entra_id.group_devices_fslogix_description' "$config_file")
-    export ENTRA_GROUP_DEVICES_NETWORK=$(yq e '.entra_id.group_devices_network' "$config_file")
-    export ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION=$(yq e '.entra_id.group_devices_network_description' "$config_file")
-    export ENTRA_GROUP_DEVICES_SECURITY=$(yq e '.entra_id.group_devices_security' "$config_file")
-    export ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION=$(yq e '.entra_id.group_devices_security_description' "$config_file")
+    ENTRA_GROUP_USERS_STANDARD=$(yq e '.entra_id.group_users_standard' "$config_file"); export ENTRA_GROUP_USERS_STANDARD
+    ENTRA_GROUP_USERS_STANDARD_DESCRIPTION=$(yq e '.entra_id.group_users_standard_description' "$config_file"); export ENTRA_GROUP_USERS_STANDARD_DESCRIPTION
+    ENTRA_GROUP_USERS_ADMINS=$(yq e '.entra_id.group_users_admins' "$config_file"); export ENTRA_GROUP_USERS_ADMINS
+    ENTRA_GROUP_USERS_ADMINS_DESCRIPTION=$(yq e '.entra_id.group_users_admins_description' "$config_file"); export ENTRA_GROUP_USERS_ADMINS_DESCRIPTION
+    ENTRA_GROUP_DEVICES_SSO=$(yq e '.entra_id.group_devices_sso' "$config_file"); export ENTRA_GROUP_DEVICES_SSO
+    ENTRA_GROUP_DEVICES_SSO_DESCRIPTION=$(yq e '.entra_id.group_devices_sso_description' "$config_file"); export ENTRA_GROUP_DEVICES_SSO_DESCRIPTION
+    ENTRA_GROUP_DEVICES_FSLOGIX=$(yq e '.entra_id.group_devices_fslogix' "$config_file"); export ENTRA_GROUP_DEVICES_FSLOGIX
+    ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION=$(yq e '.entra_id.group_devices_fslogix_description' "$config_file"); export ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION
+    ENTRA_GROUP_DEVICES_NETWORK=$(yq e '.entra_id.group_devices_network' "$config_file"); export ENTRA_GROUP_DEVICES_NETWORK
+    ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION=$(yq e '.entra_id.group_devices_network_description' "$config_file"); export ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION
+    ENTRA_GROUP_DEVICES_SECURITY=$(yq e '.entra_id.group_devices_security' "$config_file"); export ENTRA_GROUP_DEVICES_SECURITY
+    ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION=$(yq e '.entra_id.group_devices_security_description' "$config_file"); export ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION
 
     # Golden Image section
-    export GOLDEN_IMAGE_TEMP_VM_NAME=$(yq e '.golden_image.temp_vm_name' "$config_file")
-    export GOLDEN_IMAGE_VM_SIZE=$(yq e '.golden_image.vm_size' "$config_file")
-    export GOLDEN_IMAGE_IMAGE_PUBLISHER=$(yq e '.golden_image.image_publisher' "$config_file")
-    export GOLDEN_IMAGE_IMAGE_OFFER=$(yq e '.golden_image.image_offer' "$config_file")
-    export GOLDEN_IMAGE_IMAGE_SKU=$(yq e '.golden_image.image_sku' "$config_file")
-    export GOLDEN_IMAGE_IMAGE_VERSION=$(yq e '.golden_image.image_version' "$config_file")
-    export GOLDEN_IMAGE_ADMIN_USERNAME=$(yq e '.golden_image.admin_username' "$config_file")
+    GOLDEN_IMAGE_TEMP_VM_NAME=$(yq e '.golden_image.temp_vm_name' "$config_file"); export GOLDEN_IMAGE_TEMP_VM_NAME
+    GOLDEN_IMAGE_VM_SIZE=$(yq e '.golden_image.vm_size' "$config_file"); export GOLDEN_IMAGE_VM_SIZE
+    GOLDEN_IMAGE_IMAGE_PUBLISHER=$(yq e '.golden_image.image_publisher' "$config_file"); export GOLDEN_IMAGE_IMAGE_PUBLISHER
+    GOLDEN_IMAGE_IMAGE_OFFER=$(yq e '.golden_image.image_offer' "$config_file"); export GOLDEN_IMAGE_IMAGE_OFFER
+    GOLDEN_IMAGE_IMAGE_SKU=$(yq e '.golden_image.image_sku' "$config_file"); export GOLDEN_IMAGE_IMAGE_SKU
+    GOLDEN_IMAGE_IMAGE_VERSION=$(yq e '.golden_image.image_version' "$config_file"); export GOLDEN_IMAGE_IMAGE_VERSION
+    GOLDEN_IMAGE_ADMIN_USERNAME=$(yq e '.golden_image.admin_username' "$config_file"); export GOLDEN_IMAGE_ADMIN_USERNAME
     # Preserve environment variable if already set (for security - don't overwrite with empty value)
     if [[ -z "${GOLDEN_IMAGE_ADMIN_PASSWORD:-}" ]]; then
-        export GOLDEN_IMAGE_ADMIN_PASSWORD=$(yq e '.golden_image.admin_password' "$config_file")
+        GOLDEN_IMAGE_ADMIN_PASSWORD=$(yq e '.golden_image.admin_password' "$config_file"); export GOLDEN_IMAGE_ADMIN_PASSWORD
     fi
-    export GOLDEN_IMAGE_GALLERY_NAME=$(yq e '.golden_image.gallery_name' "$config_file")
-    export GOLDEN_IMAGE_DEFINITION_NAME=$(yq e '.golden_image.definition_name' "$config_file")
+    GOLDEN_IMAGE_GALLERY_NAME=$(yq e '.golden_image.gallery_name' "$config_file"); export GOLDEN_IMAGE_GALLERY_NAME
+    GOLDEN_IMAGE_DEFINITION_NAME=$(yq e '.golden_image.definition_name' "$config_file"); export GOLDEN_IMAGE_DEFINITION_NAME
 
     # Session Host section
-    export SESSION_HOST_VM_COUNT=$(yq e '.session_host.vm_count' "$config_file")
-    export SESSION_HOST_VM_SIZE=$(yq e '.session_host.vm_size' "$config_file")
-    export SESSION_HOST_NAME_PREFIX=$(yq e '.session_host.name_prefix' "$config_file")
+    SESSION_HOST_VM_COUNT=$(yq e '.session_host.vm_count' "$config_file"); export SESSION_HOST_VM_COUNT
+    SESSION_HOST_VM_SIZE=$(yq e '.session_host.vm_size' "$config_file"); export SESSION_HOST_VM_SIZE
+    SESSION_HOST_NAME_PREFIX=$(yq e '.session_host.name_prefix' "$config_file"); export SESSION_HOST_NAME_PREFIX
 
     # Host Pool section
-    export HOST_POOL_NAME=$(yq e '.host_pool.name' "$config_file")
-    export HOST_POOL_TYPE=$(yq e '.host_pool.type' "$config_file")
-    export HOST_POOL_MAX_SESSIONS=$(yq e '.host_pool.max_sessions' "$config_file")
-    export HOST_POOL_LOAD_BALANCER=$(yq e '.host_pool.load_balancer' "$config_file")
+    HOST_POOL_NAME=$(yq e '.host_pool.name' "$config_file"); export HOST_POOL_NAME
+    HOST_POOL_TYPE=$(yq e '.host_pool.type' "$config_file"); export HOST_POOL_TYPE
+    HOST_POOL_MAX_SESSIONS=$(yq e '.host_pool.max_sessions' "$config_file"); export HOST_POOL_MAX_SESSIONS
+    HOST_POOL_LOAD_BALANCER=$(yq e '.host_pool.load_balancer' "$config_file"); export HOST_POOL_LOAD_BALANCER
 
     # Workspace section
-    export WORKSPACE_NAME=$(yq e '.workspace.name' "$config_file")
-    export WORKSPACE_FRIENDLY_NAME=$(yq e '.workspace.friendly_name' "$config_file")
+    WORKSPACE_NAME=$(yq e '.workspace.name' "$config_file"); export WORKSPACE_NAME
+    WORKSPACE_FRIENDLY_NAME=$(yq e '.workspace.friendly_name' "$config_file"); export WORKSPACE_FRIENDLY_NAME
 
     # Application Group section
-    export APP_GROUP_NAME=$(yq e '.app_group.name' "$config_file")
-    export APP_GROUP_TYPE=$(yq e '.app_group.type' "$config_file")
+    APP_GROUP_NAME=$(yq e '.app_group.name' "$config_file"); export APP_GROUP_NAME
+    APP_GROUP_TYPE=$(yq e '.app_group.type' "$config_file"); export APP_GROUP_TYPE
 
     echo "[v] Configuration loaded successfully"
     return 0
@@ -245,32 +245,32 @@ prompt_user_for_config() {
 
     # Azure configuration
     echo "--- Azure Configuration ---"
-    read -p "Subscription ID [$AZURE_SUBSCRIPTION_ID]: " input
+    read -r -p "Subscription ID [$AZURE_SUBSCRIPTION_ID]: " input
     AZURE_SUBSCRIPTION_ID="${input:-$AZURE_SUBSCRIPTION_ID}"
 
-    read -p "Tenant ID [$AZURE_TENANT_ID]: " input
+    read -r -p "Tenant ID [$AZURE_TENANT_ID]: " input
     AZURE_TENANT_ID="${input:-$AZURE_TENANT_ID}"
 
-    read -p "Location [$AZURE_LOCATION]: " input
+    read -r -p "Location [$AZURE_LOCATION]: " input
     AZURE_LOCATION="${input:-$AZURE_LOCATION}"
 
-    read -p "Resource Group [$AZURE_RESOURCE_GROUP]: " input
+    read -r -p "Resource Group [$AZURE_RESOURCE_GROUP]: " input
     AZURE_RESOURCE_GROUP="${input:-$AZURE_RESOURCE_GROUP}"
 
     echo ""
     echo "--- Golden Image VM ---"
-    read -p "Temp VM Name [$GOLDEN_IMAGE_TEMP_VM_NAME]: " input
+    read -r -p "Temp VM Name [$GOLDEN_IMAGE_TEMP_VM_NAME]: " input
     GOLDEN_IMAGE_TEMP_VM_NAME="${input:-$GOLDEN_IMAGE_TEMP_VM_NAME}"
 
-    read -p "VM Size [$GOLDEN_IMAGE_VM_SIZE]: " input
+    read -r -p "VM Size [$GOLDEN_IMAGE_VM_SIZE]: " input
     GOLDEN_IMAGE_VM_SIZE="${input:-$GOLDEN_IMAGE_VM_SIZE}"
 
-    read -p "Admin Username [$GOLDEN_IMAGE_ADMIN_USERNAME]: " input
+    read -r -p "Admin Username [$GOLDEN_IMAGE_ADMIN_USERNAME]: " input
     GOLDEN_IMAGE_ADMIN_USERNAME="${input:-$GOLDEN_IMAGE_ADMIN_USERNAME}"
 
     # Admin password (secure input)
     if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" ]]; then
-        read -sp "Admin Password (hidden): " GOLDEN_IMAGE_ADMIN_PASSWORD
+        read -r -sp "Admin Password (hidden): " GOLDEN_IMAGE_ADMIN_PASSWORD
         echo ""
     else
         echo "Admin Password: [already set - not prompting]"
@@ -289,9 +289,12 @@ check_pipeline_state() {
         echo "[i] Found existing state file: $STATE_FILE"
 
         # Extract current module and operation
-        local current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
-        local current_operation=$(jq -r '.current_operation // "none"' "$STATE_FILE")
-        local status=$(jq -r '.status // "unknown"' "$STATE_FILE")
+        local current_module
+        current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
+        local current_operation
+        current_operation=$(jq -r '.current_operation // "none"' "$STATE_FILE")
+        local status
+        status=$(jq -r '.status // "unknown"' "$STATE_FILE")
 
         echo "[i] Current module: $current_module"
         echo "[i] Current operation: $current_operation"

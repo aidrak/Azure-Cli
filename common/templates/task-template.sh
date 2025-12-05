@@ -51,8 +51,6 @@ fi
 # Source centralized config and local config
 source "$CONFIG_FILE" || { echo "ERROR: Failed to load config"; exit 1; }
 
-# Initialize logging
-ENABLE_LOGGING=1
 LOG_DIR="${PROJECT_ROOT}/artifacts"
 mkdir -p "$LOG_DIR"
 
@@ -66,11 +64,17 @@ if [[ -f "$LOGGING_FUNCS" ]]; then
     source "$LOGGING_FUNCS"
 else
     # Fallback logging if functions not available
+    # shellcheck disable=SC2317
     log_info() { echo "ℹ $*"; }
+    # shellcheck disable=SC2317
     log_success() { echo "✓ $*"; }
+    # shellcheck disable=SC2317
     log_error() { echo "✗ $*" >&2; }
+    # shellcheck disable=SC2317
     log_warning() { echo "⚠ $*"; }
+    # shellcheck disable=SC2317
     log_section() { echo ""; echo "=== $* ==="; echo ""; }
+    # shellcheck disable=SC2317
     save_log() { echo "$LOG_DIR/${SCRIPT_NAME%.*}_$(date +%Y%m%d_%H%M%S).log"; }
 fi
 
@@ -197,9 +201,13 @@ save_artifacts() {
 trap 'handle_error' ERR
 
 handle_error() {
+    # shellcheck disable=SC2317
     local line_number=$1
+    # shellcheck disable=SC2317
     log_error "Script failed at line $line_number"
+    # shellcheck disable=SC2317
     log_error "See full log: $LOG_FILE"
+    # shellcheck disable=SC2317
     exit 1
 }
 

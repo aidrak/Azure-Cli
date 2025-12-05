@@ -155,7 +155,8 @@ substitute_variables() {
 # ==============================================================================
 extract_powershell_script() {
     local yaml_file="$1"
-    local module_dir="$(dirname "$yaml_file")"
+    local module_dir
+    module_dir="$(dirname "$yaml_file")"
     local output_dir="${PROJECT_ROOT}/artifacts/scripts"
 
     mkdir -p "$output_dir"
@@ -211,9 +212,6 @@ render_command() {
     if [[ $ps_script_status -eq 0 && -n "$ps_script" && -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
         # Replace any path ending with the PowerShell filename using bash pattern substitution
         # Match "@" followed by any characters, ending with the PowerShell filename
-        local pattern="@"
-        local search_pattern="@*${POWERSHELL_FILE}"
-        # Find the full path in the command
         if [[ "$command" =~ @[^[:space:]]*${POWERSHELL_FILE} ]]; then
             local full_match="${BASH_REMATCH[0]}"
             command="${command//${full_match}/@${ps_script}}"
