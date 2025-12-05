@@ -1,0 +1,7 @@
+{
+  "operation_id": "storage-create-file-share",
+  "status": "completed",
+  "duration_seconds": 6,
+  "timestamp": "2025-12-05T19:29:39Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/storage-create-file-share_20251205_192933.log"
+}

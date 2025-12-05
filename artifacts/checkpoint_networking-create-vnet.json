@@ -1,7 +1,7 @@
 {
   "operation_id": "networking-create-vnet",
   "status": "completed",
-  "duration_seconds": 2,
-  "timestamp": "2025-12-05T04:25:54Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-vnet_20251205_042552.log"
+  "duration_seconds": 16,
+  "timestamp": "2025-12-05T19:16:09Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-vnet_20251205_191552.log"
 }

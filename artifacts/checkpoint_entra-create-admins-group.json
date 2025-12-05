@@ -1,0 +1,7 @@
+{
+  "operation_id": "entra-create-admins-group",
+  "status": "completed",
+  "duration_seconds": 4,
+  "timestamp": "2025-12-05T19:43:43Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/entra-create-admins-group_20251205_194339.log"
+}

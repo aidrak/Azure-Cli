@@ -2,6 +2,6 @@
   "operation_id": "networking-create-dns-zones",
   "status": "completed",
   "duration_seconds": 2,
-  "timestamp": "2025-12-05T04:27:24Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-dns-zones_20251205_042722.log"
+  "timestamp": "2025-12-05T19:18:10Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-dns-zones_20251205_191808.log"
 }

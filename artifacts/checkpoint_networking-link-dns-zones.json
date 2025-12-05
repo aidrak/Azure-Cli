@@ -2,6 +2,6 @@
   "operation_id": "networking-link-dns-zones",
   "status": "completed",
   "duration_seconds": 2,
-  "timestamp": "2025-12-05T04:27:26Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-link-dns-zones_20251205_042724.log"
+  "timestamp": "2025-12-05T19:18:12Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-link-dns-zones_20251205_191810.log"
 }

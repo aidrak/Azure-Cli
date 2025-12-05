@@ -30,7 +30,7 @@ operation:
       ALL_VALID=true
 
       echo "[VALIDATE] Validating host pool '$HOST_POOL_NAME'..."
-      if az desktopvirtualization host-pool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+      if az desktopvirtualization hostpool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
         echo "[INFO] Host pool '$HOST_POOL_NAME' exists."
       else
         echo "[ERROR] Host pool '$HOST_POOL_NAME' not found."

@@ -1,0 +1,74 @@
+# Get storage account name (from previous operation or config)
+if [ -f /tmp/storage-account-name.txt ]; then
+  STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
+else
+  STORAGE_NAME=""
+fi
+
+FILE_SHARE_NAME="{{STORAGE_FILE_SHARE_NAME}}"
+QUOTA_GB="{{STORAGE_QUOTA_GB}}"
+
+echo "[START] Creating file share at $(date +%H:%M:%S)"
+echo "  Storage account: $STORAGE_NAME"
+echo "  File share name: $FILE_SHARE_NAME"
+echo "  Quota: ${QUOTA_GB}GB"
+
+# Check if file share already exists
+echo "[PROGRESS] Checking if file share exists..."
+
+if az storage share exists \
+  --account-name "$STORAGE_NAME" \
+  --name "$FILE_SHARE_NAME" \
+  --query exists -o tsv 2>/dev/null | grep -q "true"; then
+
+  echo "[SUCCESS] File share already exists: $FILE_SHARE_NAME"
+
+  # Get current quota
+  CURRENT_QUOTA=$(az storage share show \
+    --account-name "$STORAGE_NAME" \
+    --name "$FILE_SHARE_NAME" \
+    --query quota -o tsv 2>/dev/null || echo "0")
+
+  echo "  Current quota: ${CURRENT_QUOTA}GB"
+  exit 0
+fi
+
+echo "[PROGRESS] Creating file share..."
+
+# Create file share
+if az storage share create \
+  --account-name "$STORAGE_NAME" \
+  --name "$FILE_SHARE_NAME" \
+  --quota "$QUOTA_GB" \
+  --output json > /tmp/file-share.json; then
+
+  echo "[VALIDATE] Verifying file share creation..."
+
+  # Verify file share exists
+  if az storage share show \
+    --account-name "$STORAGE_NAME" \
+    --name "$FILE_SHARE_NAME" &>/dev/null; then
+
+    SHARE_QUOTA=$(az storage share show \
+      --account-name "$STORAGE_NAME" \
+      --name "$FILE_SHARE_NAME" \
+      --query quota -o tsv)
+
+    echo "[SUCCESS] File share created: $FILE_SHARE_NAME"
+    echo "  Storage account: $STORAGE_NAME"
+    echo "  Provisioned capacity: ${SHARE_QUOTA}GB"
+    echo "  Protocol: SMB 3.1.1"
+    echo "  UNC path: \\\\${STORAGE_NAME}.file.core.windows.net\\${FILE_SHARE_NAME}"
+    echo ""
+    echo "[INFO] FSLogix Configuration Value:"
+    echo "  VHDLocations: \\\\${STORAGE_NAME}.file.core.windows.net\\${FILE_SHARE_NAME}"
+    exit 0
+  else
+    echo "[ERROR] File share creation verification failed"
+    exit 1
+  fi
+else
+  echo "[ERROR] Failed to create file share"
+  cat /tmp/file-share.json
+  exit 1
+fi

@@ -92,7 +92,10 @@ load_config() {
     export GOLDEN_IMAGE_IMAGE_SKU=$(yq e '.golden_image.image_sku' "$config_file")
     export GOLDEN_IMAGE_IMAGE_VERSION=$(yq e '.golden_image.image_version' "$config_file")
     export GOLDEN_IMAGE_ADMIN_USERNAME=$(yq e '.golden_image.admin_username' "$config_file")
-    export GOLDEN_IMAGE_ADMIN_PASSWORD=$(yq e '.golden_image.admin_password' "$config_file")
+    # Preserve environment variable if already set (for security - don't overwrite with empty value)
+    if [[ -z "${GOLDEN_IMAGE_ADMIN_PASSWORD:-}" ]]; then
+        export GOLDEN_IMAGE_ADMIN_PASSWORD=$(yq e '.golden_image.admin_password' "$config_file")
+    fi
     export GOLDEN_IMAGE_GALLERY_NAME=$(yq e '.golden_image.gallery_name' "$config_file")
     export GOLDEN_IMAGE_DEFINITION_NAME=$(yq e '.golden_image.definition_name' "$config_file")
 
@@ -122,12 +125,21 @@ load_config() {
 # ==============================================================================
 # Validate Configuration
 # ==============================================================================
+# Usage: validate_config [module_id]
+# If module_id provided, only validates sections required for that module
+# If no module_id, validates all required sections (full validation)
 validate_config() {
-    echo "[*] Validating configuration..."
+    local module_id="${1:-}"
+
+    if [[ -n "$module_id" ]]; then
+        echo "[*] Validating configuration for module: $module_id"
+    else
+        echo "[*] Validating full configuration..."
+    fi
 
     local errors=0
 
-    # Required Azure fields
+    # Always validate Azure global fields (required by all modules)
     if [[ -z "$AZURE_SUBSCRIPTION_ID" || "$AZURE_SUBSCRIPTION_ID" == "null" ]]; then
         echo "[x] ERROR: azure.subscription_id is required"
         ((errors++))
@@ -148,13 +160,67 @@ validate_config() {
         ((errors++))
     fi
 
-    # Check for admin password (security requirement)
-    if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "" ]]; then
-        echo "[!] WARNING: golden_image.admin_password not set"
-        echo "[!] You will need to provide it via environment variable:"
-        echo "[!]   export GOLDEN_IMAGE_ADMIN_PASSWORD='your-secure-password'"
-        # Not an error - can be provided via environment
-    fi
+    # Module-specific validation
+    case "$module_id" in
+        "01-networking")
+            # Networking module requires VNet configuration
+            if [[ -z "$NETWORKING_VNET_NAME" || "$NETWORKING_VNET_NAME" == "null" ]]; then
+                echo "[x] ERROR: networking.vnet.name is required"
+                ((errors++))
+            fi
+            ;;
+
+        "02-storage")
+            # Storage module - account_name is optional (auto-generated if empty)
+            # Validate other critical storage settings
+            if [[ -z "$STORAGE_SKU" || "$STORAGE_SKU" == "null" ]]; then
+                echo "[x] ERROR: storage.sku is required"
+                ((errors++))
+            fi
+            ;;
+
+        "03-entra-group")
+            # Entra ID module requires group configuration
+            if [[ -z "$ENTRA_GROUP_USERS_STANDARD" || "$ENTRA_GROUP_USERS_STANDARD" == "null" ]]; then
+                echo "[x] ERROR: entra_id.group_users_standard is required"
+                ((errors++))
+            fi
+            ;;
+
+        "04-host-pool-workspace"|"05-golden-image"|"06-session-host-deployment")
+            # These modules require golden image configuration
+            if [[ -z "$GOLDEN_IMAGE_TEMP_VM_NAME" || "$GOLDEN_IMAGE_TEMP_VM_NAME" == "null" ]]; then
+                echo "[x] ERROR: golden_image.temp_vm_name is required"
+                ((errors++))
+            fi
+
+            # Admin password only required for golden image module
+            if [[ "$module_id" == "05-golden-image" ]]; then
+                if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "" ]]; then
+                    echo "[x] ERROR: golden_image.admin_password is required for Module 05"
+                    echo "[!] Provide via environment variable:"
+                    echo "[!]   export GOLDEN_IMAGE_ADMIN_PASSWORD='your-secure-password'"
+                    ((errors++))
+                fi
+            fi
+            ;;
+
+        "")
+            # Full validation (no module specified)
+            # Check for admin password (security requirement)
+            if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "" ]]; then
+                echo "[!] WARNING: golden_image.admin_password not set"
+                echo "[!] You will need to provide it via environment variable for Module 05:"
+                echo "[!]   export GOLDEN_IMAGE_ADMIN_PASSWORD='your-secure-password'"
+                # Not an error - can be provided later when needed
+            fi
+            ;;
+
+        *)
+            # Unknown module - skip module-specific validation
+            echo "[i] No specific validation rules for module: $module_id"
+            ;;
+    esac
 
     if [[ $errors -gt 0 ]]; then
         echo "[x] Configuration validation failed with $errors errors"

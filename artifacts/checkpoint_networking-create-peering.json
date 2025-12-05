@@ -2,6 +2,6 @@
   "operation_id": "networking-create-peering",
   "status": "completed",
   "duration_seconds": 2,
-  "timestamp": "2025-12-05T04:27:28Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-peering_20251205_042726.log"
+  "timestamp": "2025-12-05T19:18:15Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-peering_20251205_191813.log"
 }

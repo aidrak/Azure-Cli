@@ -1,0 +1,7 @@
+{
+  "operation_id": "entra-validate-groups",
+  "status": "completed",
+  "duration_seconds": 12,
+  "timestamp": "2025-12-05T19:44:04Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/entra-validate-groups_20251205_194352.log"
+}

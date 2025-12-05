@@ -98,3 +98,303 @@
 {"timestamp":"2025-12-05T04:27:31.302Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T04:27:31.322Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-05T04:27:39.457Z","level":"SUCCESS","message":"Module completed: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:22.831Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:23.099Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:23.125Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:23.134Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:23.196Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:23.206Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:49.378Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:49.395Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:49.473Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:28:49.485Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:29:03.635Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:29:03.656Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:29:03.722Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T04:29:03.732Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:16.719Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:16.996Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:17.020Z","level":"INFO","message":"Executing operation: networking-create-vnet","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:17.030Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/01-create-vnet.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:17.095Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:14:17.105Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.372Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.654Z","level":"INFO","message":"Executing module: 00-resource-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.677Z","level":"INFO","message":"Executing operation: resource-group-create","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.687Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/00-resource-group/operations/01-create.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.750Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:34.759Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:38.870Z","level":"INFO","message":"Executing operation: resource-group-validate","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:38.885Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/00-resource-group/operations/02-validate.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:38.950Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:38.960Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:41.070Z","level":"SUCCESS","message":"Module completed: 00-resource-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.471Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.743Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.766Z","level":"INFO","message":"Executing operation: networking-create-vnet","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.776Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/01-create-vnet.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.840Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:15:52.851Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:08.991Z","level":"INFO","message":"Retry counter reset for networking-create-vnet","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-05T19:16:09.003Z","level":"INFO","message":"Executing operation: networking-create-subnets","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:09.018Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/02-create-subnets.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:09.082Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:09.105Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:29.262Z","level":"INFO","message":"Executing operation: networking-create-nsgs","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:29.282Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/03-create-nsgs.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:29.350Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:29.376Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:41.519Z","level":"INFO","message":"Executing operation: networking-configure-nsg-rules","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:41.546Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/04-configure-nsg-rules.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:41.617Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:16:41.640Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:01.801Z","level":"INFO","message":"Executing operation: networking-attach-nsgs","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:01.827Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/05-attach-nsgs.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:01.896Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:01.920Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:42.135Z","level":"INFO","message":"Executing operation: networking-configure-service-endpoints","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:42.168Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/06-configure-service-endpoints.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:42.236Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:17:42.260Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:08.429Z","level":"INFO","message":"Executing operation: networking-create-dns-zones","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:08.465Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/07-create-dns-zones.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:08.526Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:08.548Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:10.655Z","level":"INFO","message":"Executing operation: networking-link-dns-zones","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:10.701Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/08-link-dns-zones.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:10.770Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:10.792Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:12.905Z","level":"INFO","message":"Executing operation: networking-create-peering","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:12.948Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/09-create-peering.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:13.011Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:13.033Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:15.138Z","level":"INFO","message":"Executing operation: networking-configure-route-tables","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:15.186Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/10-configure-route-tables.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:15.247Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:15.269Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:17.375Z","level":"INFO","message":"Executing operation: networking-validate-all","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:17.429Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/11-validate-all.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:17.495Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:17.517Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:18:23.637Z","level":"SUCCESS","message":"Module completed: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:21:33.978Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.257Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.553Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.577Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.588Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.657Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:10.669Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:36.853Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:36.869Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:36.939Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:36.950Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:55.117Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:55.139Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:55.206Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:22:55.218Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:49.886Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:50.168Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:50.196Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:50.207Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:50.273Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:23:50.284Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:16.463Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:16.479Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:16.547Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:16.557Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:30.705Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:30.725Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:30.791Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:30.802Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:36.918Z","level":"INFO","message":"Retry counter reset for storage-create-file-share","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-05T19:24:36.931Z","level":"INFO","message":"Executing operation: storage-disable-public-access","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:36.956Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/04-disable-public-access.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:37.020Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:37.029Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:45.154Z","level":"INFO","message":"Executing operation: storage-create-private-dns","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:45.183Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/05-create-private-dns-zone.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:45.257Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:24:45.267Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.230Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.497Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.521Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.530Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.594Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:17.604Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:43.775Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:43.789Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:43.858Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:43.869Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:54.028Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:54.050Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:54.123Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:25:54.135Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:00.269Z","level":"INFO","message":"Executing operation: storage-disable-public-access","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:00.293Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/04-disable-public-access.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:00.368Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:00.379Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:08.511Z","level":"INFO","message":"Executing operation: storage-create-private-dns","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:08.539Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/05-create-private-dns-zone.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:08.607Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:08.620Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:48.841Z","level":"INFO","message":"Executing operation: storage-create-private-endpoint","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:48.873Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/06-create-private-endpoint.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:48.938Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:26:48.948Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:07.956Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:08.233Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:08.255Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:08.265Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:08.328Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:08.338Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:32.509Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:32.523Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:32.585Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:32.595Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:46.739Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:46.760Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:46.828Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:46.837Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:52.960Z","level":"INFO","message":"Executing operation: storage-disable-public-access","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:52.985Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/04-disable-public-access.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:53.049Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:27:53.061Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:01.192Z","level":"INFO","message":"Executing operation: storage-create-private-dns","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:01.224Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/05-create-private-dns-zone.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:01.297Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:01.308Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:05.436Z","level":"INFO","message":"Executing operation: storage-create-private-endpoint","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:05.468Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/06-create-private-endpoint.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:05.539Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:05.549Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:40.905Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:41.182Z","level":"INFO","message":"Executing module: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:41.204Z","level":"INFO","message":"Executing operation: storage-create-account","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:41.213Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/01-create-storage-account.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:41.276Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:28:41.285Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:07.445Z","level":"INFO","message":"Executing operation: storage-enable-kerberos","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:07.460Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/02-enable-entra-kerberos.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:07.522Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:07.532Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:33.709Z","level":"INFO","message":"Executing operation: storage-create-file-share","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:33.728Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/03-create-file-share.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:33.792Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:33.801Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:39.920Z","level":"INFO","message":"Executing operation: storage-disable-public-access","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:39.943Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/04-disable-public-access.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:40.010Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:40.020Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:48.149Z","level":"INFO","message":"Executing operation: storage-create-private-dns","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:48.180Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/05-create-private-dns-zone.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:48.250Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:48.260Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:54.384Z","level":"INFO","message":"Executing operation: storage-create-private-endpoint","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:54.419Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/02-storage/operations/06-create-private-endpoint.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:54.483Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:29:54.493Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:30:56.777Z","level":"INFO","message":"Retry counter reset for storage-create-private-endpoint","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-05T19:30:56.791Z","level":"SUCCESS","message":"Module completed: 02-storage","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.291Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.585Z","level":"INFO","message":"Executing module: 03-entra-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.612Z","level":"INFO","message":"Executing operation: entra-create-users-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.628Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/01-create-users-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.696Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:34.707Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:38.836Z","level":"INFO","message":"Executing operation: entra-create-admins-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:38.854Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/02-create-admins-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:38.929Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:38.940Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:43.079Z","level":"INFO","message":"Executing operation: entra-create-sso-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:43.100Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/03-create-sso-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:43.175Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:43.186Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:45.308Z","level":"INFO","message":"Executing operation: entra-create-fslogix-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:45.336Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/04-create-fslogix-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:45.408Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:45.420Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:47.537Z","level":"INFO","message":"Executing operation: entra-create-network-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:47.567Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/05-create-network-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:47.644Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:47.655Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:49.784Z","level":"INFO","message":"Executing operation: entra-create-security-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:49.821Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/06-create-security-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:49.902Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:49.914Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:52.035Z","level":"INFO","message":"Executing operation: entra-validate-groups","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:52.076Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/03-entra-group/operations/07-validate-groups.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:52.147Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:43:52.244Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:44:04.407Z","level":"SUCCESS","message":"Module completed: 03-entra-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:45.918Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:46.194Z","level":"INFO","message":"Executing module: 04-host-pool-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:46.219Z","level":"INFO","message":"Executing operation: hostpool-create-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:46.230Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/01-create-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:46.294Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:47:46.303Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.206Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.501Z","level":"INFO","message":"Executing module: 04-host-pool-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.527Z","level":"INFO","message":"Executing operation: hostpool-create-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.537Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/01-create-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.603Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:09.613Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.057Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.339Z","level":"INFO","message":"Executing module: 04-host-pool-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.366Z","level":"INFO","message":"Executing operation: hostpool-create-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.376Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/01-create-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.444Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:29.453Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:33.563Z","level":"INFO","message":"Retry counter reset for hostpool-create-pool","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-05T19:48:33.575Z","level":"INFO","message":"Executing operation: hostpool-configure-rdp","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:33.593Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/02-configure-rdp.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:33.662Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:48:33.687Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:03.839Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:04.119Z","level":"INFO","message":"Executing module: 04-host-pool-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:04.142Z","level":"INFO","message":"Executing operation: hostpool-create-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:04.151Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/01-create-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:04.219Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:04.231Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:06.350Z","level":"INFO","message":"Executing operation: hostpool-configure-rdp","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:06.367Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/02-configure-rdp.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:06.441Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:06.463Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:08.568Z","level":"INFO","message":"Retry counter reset for hostpool-configure-rdp","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-05T19:49:08.583Z","level":"INFO","message":"Executing operation: hostpool-create-app-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:08.608Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/03-create-app-group.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:08.682Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:08.706Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:12.839Z","level":"INFO","message":"Executing operation: hostpool-create-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:12.866Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/04-create-workspace.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:12.938Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:12.961Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:19.095Z","level":"INFO","message":"Executing operation: hostpool-validate-all","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:19.128Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/04-host-pool-workspace/operations/05-validate-all.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:19.203Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:19.229Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T19:49:23.359Z","level":"SUCCESS","message":"Module completed: 04-host-pool-workspace","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T21:42:46.448Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:03:21.991Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:03:45.904Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:09.889Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:10.166Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:10.191Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:10.202Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:10.267Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:04:10.277Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.574Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.858Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.885Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.901Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.969Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:08.980Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:57.708Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:57.999Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:58.027Z","level":"INFO","message":"Executing operation: golden-image-create-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:58.039Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/00-create-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:58.112Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:05:58.125Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:08:12.719Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:08:12.736Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:08:12.803Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-05T22:08:12.825Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}

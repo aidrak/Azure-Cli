@@ -28,19 +28,20 @@ operation:
       echo "[START] Starting 'Create AVD Host Pool' operation..."
 
       echo "[PROGRESS] Checking if host pool '$HOST_POOL_NAME' already exists..."
-      if az desktopvirtualization host-pool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+      if az desktopvirtualization hostpool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
         echo "[SUCCESS] Host pool '$HOST_POOL_NAME' already exists."
         exit 0
       fi
 
       echo "[PROGRESS] Host pool '$HOST_POOL_NAME' not found. Creating..."
-      az desktopvirtualization host-pool create \
+      az desktopvirtualization hostpool create \
         --name "$HOST_POOL_NAME" \
         --resource-group "$RESOURCE_GROUP" \
         --location "$LOCATION" \
         --host-pool-type "$HOST_POOL_TYPE" \
         --load-balancer-type "$LOAD_BALANCER" \
-        --max-sessions-limit "$MAX_SESSIONS" \
+        --max-session-limit "$MAX_SESSIONS" \
+        --preferred-app-group-type "Desktop" \
         --friendly-name "$HOST_POOL_NAME" \
         --tags $TAGS \
         --output none

@@ -1,7 +1,7 @@
 {
   "addressPrefix": "10.0.2.0/24",
   "delegations": [],
-  "etag": "W/\"751c661b-e43f-4fae-8e3b-c7e3761ae2f7\"",
+  "etag": "W/\"18f28792-86a9-4b78-a517-22a962489aee\"",
   "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Network/virtualNetworks/avd-vnet/subnets/subnet-private-endpoints",
   "name": "subnet-private-endpoints",
   "privateEndpointNetworkPolicies": "Disabled",

@@ -1,0 +1,10 @@
+{
+  "fqdns": "",
+  "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Compute/virtualMachines/gm-temp-vm",
+  "location": "centralus",
+  "macAddress": "7C-1E-52-89-BF-55",
+  "powerState": "VM running",
+  "privateIpAddress": "10.0.1.4",
+  "publicIpAddress": "132.196.54.16",
+  "resourceGroup": "RG-Azure-VDI-01"
+}

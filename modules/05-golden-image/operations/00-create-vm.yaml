@@ -1,0 +1,78 @@
+# ==============================================================================
+# Operation: Create Temporary VM
+# ==============================================================================
+operation:
+  id: "golden-image-create-vm"
+  name: "Create Temporary VM"
+  description: "Create temporary Windows 11 VM for golden image preparation"
+
+  # Duration expectations
+  duration:
+    expected: 420   # 7 minutes
+    timeout: 900    # 15 minutes (VM creation can be slow)
+    type: "WAIT"    # WAIT (10+min typical for VM creation)
+
+  # Prerequisites (check state.json)
+  requires: []  # First operation, no prerequisites
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "vm"
+        resource_name: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+        description: "VM created successfully"
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "az-cli"
+    command: |
+      # Check if VM already exists (idempotent)
+      if az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --output none 2>/dev/null; then
+        echo "[INFO] VM '{{GOLDEN_IMAGE_TEMP_VM_NAME}}' already exists. Skipping creation."
+        exit 0
+      fi
+
+      # Create VM with TrustedLaunch security
+      az vm create \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --image "{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}:{{GOLDEN_IMAGE_IMAGE_OFFER}}:{{GOLDEN_IMAGE_IMAGE_SKU}}:{{GOLDEN_IMAGE_IMAGE_VERSION}}" \
+        --size "{{GOLDEN_IMAGE_VM_SIZE}}" \
+        --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" \
+        --admin-password "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --subnet "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}" \
+        --public-ip-sku Standard \
+        --security-type TrustedLaunch \
+        --enable-secure-boot true \
+        --enable-vtpm true \
+        --location "{{AZURE_LOCATION}}" \
+        --output json > artifacts/outputs/golden-image-create-vm.json
+
+      # Get VM details
+      VM_PUBLIC_IP=$(az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --show-details \
+        --query "publicIps" \
+        --output tsv)
+
+      VM_PRIVATE_IP=$(az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --show-details \
+        --query "privateIps" \
+        --output tsv)
+
+      echo "[SUCCESS] VM created successfully"
+      echo "[INFO] Public IP: $VM_PUBLIC_IP"
+      echo "[INFO] Private IP: $VM_PRIVATE_IP"
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

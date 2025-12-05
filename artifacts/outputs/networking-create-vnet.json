@@ -6,14 +6,14 @@
       ]
     },
     "enableDdosProtection": false,
-    "etag": "W/\"e900da43-3636-4141-ae7e-0091407611f0\"",
+    "etag": "W/\"ada8cf2e-c9f1-485a-aee4-0f884ea36097\"",
     "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Network/virtualNetworks/avd-vnet",
     "location": "centralus",
     "name": "avd-vnet",
     "privateEndpointVNetPolicies": "Disabled",
     "provisioningState": "Succeeded",
     "resourceGroup": "RG-Azure-VDI-01",
-    "resourceGuid": "4cf9d60e-e3c1-4f11-988a-8d6641a04140",
+    "resourceGuid": "0dc37d29-7c0b-4a87-9185-9823bc088fd3",
     "subnets": [],
     "type": "Microsoft.Network/virtualNetworks",
     "virtualNetworkPeerings": []

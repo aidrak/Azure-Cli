@@ -1,7 +1,7 @@
 {
   "addressPrefix": "10.0.1.0/24",
   "delegations": [],
-  "etag": "W/\"a52a8d51-8cb8-4a34-aace-a6fbf48b4bb0\"",
+  "etag": "W/\"ea2f95f2-142c-42ed-a70a-cc81ac915fc2\"",
   "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/RG-Azure-VDI-01/providers/Microsoft.Network/virtualNetworks/avd-vnet/subnets/subnet-session-hosts",
   "name": "subnet-session-hosts",
   "privateEndpointNetworkPolicies": "Enabled",

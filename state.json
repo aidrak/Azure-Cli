@@ -1,69 +1,199 @@
 {
-  "current_module": "null",
-  "updated_at": "2025-12-05T04:27:39Z",
+  "current_module": "05-golden-image",
+  "updated_at": "2025-12-05T22:10:13Z",
   "modules": {
     "01-networking": {
       "status": "completed",
-      "timestamp": "2025-12-05T04:27:39Z"
+      "timestamp": "2025-12-05T19:18:23Z"
+    },
+    "02-storage": {
+      "status": "completed",
+      "timestamp": "2025-12-05T19:30:56Z"
+    },
+    "00-resource-group": {
+      "status": "completed",
+      "timestamp": "2025-12-05T19:15:41Z"
+    },
+    "03-entra-group": {
+      "status": "completed",
+      "timestamp": "2025-12-05T19:44:04Z"
+    },
+    "04-host-pool-workspace": {
+      "status": "completed",
+      "timestamp": "2025-12-05T19:49:23Z"
+    },
+    "05-golden-image": {
+      "status": "failed",
+      "timestamp": "2025-12-05T22:10:13Z"
     }
   },
-  "current_operation": "networking-validate-all",
-  "status": "completed",
+  "current_operation": "golden-image-system-prep",
+  "status": "failed",
   "operations": {
     "networking-create-vnet": {
       "status": "completed",
-      "duration": 2,
-      "timestamp": "2025-12-05T04:25:54Z"
+      "duration": 16,
+      "timestamp": "2025-12-05T19:16:08Z"
     },
     "networking-create-subnets": {
       "status": "completed",
-      "duration": 4,
-      "timestamp": "2025-12-05T04:25:58Z"
+      "duration": 20,
+      "timestamp": "2025-12-05T19:16:29Z"
     },
     "networking-create-nsgs": {
       "status": "completed",
-      "duration": 4,
-      "timestamp": "2025-12-05T04:26:03Z"
+      "duration": 12,
+      "timestamp": "2025-12-05T19:16:41Z"
     },
     "networking-configure-nsg-rules": {
       "status": "completed",
-      "duration": 12,
-      "timestamp": "2025-12-05T04:26:15Z"
+      "duration": 20,
+      "timestamp": "2025-12-05T19:17:01Z"
     },
     "networking-attach-nsgs": {
       "status": "completed",
-      "duration": 40,
-      "timestamp": "2025-12-05T04:26:55Z"
+      "duration": 41,
+      "timestamp": "2025-12-05T19:17:42Z"
     },
     "networking-configure-service-endpoints": {
       "status": "completed",
       "duration": 26,
-      "timestamp": "2025-12-05T04:27:22Z"
+      "timestamp": "2025-12-05T19:18:08Z"
     },
     "networking-create-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T04:27:24Z"
+      "timestamp": "2025-12-05T19:18:10Z"
     },
     "networking-link-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T04:27:26Z"
+      "timestamp": "2025-12-05T19:18:12Z"
     },
     "networking-create-peering": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T04:27:28Z"
+      "timestamp": "2025-12-05T19:18:15Z"
     },
     "networking-configure-route-tables": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T04:27:31Z"
+      "timestamp": "2025-12-05T19:18:17Z"
     },
     "networking-validate-all": {
       "status": "completed",
+      "duration": 6,
+      "timestamp": "2025-12-05T19:18:23Z"
+    },
+    "storage-create-account": {
+      "status": "completed",
+      "duration": 26,
+      "timestamp": "2025-12-05T19:29:07Z"
+    },
+    "storage-enable-kerberos": {
+      "status": "completed",
+      "duration": 26,
+      "timestamp": "2025-12-05T19:29:33Z"
+    },
+    "storage-create-file-share": {
+      "status": "completed",
+      "duration": 6,
+      "timestamp": "2025-12-05T19:29:39Z"
+    },
+    "resource-group-create": {
+      "status": "completed",
+      "duration": 4,
+      "timestamp": "2025-12-05T19:15:38Z"
+    },
+    "resource-group-validate": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:15:41Z"
+    },
+    "storage-disable-public-access": {
+      "status": "completed",
       "duration": 8,
-      "timestamp": "2025-12-05T04:27:39Z"
+      "timestamp": "2025-12-05T19:29:48Z"
+    },
+    "storage-create-private-dns": {
+      "status": "completed",
+      "duration": 6,
+      "timestamp": "2025-12-05T19:29:54Z"
+    },
+    "storage-create-private-endpoint": {
+      "status": "completed",
+      "duration": 62,
+      "timestamp": "2025-12-05T19:30:56Z"
+    },
+    "entra-create-users-group": {
+      "status": "completed",
+      "duration": 4,
+      "timestamp": "2025-12-05T19:43:38Z"
+    },
+    "entra-create-admins-group": {
+      "status": "completed",
+      "duration": 4,
+      "timestamp": "2025-12-05T19:43:43Z"
+    },
+    "entra-create-sso-group": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:43:45Z"
+    },
+    "entra-create-fslogix-group": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:43:47Z"
+    },
+    "entra-create-network-group": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:43:49Z"
+    },
+    "entra-create-security-group": {
+      "status": "completed",
+      "duration": 3,
+      "timestamp": "2025-12-05T19:43:52Z"
+    },
+    "entra-validate-groups": {
+      "status": "completed",
+      "duration": 12,
+      "timestamp": "2025-12-05T19:44:04Z"
+    },
+    "hostpool-create-pool": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:49:06Z"
+    },
+    "hostpool-configure-rdp": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-05T19:49:08Z"
+    },
+    "hostpool-create-app-group": {
+      "status": "completed",
+      "duration": 4,
+      "timestamp": "2025-12-05T19:49:12Z"
+    },
+    "hostpool-create-workspace": {
+      "status": "completed",
+      "duration": 6,
+      "timestamp": "2025-12-05T19:49:19Z"
+    },
+    "hostpool-validate-all": {
+      "status": "completed",
+      "duration": 4,
+      "timestamp": "2025-12-05T19:49:23Z"
+    },
+    "golden-image-system-prep": {
+      "status": "failed",
+      "duration": 121,
+      "timestamp": "2025-12-05T22:10:13Z"
+    },
+    "golden-image-create-vm": {
+      "status": "completed",
+      "duration": 134,
+      "timestamp": "2025-12-05T22:08:12Z"
     }
   }
 }

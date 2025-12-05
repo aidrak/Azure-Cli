@@ -1,0 +1,7 @@
+{
+  "operation_id": "entra-create-network-group",
+  "status": "completed",
+  "duration_seconds": 2,
+  "timestamp": "2025-12-05T19:43:49Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/entra-create-network-group_20251205_194347.log"
+}

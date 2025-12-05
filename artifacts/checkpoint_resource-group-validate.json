@@ -1,0 +1,7 @@
+{
+  "operation_id": "resource-group-validate",
+  "status": "completed",
+  "duration_seconds": 2,
+  "timestamp": "2025-12-05T19:15:41Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/resource-group-validate_20251205_191539.log"
+}
