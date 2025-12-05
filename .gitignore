@@ -10,6 +10,9 @@ config/avd-config.ps1
 config/*-config.sh
 config/*-config.ps1
 
+# Secrets file (NEVER commit - contains passwords and sensitive data)
+secrets.yaml
+
 # Keep only example files (these are safe to commit)
 !config/*.example.sh
 !config/*.example.ps1
