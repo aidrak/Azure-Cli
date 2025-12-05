@@ -18,6 +18,7 @@ set -euo pipefail
 # Project paths
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CONFIG_FILE="${PROJECT_ROOT}/config.yaml"
+SECRETS_FILE="${PROJECT_ROOT}/secrets.yaml"
 STATE_FILE="${PROJECT_ROOT}/state.json"
 
 # ==============================================================================
@@ -117,6 +118,32 @@ load_config() {
     # Application Group section
     APP_GROUP_NAME=$(yq e '.app_group.name' "$config_file"); export APP_GROUP_NAME
     APP_GROUP_TYPE=$(yq e '.app_group.type' "$config_file"); export APP_GROUP_TYPE
+
+    # ===========================================================================
+    # Load Secrets (if secrets.yaml exists, merge with config.yaml)
+    # Secrets take precedence over config.yaml values
+    # ===========================================================================
+    if [[ -f "$SECRETS_FILE" ]]; then
+        echo "[*] Loading secrets from: $SECRETS_FILE"
+
+        # Override golden image admin password if set in secrets
+        local secret_password
+        secret_password=$(yq e '.golden_image.admin_password' "$SECRETS_FILE" 2>/dev/null)
+        if [[ -n "$secret_password" && "$secret_password" != "null" ]]; then
+            GOLDEN_IMAGE_ADMIN_PASSWORD="$secret_password"
+            export GOLDEN_IMAGE_ADMIN_PASSWORD
+            echo "[v] Golden image admin password loaded from secrets"
+        fi
+
+        # Add more secret overrides here as needed
+        # Example:
+        # local secret_api_key
+        # secret_api_key=$(yq e '.api.key' "$SECRETS_FILE" 2>/dev/null)
+        # if [[ -n "$secret_api_key" && "$secret_api_key" != "null" ]]; then
+        #     API_KEY="$secret_api_key"
+        #     export API_KEY
+        # fi
+    fi
 
     echo "[v] Configuration loaded successfully"
     return 0

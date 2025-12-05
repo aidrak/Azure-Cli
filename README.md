@@ -18,6 +18,18 @@ azure:
   resource_group: "RG-Azure-VDI-01"
 ```
 
+**Secrets Management** (for passwords and sensitive values):
+
+```bash
+# Copy the secrets template
+cp secrets.yaml.example secrets.yaml
+
+# Edit secrets.yaml (this file is in .gitignore - never committed)
+vi secrets.yaml
+```
+
+Secrets in `secrets.yaml` automatically override values in `config.yaml`. This keeps sensitive data out of git while allowing you to configure once and not constantly provide passwords.
+
 ### 2. Execute
 
 ```bash
