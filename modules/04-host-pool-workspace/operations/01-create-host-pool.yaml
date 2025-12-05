@@ -1,0 +1,48 @@
+# ==============================================================================
+# Operation: Create AVD Host Pool
+# ==============================================================================
+operation:
+  id: "hostpool-create-pool"
+  name: "Create AVD Host Pool"
+  description: "Create the AVD host pool with type, load balancer, and session limit from config."
+
+  duration:
+    expected: 120
+    timeout: 240
+    type: "FAST"
+
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      LOCATION="{{AZURE_LOCATION}}"
+      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      HOST_POOL_TYPE="{{HOST_POOL_TYPE}}"
+      MAX_SESSIONS="{{HOST_POOL_MAX_SESSIONS}}"
+      LOAD_BALANCER="{{HOST_POOL_LOAD_BALANCER}}"
+      TAGS="environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      echo "[START] Starting 'Create AVD Host Pool' operation..."
+
+      echo "[PROGRESS] Checking if host pool '$HOST_POOL_NAME' already exists..."
+      if az desktopvirtualization host-pool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+        echo "[SUCCESS] Host pool '$HOST_POOL_NAME' already exists."
+        exit 0
+      fi
+
+      echo "[PROGRESS] Host pool '$HOST_POOL_NAME' not found. Creating..."
+      az desktopvirtualization host-pool create \
+        --name "$HOST_POOL_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --location "$LOCATION" \
+        --host-pool-type "$HOST_POOL_TYPE" \
+        --load-balancer-type "$LOAD_BALANCER" \
+        --max-sessions-limit "$MAX_SESSIONS" \
+        --friendly-name "$HOST_POOL_NAME" \
+        --tags $TAGS \
+        --output none
+
+      echo "[SUCCESS] Successfully created host pool '$HOST_POOL_NAME'."

@@ -1,7 +1,0 @@
-{
-  "operation_id": "golden-image-install-fslogix",
-  "status": "completed",
-  "duration_seconds": 155,
-  "timestamp": "2025-12-04T20:52:24Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-install-fslogix_20251204_204949.log"
-}

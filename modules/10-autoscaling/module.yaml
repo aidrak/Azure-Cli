@@ -1,0 +1,64 @@
+# ==============================================================================
+# Module: Autoscaling Configuration
+# ==============================================================================
+module:
+  id: "10-autoscaling"
+  name: "Autoscaling Configuration"
+  description: "Configure autoscaling for AVD host pool to optimize costs based on demand"
+
+  # Module-level configuration
+  config:
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    host_pool_name: "{{HOST_POOL_NAME}}"
+    autoscaling_enabled: "{{AUTOSCALING_ENABLED}}"
+
+  # Operations in this module (executed in order)
+  operations:
+    - id: "autoscaling-assign-rbac"
+      name: "Assign Autoscaling RBAC Role"
+      description: "Assign Desktop Virtualization Power On Off Contributor role to AVD service principal"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "autoscaling-create-plan"
+      name: "Create Scaling Plan"
+      description: "Create autoscaling plan with schedules for cost optimization"
+      duration: 180  # 3 minutes
+      type: "FAST"
+
+    - id: "autoscaling-verify-configuration"
+      name: "Verify Autoscaling Configuration"
+      description: "Verify autoscaling plan is configured and assigned to host pool"
+      duration: 60   # 1 minute
+      type: "FAST"
+
+  # Module-level validation (run after all operations complete)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          # Verify scaling plan exists
+          if az desktopvirtualization scaling-plan show \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "ScalingPlan-{{HOST_POOL_NAME}}" &>/dev/null; then
+            echo "[VALIDATE] Scaling plan exists"
+            exit 0
+          else
+            echo "[ERROR] Scaling plan not found"
+            exit 1
+          fi
+        description: "Verify scaling plan exists"
+
+  # Expected total duration
+  total_duration:
+    expected: 360   # 6 minutes (sum of all operations)
+    timeout: 720    # 12 minutes (2x expected)
+
+  # Module state file
+  state_file: "modules/10-autoscaling/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"

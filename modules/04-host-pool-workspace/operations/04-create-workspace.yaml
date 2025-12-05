@@ -1,0 +1,58 @@
+# ==============================================================================
+# Operation: Create AVD Workspace
+# ==============================================================================
+operation:
+  id: "hostpool-create-workspace"
+  name: "Create AVD Workspace"
+  description: "Create the AVD workspace and register the application group to it."
+
+  duration:
+    expected: 90
+    timeout: 180
+    type: "FAST"
+
+  requires:
+    - "hostpool-create-app-group"
+
+  template:
+    type: "azure-cli-bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      LOCATION="{{AZURE_LOCATION}}"
+      WORKSPACE_NAME="{{WORKSPACE_NAME}}"
+      WORKSPACE_FRIENDLY_NAME="{{WORKSPACE_FRIENDLY_NAME}}"
+      WORKSPACE_DESCRIPTION="{{WORKSPACE_DESCRIPTION}}"
+      APP_GROUP_NAME="{{APP_GROUP_NAME}}"
+      TAGS="environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      echo "[START] Starting 'Create AVD Workspace' operation..."
+
+      echo "[PROGRESS] Checking if workspace '$WORKSPACE_NAME' already exists..."
+      if az desktopvirtualization workspace show --name "$WORKSPACE_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+        echo "[INFO] Workspace '$WORKSPACE_NAME' already exists."
+      else
+        echo "[PROGRESS] Workspace '$WORKSPACE_NAME' not found. Creating..."
+        az desktopvirtualization workspace create \
+          --name "$WORKSPACE_NAME" \
+          --resource-group "$RESOURCE_GROUP" \
+          --location "$LOCATION" \
+          --description "$WORKSPACE_DESCRIPTION" \
+          --friendly-name "$WORKSPACE_FRIENDLY_NAME" \
+          --tags $TAGS \
+          --output none
+        echo "[SUCCESS] Successfully created workspace '$WORKSPACE_NAME'."
+      fi
+
+      echo "[PROGRESS] Ensuring application group '$APP_GROUP_NAME' is registered to the workspace..."
+      APP_GROUP_ID=$(az desktopvirtualization applicationgroup show --name "$APP_GROUP_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv)
+      
+      az desktopvirtualization workspace update \
+        --name "$WORKSPACE_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --application-group-references "$APP_GROUP_ID" \
+        --output none
+
+      echo "[SUCCESS] Application group '$APP_GROUP_NAME' is registered to workspace '$WORKSPACE_NAME'."

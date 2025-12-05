@@ -1,7 +1,0 @@
-{
-  "operation_id": "golden-image-run-vdot",
-  "status": "completed",
-  "duration_seconds": 64,
-  "timestamp": "2025-12-04T22:25:32Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/golden-image-run-vdot_20251204_222428.log"
-}

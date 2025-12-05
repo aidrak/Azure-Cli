@@ -1,0 +1,221 @@
+# ==============================================================================
+# Operation: Configure Host Pool for SSO
+# ==============================================================================
+operation:
+  id: "sso-configure-host-pool"
+  name: "Configure Host Pool RDP Properties"
+  description: "Enable Entra ID authentication (SSO) in host pool RDP properties"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 300    # 5 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "host-pool-create"
+      status: "completed"
+      optional: true  # Host pool may have been created previously
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          RDP_PROPS=$(az desktopvirtualization hostpool show \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{HOST_POOL_NAME}}" \
+            --query "customRdpProperty" -o tsv)
+
+          if echo "$RDP_PROPS" | grep -q "enablerdsaadauth:i:1"; then
+            echo "[VALIDATE] SSO enabled in RDP properties"
+            exit 0
+          else
+            echo "[ERROR] SSO not found in RDP properties"
+            exit 1
+          fi
+        description: "Verify SSO enabled in host pool"
+
+  # Template command (executed via bash)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] SSO Host Pool Configuration: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      SSO_ENABLED="{{SSO_ENABLED}}"
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Check if SSO is enabled in config
+      echo "[PROGRESS] Step 2/5: Checking SSO configuration..."
+      if [[ "$SSO_ENABLED" != "true" ]]; then
+        echo "[WARNING] SSO is disabled in config.yaml (sso.enabled: false)"
+        echo "[WARNING] Skipping SSO configuration"
+
+        {
+          echo "SSO Configuration Skipped"
+          echo "========================="
+          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "SSO is disabled in configuration."
+          echo "To enable SSO, set sso.enabled: true in config.yaml"
+          echo ""
+        } > "artifacts/outputs/sso-configure-host-pool.txt"
+
+        exit 0
+      fi
+
+      # Step 3: Verify host pool exists
+      echo "[PROGRESS] Step 3/5: Verifying host pool exists..."
+      if ! az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" &>/dev/null; then
+        echo "[ERROR] Host pool not found: $HOST_POOL_NAME"
+        echo "[ERROR] Please ensure host pool was created (Module 04)"
+        exit 1
+      fi
+
+      echo "[VALIDATE] Host pool found: $HOST_POOL_NAME"
+
+      # Step 4: Get current RDP properties
+      echo "[PROGRESS] Step 4/5: Getting current RDP properties..."
+      CURRENT_RDP_PROPS=$(az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" \
+        --query "customRdpProperty" -o tsv)
+
+      if [[ -z "$CURRENT_RDP_PROPS" || "$CURRENT_RDP_PROPS" == "null" ]]; then
+        CURRENT_RDP_PROPS=""
+      fi
+
+      echo "[VALIDATE] Current RDP properties: ${CURRENT_RDP_PROPS:-<empty>}"
+
+      # Check if SSO already enabled
+      if echo "$CURRENT_RDP_PROPS" | grep -q "enablerdsaadauth:i:1"; then
+        echo "[SUCCESS] SSO already enabled in host pool"
+      else
+        # Step 5: Update RDP properties to enable SSO
+        echo "[PROGRESS] Step 5/5: Enabling SSO in RDP properties..."
+
+        # Add SSO property to existing properties
+        if [[ -n "$CURRENT_RDP_PROPS" ]]; then
+          # Append to existing properties
+          NEW_RDP_PROPS="${CURRENT_RDP_PROPS};enablerdsaadauth:i:1"
+        else
+          # No existing properties, just set SSO
+          NEW_RDP_PROPS="enablerdsaadauth:i:1"
+        fi
+
+        # Update host pool
+        if az desktopvirtualization hostpool update \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$HOST_POOL_NAME" \
+          --custom-rdp-property "$NEW_RDP_PROPS" \
+          --output none 2>&1; then
+          echo "[SUCCESS] SSO enabled in host pool"
+        else
+          echo "[ERROR] Failed to update host pool RDP properties"
+          exit 1
+        fi
+
+        # Verify the update
+        UPDATED_RDP_PROPS=$(az desktopvirtualization hostpool show \
+          --resource-group "$RESOURCE_GROUP" \
+          --name "$HOST_POOL_NAME" \
+          --query "customRdpProperty" -o tsv)
+
+        echo "[VALIDATE] Updated RDP properties: $UPDATED_RDP_PROPS"
+      fi
+
+      # Save configuration details
+      {
+        echo "SSO Host Pool Configuration"
+        echo "==========================="
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Host Pool:"
+        echo "  Name: $HOST_POOL_NAME"
+        echo "  Resource Group: $RESOURCE_GROUP"
+        echo ""
+        echo "SSO Configuration:"
+        echo "  Enabled: Yes"
+        echo "  Method: Entra ID (Azure AD)"
+        echo "  RDP Property: enablerdsaadauth:i:1"
+        echo ""
+        echo "What This Enables:"
+        echo "  - Single Sign-On with Entra ID credentials"
+        echo "  - Passwordless authentication support"
+        echo "  - Windows Hello for Business integration"
+        echo "  - FIDO2 security key support"
+        echo "  - Seamless authentication from Entra-joined devices"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Configure Windows Cloud Login service principal (manual)"
+        echo "  2. Add trusted device groups for SSO (manual)"
+        echo "  3. Configure Conditional Access policies (manual)"
+        echo "  4. Test user SSO experience"
+        echo ""
+        echo "Manual Configuration Required:"
+        echo ""
+        echo "Step 1: Enable RDP on Windows Cloud Login Service Principal"
+        echo "  Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45"
+        echo "  This must be done via Microsoft Graph API or Portal"
+        echo ""
+        echo "Step 2: Configure Trusted Device Groups (Optional but Recommended)"
+        echo "  Add your device group (e.g., AVD-Devices-Pooled-SSO) to eliminate"
+        echo "  consent prompts for users connecting from managed devices"
+        echo ""
+        echo "Step 3: Configure Conditional Access Policies"
+        echo "  Required Cloud Apps:"
+        echo "    - Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)"
+        echo "    - Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)"
+        echo "    - Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)"
+        echo ""
+        echo "  IMPORTANT: Do NOT apply sign-in frequency policies to Windows Cloud Login"
+        echo ""
+        echo "Testing SSO:"
+        echo "  1. User launches Windows App or Remote Desktop client"
+        echo "  2. Signs in with Entra ID credentials (once)"
+        echo "  3. Desktop should launch without additional credential prompt"
+        echo "  4. If credential prompt appears, SSO configuration needs review"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  - Wait 10-15 minutes for changes to propagate"
+        echo "  - Verify session hosts are Entra-joined (not hybrid)"
+        echo "  - Check Virtual Machine User Login RBAC role is assigned"
+        echo "  - Review Conditional Access policies for conflicts"
+        echo ""
+      } > "artifacts/outputs/sso-configure-host-pool.txt"
+
+      echo "[SUCCESS] SSO host pool configuration completed"
+      echo ""
+      echo "IMPORTANT: Manual Steps Required"
+      echo "================================="
+      echo "The host pool has been configured for SSO, but additional manual"
+      echo "configuration is required in the Azure Portal:"
+      echo ""
+      echo "1. Configure Windows Cloud Login service principal"
+      echo "2. Add trusted device groups (optional)"
+      echo "3. Configure Conditional Access policies"
+      echo ""
+      echo "See artifacts/outputs/sso-configure-host-pool.txt for detailed instructions"
+      echo ""
+
+      exit 0
+
+  # Self-healing: Previous fixes applied to this template
+  fixes:
+    # Fixes will be added here automatically when errors occur

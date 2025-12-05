@@ -1,0 +1,67 @@
+# ==============================================================================
+# Module: RBAC Role Assignments
+# ==============================================================================
+module:
+  id: "08-rbac"
+  name: "RBAC Role Assignments"
+  description: "Assign RBAC roles to user groups for AVD resource access"
+
+  # Module-level configuration
+  config:
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    standard_users_group: "{{ENTRA_GROUP_USERS_STANDARD}}"
+    admin_users_group: "{{ENTRA_GROUP_USERS_ADMINS}}"
+
+  # Operations in this module (executed in order)
+  operations:
+    - id: "rbac-storage-permissions"
+      name: "Assign Storage Permissions"
+      description: "Assign FSLogix storage file share permissions to user groups"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "rbac-vm-login-permissions"
+      name: "Assign VM Login Permissions"
+      description: "Assign VM login permissions to user groups"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "rbac-app-group-permissions"
+      name: "Assign Application Group Permissions"
+      description: "Assign Desktop Virtualization User role to application groups"
+      duration: 120  # 2 minutes
+      type: "FAST"
+
+    - id: "rbac-verify-assignments"
+      name: "Verify RBAC Assignments"
+      description: "Verify all RBAC role assignments are in place"
+      duration: 60   # 1 minute
+      type: "FAST"
+
+  # Module-level validation (run after all operations complete)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          # Verify standard user storage permissions
+          GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv)
+          if [[ -z "$GROUP_ID" ]]; then
+            echo "[ERROR] Standard users group not found"
+            exit 1
+          fi
+          echo "[VALIDATE] Standard users group found: $GROUP_ID"
+        description: "Verify user groups exist"
+
+  # Expected total duration
+  total_duration:
+    expected: 420   # 7 minutes (sum of all operations)
+    timeout: 840    # 14 minutes (2x expected)
+
+  # Module state file
+  state_file: "modules/08-rbac/state.json"
+
+  # Artifacts
+  artifacts:
+    logs: "artifacts/logs/"
+    outputs: "artifacts/outputs/"
