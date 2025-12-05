@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] FSLogix installation: 14:49:58\n[PROGRESS] Step 1/5: Downloading FSLogix...\n[PROGRESS] Download complete (113.219443321228 MB)\n[PROGRESS] Step 2/5: Extracting archive...\n[PROGRESS] Step 3/5: Locating installer...\n[PROGRESS] Found installer: C:\\Windows\\TEMP\\FSLogix\\x64\\Release\\FSLogixAppsSetup.exe\n[PROGRESS] Step 4/5: Installing FSLogix...\n[PROGRESS] Installation complete\n[PROGRESS] Step 5/5: Validating installation...\n[VALIDATE] Checking executable...\n[VALIDATE] Checking registry key...\n[VALIDATE] Checking Apps registry key...\n[PROGRESS] Cleaning up temporary files...\n[SUCCESS] FSLogix installed successfully"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    }
+  ]
+}

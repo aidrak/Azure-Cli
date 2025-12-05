@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] Default user profile configuration: 16:26:29\n[PROGRESS] Step 1/4: Loading default user registry hive...\n[PROGRESS] Default user hive loaded\n[PROGRESS] Step 2/4: Disabling pre-installed apps and suggestions...\n[PROGRESS] Pre-installed apps disabled\n[PROGRESS] Step 3/4: Disabling user engagement prompts...\n[PROGRESS] User engagement prompts disabled\n[PROGRESS] Step 4/4: Unloading default user registry hive...\n[PROGRESS] Default user hive unloaded successfully\n[VALIDATE] Verifying default user profile configuration...\n[SUCCESS] Default user profile configured successfully\n[SUCCESS] Disabled: pre-installed apps, content suggestions, user engagement prompts"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    }
+  ]
+}

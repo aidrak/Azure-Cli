@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] System preparation: 14:46:43\n[PROGRESS] Step 1/2: Disabling BitLocker...\n[PROGRESS] BitLocker disabled\n[PROGRESS] Step 2/2: Creating temporary directory...\n[PROGRESS] Temporary directory already exists\n[VALIDATE] Checking temp directory...\n[SUCCESS] System preparation complete"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    }
+  ]
+}

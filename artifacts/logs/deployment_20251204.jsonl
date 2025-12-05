@@ -1,52 +1,116 @@
-{
-  "timestamp": "2025-12-04T17:14:52.538Z",
-  "level": "INFO",
-  "message": "Test info message",
-  "operation_id": "test-operation",
-  "metadata": {}
-}
-{
-  "timestamp": "2025-12-04T17:14:52.544Z",
-  "level": "WARN",
-  "message": "Test warning message",
-  "operation_id": "test-operation",
-  "metadata": {}
-}
-{
-  "timestamp": "2025-12-04T17:14:52.549Z",
-  "level": "SUCCESS",
-  "message": "Test success message",
-  "operation_id": "test-operation",
-  "metadata": {}
-}
-
-
-
-{
-  "timestamp": "2025-12-04T17:42:23.032Z",
-  "level": "INFO",
-  "message": "Retry counter reset for test-operation-retry",
-  "operation_id": "error-handler",
-  "metadata": {}
-}
-{
-  "timestamp": "2025-12-04T17:42:46.250Z",
-  "level": "INFO",
-  "message": "Retry counter reset for test-operation-retry",
-  "operation_id": "error-handler",
-  "metadata": {}
-}
-{
-  "timestamp": "2025-12-04T17:42:46.367Z",
-  "level": "OPERATION_ERROR",
-  "message": "Operation error: 1",
-  "operation_id": "test-error-workflow",
-  "metadata": {}
-}
-{
-  "timestamp": "2025-12-04T17:42:46.390Z",
-  "level": "INFO",
-  "message": "Retry counter reset for test-error-workflow",
-  "operation_id": "error-handler",
-  "metadata": {}
-}
+{"timestamp":"2025-12-04T20:18:50.002Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:18:50.168Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:18:50.179Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:18:50.246Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:18:50.256Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:10.082Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:10.243Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:10.253Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:10.330Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:10.340Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:43:42.547Z","level":"INFO","message":"Retry counter reset for golden-image-system-prep","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-04T20:45:07.157Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:07.310Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:07.319Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:07.383Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:07.394Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:32.239Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:32.390Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:32.401Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:32.462Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:45:32.471Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:46:33.679Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:46:33.827Z","level":"INFO","message":"Executing operation: golden-image-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:46:33.837Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:46:33.900Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:46:33.909Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:47:26.091Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:47:26.240Z","level":"INFO","message":"Executing operation: golden-image-install-fslogix","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:47:26.255Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02-install-fslogix.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:47:26.322Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:47:26.343Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:49:49.640Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:49:49.799Z","level":"INFO","message":"Executing operation: golden-image-install-fslogix","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:49:49.814Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02-install-fslogix.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:49:49.881Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:49:49.905Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:43.930Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:44.103Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:44.149Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:44.323Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:49.293Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:49.463Z","level":"INFO","message":"Executing operation: golden-image-install-chrome","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:49.485Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-chrome.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:49.555Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T20:52:49.581Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:21:35.784Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:21:35.956Z","level":"INFO","message":"Executing operation: golden-image-install-adobe","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:21:35.987Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/04-install-adobe.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:21:36.058Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:23:54.830Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:23:55.015Z","level":"INFO","message":"Executing operation: golden-image-install-adobe","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:23:55.046Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/04-install-adobe.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:23:55.129Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:26:22.998Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:26:23.185Z","level":"INFO","message":"Executing operation: golden-image-install-adobe","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:26:23.214Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/04-install-adobe.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:26:23.296Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:26:23.322Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:38:46.518Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:38:46.686Z","level":"INFO","message":"Executing operation: golden-image-install-office","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:38:46.719Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/05-install-office.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:38:46.786Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:39:04.072Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:39:04.233Z","level":"INFO","message":"Executing operation: golden-image-install-office","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:39:04.262Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/05-install-office.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:39:04.332Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T21:39:04.355Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:05:19.264Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:05:19.447Z","level":"INFO","message":"Executing operation: golden-image-configure-defaults","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:05:19.483Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/06-configure-defaults.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:05:19.556Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:05:19.577Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:06:17.247Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:06:17.413Z","level":"INFO","message":"Executing operation: golden-image-run-vdot","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:06:17.457Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/07-run-vdot.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:06:17.548Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:06:17.575Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:23:55.422Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:23:55.567Z","level":"INFO","message":"Executing operation: 07-run-vdot","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:08.080Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:08.238Z","level":"INFO","message":"Executing operation: 07-run-vdot","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:28.382Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:28.529Z","level":"INFO","message":"Executing operation: golden-image-run-vdot","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:28.564Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/07-run-vdot.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:28.627Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:24:28.647Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:25:42.638Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:25:42.788Z","level":"INFO","message":"Executing operation: golden-image-registry-avd","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:25:42.829Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/08-registry-avd.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:25:42.889Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:25:42.912Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:26:23.023Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:26:23.170Z","level":"INFO","message":"Executing operation: golden-image-configure-default-profile","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:26:23.217Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/09-configure-default-profile.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:26:23.281Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:26:23.302Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:27:03.159Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:27:03.308Z","level":"INFO","message":"Executing operation: golden-image-cleanup-temp","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:27:03.359Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/10-cleanup-temp.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:27:03.424Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:27:03.445Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:29:02.435Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:29:02.618Z","level":"INFO","message":"Executing operation: golden-image-cleanup-temp","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:29:02.674Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/10-cleanup-temp.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:29:02.746Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:29:02.769Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:30:22.192Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:30:22.365Z","level":"INFO","message":"Executing operation: golden-image-validate-all","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:30:22.425Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/11-validate-all.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:30:22.499Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:30:22.525Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:31:33.731Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:31:33.900Z","level":"INFO","message":"Executing operation: golden-image-validate-all","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:31:33.959Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/11-validate-all.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:31:34.028Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-04T22:31:34.050Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}

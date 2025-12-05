@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] Registry configuration for AVD: 16:25:59\n[PROGRESS] Step 1/7: Configuring RDP settings...\n[PROGRESS] RDP timezone redirection enabled\n[PROGRESS] Step 2/7: Configuring Windows Defender exclusions for FSLogix...\n[PROGRESS] Defender exclusions configured for FSLogix\n[PROGRESS] Step 3/7: Disabling System Restore and VSS...\n[PROGRESS] System Restore and VSS disabled\n[PROGRESS] Step 4/7: Disabling first logon animation...\n[PROGRESS] First logon animation disabled\n[PROGRESS] Step 5/7: Disabling OOBE privacy experience...\n[PROGRESS] OOBE privacy experience disabled\n[PROGRESS] Step 6/7: Disabling Windows Hello for Business...\n[PROGRESS] Windows Hello for Business disabled\n[PROGRESS] Step 7/7: Disabling biometrics...\n[PROGRESS] Biometrics disabled\n[VALIDATE] Verifying registry configuration...\n[VALIDATE] All registry keys validated successfully\n[SUCCESS] Windows registry configured for Azure Virtual Desktop\n[SUCCESS] Applied: RDP settings, FSLogix exclusions, OOBE disabled, Windows Hello disabled"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    }
+  ]
+}

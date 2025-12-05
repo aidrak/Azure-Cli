@@ -119,7 +119,7 @@ golden_image:
 # Session Host Configuration (Module 06)
 # ==============================================================================
 session_host:
-  vm_count: 2
+  vm_count: 1
   vm_size: "Standard_D4s_v6"
   name_prefix: "avd-sh"
 

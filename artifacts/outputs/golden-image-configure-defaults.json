@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] Configuring default applications: 16:05:25\n[PROGRESS] Step 1/2: Setting default applications...\n[PROGRESS] Setting Adobe Reader as default PDF handler...\n[PROGRESS] Adobe Reader set as default PDF application\n[PROGRESS] Step 2/2: Creating desktop shortcuts...\n[PROGRESS] Created shortcut: Adobe Acrobat Reader\n[PROGRESS] Created shortcut: Google Chrome\n[PROGRESS] Created shortcut: Microsoft Outlook\n[PROGRESS] Created shortcut: Microsoft Word\n[PROGRESS] Created shortcut: Microsoft Excel\n[VALIDATE] Verifying shortcuts created...\n[SUCCESS] Default applications configured and desktop shortcuts created\n[SUCCESS] Created 5 shortcuts in C:\\Users\\Public\\Desktop"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    }
+  ]
+}

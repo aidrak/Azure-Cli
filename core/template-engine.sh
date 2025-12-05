@@ -24,11 +24,11 @@ parse_operation_yaml() {
     local yaml_file="$1"
 
     if [[ ! -f "$yaml_file" ]]; then
-        echo "[x] ERROR: Operation YAML not found: $yaml_file"
+        echo "[x] ERROR: Operation YAML not found: $yaml_file" >&2
         return 1
     fi
 
-    echo "[*] Parsing operation: $yaml_file"
+    echo "[*] Parsing operation: $yaml_file" >&2
 
     # Extract key fields using yq
     OPERATION_ID=$(yq e '.operation.id' "$yaml_file")
@@ -56,7 +56,7 @@ parse_operation_yaml() {
     export TEMPLATE_TYPE TEMPLATE_COMMAND
     export POWERSHELL_FILE POWERSHELL_CONTENT
 
-    echo "[v] Parsed operation: $OPERATION_NAME (ID: $OPERATION_ID)"
+    echo "[v] Parsed operation: $OPERATION_NAME (ID: $OPERATION_ID)" >&2
     return 0
 }
 
@@ -140,7 +140,7 @@ extract_powershell_script() {
         local ps_file="${output_dir}/${OPERATION_ID}.ps1"
         yq e '.operation.powershell.content' "$yaml_file" > "$ps_file"
 
-        echo "[v] PowerShell script extracted to: $ps_file"
+        echo "[v] PowerShell script extracted to: $ps_file" >&2
         echo "$ps_file"
         return 0
     elif [[ -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
@@ -148,15 +148,15 @@ extract_powershell_script() {
         local ps_file="${module_dir}/${POWERSHELL_FILE}"
 
         if [[ ! -f "$ps_file" ]]; then
-            echo "[x] ERROR: PowerShell file not found: $ps_file"
+            echo "[x] ERROR: PowerShell file not found: $ps_file" >&2
             return 1
         fi
 
-        echo "[v] Using PowerShell script: $ps_file"
+        echo "[v] Using PowerShell script: $ps_file" >&2
         echo "$ps_file"
         return 0
     else
-        echo "[!] WARNING: No PowerShell script defined"
+        echo "[!] WARNING: No PowerShell script defined" >&2
         return 1
     fi
 }
@@ -179,7 +179,18 @@ render_command() {
     command=$(substitute_variables "$TEMPLATE_COMMAND")
 
     # Replace @script.ps1 placeholder with actual path
-    command="${command//@${POWERSHELL_FILE}/@${ps_script}}"
+    # Handle both "@filename.ps1" and "@modules/.../filename.ps1" patterns
+    if [[ -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
+        # Replace any path ending with the PowerShell filename using bash pattern substitution
+        # Match "@" followed by any characters, ending with the PowerShell filename
+        local pattern="@"
+        local search_pattern="@*${POWERSHELL_FILE}"
+        # Find the full path in the command
+        if [[ "$command" =~ @[^[:space:]]*${POWERSHELL_FILE} ]]; then
+            local full_match="${BASH_REMATCH[0]}"
+            command="${command//${full_match}/@${ps_script}}"
+        fi
+    fi
 
     echo "$command"
     return 0

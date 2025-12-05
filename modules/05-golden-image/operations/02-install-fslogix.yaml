@@ -46,7 +46,7 @@ operation:
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "03-install-fslogix.ps1"
+    file: "02-install-fslogix.ps1"
     content: |
       # ==============================================================================
       # Install FSLogix on Golden Image VM

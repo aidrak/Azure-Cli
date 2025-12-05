@@ -106,26 +106,26 @@ operation:
           Write-Host "[PROGRESS] Step 5/7: Creating Office configuration file..."
 
           $configXml = @"
-<Configuration ID="d473a46c-9126-4f5a-99d8-af03586a67bc">
-  <Add OfficeClientEdition="64" Channel="Current">
-    <Product ID="O365ProPlusEEANoTeamsRetail">
-      <Language ID="en-us" />
-      <ExcludeApp ID="Groove" />
-      <ExcludeApp ID="Lync" />
-      <ExcludeApp ID="OneDrive" />
-      <ExcludeApp ID="OneNote" />
-      <ExcludeApp ID="OutlookForWindows" />
-    </Product>
-  </Add>
-  <Property Name="SharedComputerLicensing" Value="1" />
-  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
-  <Property Name="DeviceBasedLicensing" Value="0" />
-  <Property Name="SCLCacheOverride" Value="0" />
-  <Updates Enabled="FALSE" />
-  <RemoveMSI />
-  <Display Level="None" AcceptEULA="TRUE" />
-</Configuration>
-"@
+      <Configuration ID="d473a46c-9126-4f5a-99d8-af03586a67bc">
+        <Add OfficeClientEdition="64" Channel="Current">
+          <Product ID="O365ProPlusEEANoTeamsRetail">
+            <Language ID="en-us" />
+            <ExcludeApp ID="Groove" />
+            <ExcludeApp ID="Lync" />
+            <ExcludeApp ID="OneDrive" />
+            <ExcludeApp ID="OneNote" />
+            <ExcludeApp ID="OutlookForWindows" />
+          </Product>
+        </Add>
+        <Property Name="SharedComputerLicensing" Value="1" />
+        <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
+        <Property Name="DeviceBasedLicensing" Value="0" />
+        <Property Name="SCLCacheOverride" Value="0" />
+        <Updates Enabled="FALSE" />
+        <RemoveMSI />
+        <Display Level="None" AcceptEULA="TRUE" />
+      </Configuration>
+      "@
 
           $configPath = "$officePath\Configuration.xml"
           $configXml | Out-File -FilePath $configPath -Encoding UTF8 -ErrorAction Stop
