@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "[START] Optimized Application Installation\n[INFO] Using parallel downloads for improved performance\n[PROGRESS] Phase 1/3: Downloading installers in parallel...\n[PROGRESS] Chrome already cached, skipping download\n[PROGRESS] Starting download job for Adobe Reader...\n[INFO] Waiting for 1 download(s) to complete...\n[INFO] Downloading Adobe Reader...\n[SUCCESS] Downloaded Adobe Reader (251.44 MB)\n[SUCCESS] All downloads completed\n[PROGRESS] Phase 2/3: Installing Google Chrome...\n[VALIDATE] Verifying Chrome installation...\n[SUCCESS] Google Chrome installed successfully\n[PROGRESS] Phase 3/3: Installing Adobe Reader DC...\n[VALIDATE] Verifying Adobe installation...\n[SUCCESS] Adobe Reader installed successfully\n\n========================================\nInstallation Summary\n========================================\n[SUCCESS] Google Chrome - Installed\n[SUCCESS] Adobe Reader DC - Installed\n\n[SUCCESS] All applications installed successfully"
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "Unable to find type [START].\nAt C:\\Packages\\Plugins\\Microsoft.CPlat.Core.RunCommandWindows\\1.1.22\\Downloads\\script6.ps1:1 char:1\n+ [START]\n+ ~~~~~~~\n    + CategoryInfo          : InvalidOperation: (START:TypeName) [], RuntimeException\n    + FullyQualifiedErrorId : TypeNotFound\n "
+    }
+  ]
+}
