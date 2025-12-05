@@ -1,0 +1,7 @@
+{
+  "operation_id": "networking-attach-nsgs",
+  "status": "completed",
+  "duration_seconds": 40,
+  "timestamp": "2025-12-05T04:26:55Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-attach-nsgs_20251205_042615.log"
+}

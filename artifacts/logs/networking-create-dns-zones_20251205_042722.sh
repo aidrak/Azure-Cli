@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "[START] Private DNS zone creation: $(date '+%Y-%m-%d %H:%M:%S')"
+
+RESOURCE_GROUP="RG-Azure-VDI-01"
+
+# Check if private DNS is enabled
+DNS_ENABLED=$(yq e '.networking.private_dns.enabled' config.yaml)
+
+if [[ "$DNS_ENABLED" != "true" ]]; then
+  echo "[INFO] Private DNS disabled - skipping"
+  exit 0
+fi
+
+ZONE_COUNT=$(yq e '.networking.private_dns.zones | length' config.yaml)
+echo "[PROGRESS] Creating $ZONE_COUNT private DNS zone(s)..."
+
+for i in $(seq 0 $((ZONE_COUNT - 1))); do
+  ZONE_NAME=$(yq e ".networking.private_dns.zones[$i].name" config.yaml)
+
+  echo "[PROGRESS] Processing zone: $ZONE_NAME"
+
+  if az network private-dns zone show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$ZONE_NAME" &>/dev/null; then
+    echo "[INFO] Zone already exists: $ZONE_NAME"
+    continue
+  fi
+
+  if ! az network private-dns zone create \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$ZONE_NAME" \
+    --output json > "artifacts/outputs/networking-dns-zone-${ZONE_NAME//./-}.json"; then
+    echo "[ERROR] Failed to create zone: $ZONE_NAME"
+    exit 1
+  fi
+
+  echo "[SUCCESS] Zone created: $ZONE_NAME"
+done
+
+echo "[SUCCESS] All private DNS zones created"
+exit 0

@@ -1,7 +1,7 @@
 {
   "operation_id": "networking-create-nsgs",
   "status": "completed",
-  "duration_seconds": 12,
-  "timestamp": "2025-12-05T04:21:39Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-nsgs_20251205_042127.log"
+  "duration_seconds": 4,
+  "timestamp": "2025-12-05T04:26:03Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-nsgs_20251205_042559.log"
 }

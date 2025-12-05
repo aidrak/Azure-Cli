@@ -146,11 +146,11 @@ operation:
             *management*)
               echo "[PROGRESS]   Detected: Management subnet"
 
-              # Allow Bastion inbound (SSH + RDP)
-              create_nsg_rule "$NSG_NAME" "Allow-Bastion-Inbound" 100 "Inbound" "Allow" "Tcp" "AzureBastion" "*" "*" "22,3389"
-
-              # Allow HTTPS outbound
+              # Allow HTTPS outbound (for management operations, updates, monitoring)
               create_nsg_rule "$NSG_NAME" "Allow-HTTPS-Outbound" 100 "Outbound" "Allow" "Tcp" "*" "*" "*" "443"
+
+              # Allow VNet inbound (for internal management traffic)
+              create_nsg_rule "$NSG_NAME" "Allow-VNet-Inbound" 110 "Inbound" "Allow" "*" "VirtualNetwork" "*" "*" "*"
               ;;
 
             *)
@@ -193,4 +193,14 @@ operation:
 
   # Self-healing: Previous fixes applied to this template
   fixes:
-    # Fixes will be added here automatically when errors occur
+    - issue: "Azure NSG rules don't support comma-separated ports (22,3389)"
+      detected: "2025-12-05"
+      error: "SecurityRuleInvalidPortRange - Value provided: 22,3389"
+      root_cause: "Bastion rule attempted to use comma-separated ports which Azure doesn't support"
+      fix: "Removed Bastion-specific NSG rule - not needed for AVD deployment without Bastion"
+      applied_to_template: true
+      notes: |
+        - Azure Bastion is not part of this AVD deployment
+        - Management subnet kept for potential future use (monitoring, firewall, etc.)
+        - AVD session hosts use Entra SSO, no need for Bastion access
+        - If Bastion is needed later, create separate rules for port 22 and 3389

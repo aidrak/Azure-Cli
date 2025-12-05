@@ -2,6 +2,6 @@
   "operation_id": "networking-create-subnets",
   "status": "completed",
   "duration_seconds": 4,
-  "timestamp": "2025-12-05T04:21:27Z",
-  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-subnets_20251205_042123.log"
+  "timestamp": "2025-12-05T04:25:58Z",
+  "log_file": "/mnt/cache_pool/development/azure-cli/artifacts/logs/networking-create-subnets_20251205_042554.log"
 }

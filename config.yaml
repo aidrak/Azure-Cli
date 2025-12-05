@@ -71,7 +71,7 @@ networking:
         name: "" # Auto-generated: nsg-subnet-private-endpoints
         use_defaults: true # Smart defaults for private endpoints
         custom_rules: []
-    # Management Subnet (optional - for Azure Bastion, jump boxes)
+    # Management Subnet (optional - for monitoring VMs, Azure Firewall, or future use)
     - name: "subnet-management"
       address_prefix: "10.0.3.0/27" # Small subnet (32 IPs)
       service_endpoints:
