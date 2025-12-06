@@ -139,19 +139,7 @@ operation:
       $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
       $statusText = if ($failed -eq 0) { "ALL CHECKS PASSED" } else { "VALIDATION FAILED" }
 
-      $reportContent = @"
-=====================================
-Network Validation Report
-=====================================
-Timestamp: $timestamp
-
-VNet: $vnetName
-Resource Group: $resourceGroup
-Subnet Count: $subnetCount
-
-Status: $statusText
-=====================================
-"@
+      $reportContent = "====================================" + [Environment]::NewLine + "Network Validation Report" + [Environment]::NewLine + "====================================" + [Environment]::NewLine + "Timestamp: $timestamp" + [Environment]::NewLine + [Environment]::NewLine + "VNet: $vnetName" + [Environment]::NewLine + "Resource Group: $resourceGroup" + [Environment]::NewLine + "Subnet Count: $subnetCount" + [Environment]::NewLine + [Environment]::NewLine + "Status: $statusText" + [Environment]::NewLine + "===================================="
 
       $reportContent | Out-File -FilePath $reportFile -Encoding UTF8
 
