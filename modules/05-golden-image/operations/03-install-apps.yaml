@@ -105,9 +105,9 @@ operation:
           $downloadJobs = @()
           foreach ($app in $appsToProcess) {
               if ($app.source_type -ne 'Url') { continue }
-              $job = Start-Job -ScriptBlock {
+              $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
                   param($app, $parentPid)
-                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Download" -ParentProcessId $parentPid
+                  $hbJob = Start-Heartbeat -AppName "$($app.Key)-Download" -ParentProcessId $parentPid
                   try {
                       Write-Host "[$($app.name)] Downloading from $($app.url)..."
                       Invoke-WebRequest -Uri $app.url -OutFile $app.outfile -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
@@ -118,7 +118,6 @@ operation:
                       if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
                   }
               } -ArgumentList $app, $PID
-              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
               $downloadJobs += $job
           }
           
@@ -141,9 +140,9 @@ operation:
           $unzipJobs = @()
           foreach ($app in $appsToProcess) {
               if ($failedApps.Contains($app.Key) -or $app.source_format -ne 'zip') { continue }
-              $job = Start-Job -ScriptBlock {
+              $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
                   param($app, $parentPid)
-                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Unzip" -ParentProcessId $parentPid
+                  $hbJob = Start-Heartbeat -AppName "$($app.Key)-Unzip" -ParentProcessId $parentPid
                   try {
                       Write-Host "[$($app.name)] Extracting $($app.outfile)..."
                       Expand-Archive -Path $app.outfile -DestinationPath $app.unzip_dir -Force
@@ -154,7 +153,6 @@ operation:
                       if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
                   }
               } -ArgumentList $app, $PID
-              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
               $unzipJobs += $job
           }
 
@@ -178,16 +176,16 @@ operation:
           $installJobs = @()
           foreach ($app in $appsToProcess) {
               if ($failedApps.Contains($app.Key)) { continue }
-              $job = Start-Job -ScriptBlock {
+              $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
                   param($app, $parentPid)
-                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Install" -ParentProcessId $parentPid
+                  $hbJob = Start-Heartbeat -AppName "$($app.Key)-Install" -ParentProcessId $parentPid
                   try {
                       $cmd = $app.install_command.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir)
                       $args = $app.install_args.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir).Replace('{logdir}', "C:\DeployLogs")
-                      
+
                       Write-Host "[$($app.name)] Installing with command: $cmd $args"
                       $process = Start-Process -FilePath $cmd -ArgumentList $args -Wait -PassThru -ErrorAction Stop
-                      
+
                       if ($app.success_codes -contains $process.ExitCode) {
                           return @{ Status = 'Success'; AppKey = $app.Key }
                       } else {
@@ -199,7 +197,6 @@ operation:
                       if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
                   }
               } -ArgumentList $app, $PID
-              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
               $installJobs += $job
           }
           
