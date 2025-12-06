@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$AppNames,
-    [string]$ManifestPath = "C:\Temp\app_manifest.yaml"
+    [string]$ManifestPath = "C:\Temp\app_manifest.yaml",
+    [string]$ManifestContent = ""
 )
 
 # ==============================================================================
@@ -45,9 +46,15 @@ if (-not (Test-Path $LogDir)) { New-Item -Path $LogDir -ItemType Directory -Forc
 if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
 
 try {
-    # Validate manifest file exists
+    # Create or validate manifest file
     if (-not (Test-Path $ManifestPath)) {
-        throw "App manifest file not found at: $ManifestPath"
+        if ([string]::IsNullOrWhiteSpace($ManifestContent)) {
+            throw "App manifest file not found at: $ManifestPath and no manifest content provided"
+        }
+        Write-Host "[INFO] Creating manifest file from provided content..."
+        $ManifestContent | Out-File -FilePath $ManifestPath -Encoding UTF8 -Force
+    } else {
+        Write-Host "[INFO] Using existing manifest file: $ManifestPath"
     }
 
     # Parse inputs

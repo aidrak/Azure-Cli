@@ -4,7 +4,7 @@
       "code": "ComponentStatus/StdOut/succeeded",
       "displayStatus": "Provisioning succeeded",
       "level": "Info",
-      "message": "[START] System preparation: 01:43:10\n[PROGRESS] Step 1/2: Disabling BitLocker...\n[PROGRESS] BitLocker disabled\n[PROGRESS] Step 2/2: Creating temporary directory...\n[PROGRESS] Temporary directory already exists\n[VALIDATE] Checking temp directory...\n[SUCCESS] System preparation complete"
+      "message": "[START] System preparation: 01:46:41\n[PROGRESS] Step 1/2: Disabling BitLocker...\n[PROGRESS] BitLocker disabled\n[PROGRESS] Step 2/2: Creating temporary directory...\n[PROGRESS] Temporary directory already exists\n[VALIDATE] Checking temp directory...\n[SUCCESS] System preparation complete"
     },
     {
       "code": "ComponentStatus/StdErr/succeeded",

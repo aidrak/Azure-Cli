@@ -307,3 +307,21 @@
 {"timestamp":"2025-12-06T01:43:30.998Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:43:31.071Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:43:31.105Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.014Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.307Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.339Z","level":"INFO","message":"Executing operation: golden-image-00-create-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.350Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/00-create-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.417Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:57.428Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:59.549Z","level":"INFO","message":"Executing operation: golden-image-01-validate-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:59.565Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-validate-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:59.632Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:45:59.654Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:46:33.837Z","level":"INFO","message":"Executing operation: golden-image-02-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:46:33.860Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:46:33.930Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:46:33.955Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:47:06.144Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:47:06.179Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:47:06.274Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:47:06.319Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
