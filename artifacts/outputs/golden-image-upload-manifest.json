@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "code": "ComponentStatus/StdOut/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": ""
+    },
+    {
+      "code": "ComponentStatus/StdErr/succeeded",
+      "displayStatus": "Provisioning succeeded",
+      "level": "Info",
+      "message": "artifacts/scripts/golden-image-upload-manifest.ps1 : The term 'artifacts/scripts/golden-image-upload-manifest.ps1' is \nnot recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or \nif a path was included, verify that the path is correct and try again.\nAt C:\\Packages\\Plugins\\Microsoft.CPlat.Core.RunCommandWindows\\1.1.22\\Downloads\\script13.ps1:1 char:1\n+ artifacts/scripts/golden-image-upload-manifest.ps1\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n    + CategoryInfo          : ObjectNotFound: (artifacts/scrip...ad-manifest.ps1:String) [], CommandNotFoundException\n    + FullyQualifiedErrorId : CommandNotFoundException\n "
+    }
+  ]
+}
