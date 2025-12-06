@@ -1,8 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$AppNames,
-    [string]$ManifestPath = "C:\Temp\app_manifest.yaml",
-    [string]$ManifestContent = ""
+    [string]$ManifestB64  # Base64-encoded JSON manifest
 )
 
 # ==============================================================================
@@ -25,20 +24,10 @@ function Start-Heartbeat {
     return Start-Job -ScriptBlock $scriptBlock -ArgumentList $AppName, $ParentProcessId
 }
 
-function Install-YamlModule {
-    if (-not (Get-Module -ListAvailable -Name "powershell-yaml")) {
-        Write-Host "[INFO] PowerShell-YAML module not found. Installing..."
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Confirm:$false -Force
-        Install-Module -Name powershell-yaml -Scope CurrentUser -Confirm:$false -Force
-        Import-Module powershell-yaml
-    }
-}
-
 # ==============================================================================
 # Main Execution
 # ==============================================================================
 Write-Host "[START] Dynamic Application Installation Engine"
-Install-YamlModule
 
 $LogDir = "C:\DeployLogs"
 $TempDir = "C:\Temp"
@@ -46,21 +35,16 @@ if (-not (Test-Path $LogDir)) { New-Item -Path $LogDir -ItemType Directory -Forc
 if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
 
 try {
-    # Create or validate manifest file
-    if (-not (Test-Path $ManifestPath)) {
-        if ([string]::IsNullOrWhiteSpace($ManifestContent)) {
-            throw "App manifest file not found at: $ManifestPath and no manifest content provided"
-        }
-        Write-Host "[INFO] Creating manifest file from provided content..."
-        $ManifestContent | Out-File -FilePath $ManifestPath -Encoding UTF8 -Force
-    } else {
-        Write-Host "[INFO] Using existing manifest file: $ManifestPath"
+    # Decode and parse manifest from base64 JSON (no external modules needed)
+    if ([string]::IsNullOrWhiteSpace($ManifestB64)) {
+        throw "ManifestB64 parameter is required but was not provided"
     }
+    Write-Host "[INFO] Decoding manifest from base64 JSON..."
+    $jsonString = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ManifestB64))
+    $manifest = $jsonString | ConvertFrom-Json
 
     # Parse inputs
     $selectedAppNames = $AppNames -split ',' | ForEach-Object { $_.Trim() }
-    $manifestContent = Get-Content -Path $ManifestPath -Raw
-    $manifest = $manifestContent | ConvertFrom-Yaml
 
     $appsToProcess = $selectedAppNames | ForEach-Object {
         $appNameKey = $_

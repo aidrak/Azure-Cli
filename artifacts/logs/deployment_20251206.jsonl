@@ -325,3 +325,10 @@
 {"timestamp":"2025-12-06T01:47:06.179Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:47:06.274Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:47:06.319Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:12.935Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:13.239Z","level":"INFO","message":"Executing operation: 03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:19.487Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:19.780Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:19.804Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:19.868Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T02:13:19.899Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}

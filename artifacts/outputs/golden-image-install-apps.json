@@ -1,16 +1,11 @@
-{
-  "value": [
-    {
-      "code": "ComponentStatus/StdOut/succeeded",
-      "displayStatus": "Provisioning succeeded",
-      "level": "Info",
-      "message": "[START] Dynamic Application Installation Engine"
-    },
-    {
-      "code": "ComponentStatus/StdErr/succeeded",
-      "displayStatus": "Provisioning succeeded",
-      "level": "Info",
-      "message": "C:\\Packages\\Plugins\\Microsoft.CPlat.Core.RunCommandWindows\\1.1.22\\Downloads\\script17.ps1 : [FATAL] A critical error \noccurred. App manifest file not found at: C:\\Temp\\app_manifest.yaml and no manifest content provided\n    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException\n    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,script17.ps1\n "
-    }
-  ]
-}
+ERROR: unrecognized arguments:    
+
+Examples from AI knowledge base:
+az vm run-command invoke --resource-group MyResourceGroup --name MyVm --command-id RunShellScript --scripts "sudo apt-get update && sudo apt-get install
+Install nginx on a linux VM.
+
+az vm run-command invoke --command-id RunPowerShellScript --name win-vm --resource-group my-resource-group --scripts 'param([string]$arg1,[string]$arg2)' 'Write-Host This is a sample script with parameters $arg1 and $arg2' --parameters 'arg1=somefoo' 'arg2=somebar' --parameters 'arg1=somefoo'
+Run powershell script on a windows VM with parameters. Script supplied inline. Be wary of single-quoting in CMD.exe.
+
+https://docs.microsoft.com/en-US/cli/azure/vm/run-command#az_vm_run_command_invoke
+Read more about the command in reference docs
