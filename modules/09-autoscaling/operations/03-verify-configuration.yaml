@@ -187,136 +187,144 @@ Autoscaling is disabled in configuration.
       }
 
       # Save detailed verification report
-      {
-        echo "Autoscaling Configuration Verification Report"
-        echo "=============================================="
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Overall Status: $VERIFICATION_STATUS"
-        echo ""
-        echo "Summary:"
-        echo "  Total Checks: $TOTAL_CHECKS"
-        echo "  Passed: $PASSED_CHECKS"
-        echo "  Failed: $FAILED_CHECKS"
-        echo "  Warnings: $WARNING_CHECKS"
-        echo ""
-        echo "Host Pool: $HOST_POOL_NAME"
-        echo "Scaling Plan: $SCALING_PLAN_NAME"
-        echo "Resource Group: $RESOURCE_GROUP"
-        echo ""
-        echo "Automated Checks:"
-        echo "  1. Host pool exists"
-        echo "  2. Scaling plan exists"
-        echo "  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)"
-        echo "  4. Session hosts registered"
-        echo ""
-        echo "Manual Configuration Required:"
-        echo "=============================="
-        echo ""
-        echo "The scaling plan was created but schedules must be configured manually:"
-        echo ""
-        echo "1. Configure Scaling Schedules (via Azure Portal)"
-        echo "   - Navigate to: Azure Virtual Desktop → Scaling plans"
-        echo "   - Select: $SCALING_PLAN_NAME"
-        echo "   - Click: 'Schedules' → '+ Add schedule'"
-        echo ""
-        echo "   Recommended Weekday Schedule:"
-        echo "     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)"
-        echo "     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)"
-        echo "     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)"
-        echo "     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)"
-        echo ""
-        echo "   Recommended Weekend Schedule:"
-        echo "     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)"
-        echo ""
-        echo "2. Test Autoscaling Behavior"
-        echo "   - Monitor session host power states"
-        echo "   - Verify VMs power on/off according to schedule"
-        echo "   - Check scaling behavior during different load scenarios"
-        echo ""
-        echo "3. Monitor and Adjust"
-        echo "   - Review Azure Activity Log for scaling events"
-        echo "   - Check host pool Insights tab for metrics"
-        echo "   - Adjust thresholds based on usage patterns"
-        echo ""
-        echo "Expected Behavior:"
-        echo "=================="
-        echo ""
-        echo "Ramp-Up Phase:"
-        echo "  - VMs power on 10-15 minutes before users arrive"
-        echo "  - Minimum percentage of hosts powered on"
-        echo "  - Additional VMs start based on capacity threshold"
-        echo ""
-        echo "Peak Hours:"
-        echo "  - Scale up/down based on session load"
-        echo "  - Capacity threshold determines when to start new VMs"
-        echo "  - Load balancing distributes sessions"
-        echo ""
-        echo "Ramp-Down Phase:"
-        echo "  - Depth-first balancing consolidates sessions"
-        echo "  - Lightly-loaded hosts drain and shut down"
-        echo "  - Users receive warning before forced logoff"
-        echo ""
-        echo "Off-Peak Hours:"
-        echo "  - Only minimum hosts remain powered on"
-        echo "  - Significant cost savings (60-75%)"
-        echo "  - Weekend: Minimum hosts only"
-        echo ""
-        echo "Cost Optimization:"
-        echo "=================="
-        echo ""
-        echo "Typical Savings:"
-        echo "  - Without autoscaling: 100% VM uptime = High cost"
-        echo "  - With autoscaling: 25-40% average uptime = 60-75% savings"
-        echo ""
-        echo "Example (40 VMs × \$1/hour):"
-        echo "  - Before: 40 VMs × 24h × 30d = \$28,800/month"
-        echo "  - After: ~8-12 VMs average × 24h × 30d = \$7,000-9,000/month"
-        echo "  - Savings: ~\$20,000/month (65-75%)"
-        echo ""
-        echo "Troubleshooting:"
-        echo "================"
-        echo ""
-        echo "Issue: VMs not powering on/off"
-        echo "  - Verify RBAC role assigned"
-        echo "  - Check scaling plan is enabled"
-        echo "  - Verify schedules are configured"
-        echo "  - Wait 15-20 minutes for first cycle"
-        echo "  - Review Azure Activity Log for errors"
-        echo ""
-        echo "Issue: Too many/few VMs running"
-        echo "  - Adjust capacity thresholds"
-        echo "  - Change minimum host percentages"
-        echo "  - Review session load patterns"
-        echo "  - Modify schedule times"
-        echo ""
-        echo "Issue: Users complaining about forced logoff"
-        echo "  - Increase wait time (20→30 minutes)"
-        echo "  - Adjust ramp-down start time"
-        echo "  - Customize notification message"
-        echo "  - Consider excluding certain users"
-        echo ""
-        if [[ $FAILED_CHECKS -gt 0 ]]; then
-          echo "Action Required:"
-          echo "  Review failed checks above and re-run autoscaling configuration operations"
-          echo ""
-        fi
-      } > "artifacts/outputs/autoscaling-verification-complete.txt"
+      $reportContent = @"
+Autoscaling Configuration Verification Report
+==============================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
-      if [[ $EXIT_CODE -eq 0 ]]; then
-        echo "[SUCCESS] Autoscaling verification completed successfully"
-        echo ""
-        echo "Next Steps:"
-        echo "  1. Configure scaling schedules in Azure Portal"
-        echo "  2. Monitor autoscaling activity for 1 week"
-        echo "  3. Adjust schedules based on usage patterns"
-        echo "  4. Review cost savings in Azure Cost Management"
-        echo ""
-      else
-        echo "[ERROR] Autoscaling verification failed - see report for details"
-      fi
+Overall Status: $verificationStatus
 
-      exit $EXIT_CODE
+Summary:
+  Total Checks: $totalChecks
+  Passed: $passedChecks
+  Failed: $failedChecks
+  Warnings: $warningChecks
+
+Host Pool: $hostPoolName
+Scaling Plan: $scalingPlanName
+Resource Group: $resourceGroup
+
+Automated Checks:
+  1. Host pool exists
+  2. Scaling plan exists
+  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)
+  4. Session hosts registered
+
+Manual Configuration Required:
+==============================
+
+The scaling plan was created but schedules must be configured manually:
+
+1. Configure Scaling Schedules (via Azure Portal)
+   - Navigate to: Azure Virtual Desktop → Scaling plans
+   - Select: $scalingPlanName
+   - Click: 'Schedules' → '+ Add schedule'
+
+   Recommended Weekday Schedule:
+     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)
+     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)
+     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)
+     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)
+
+   Recommended Weekend Schedule:
+     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)
+
+2. Test Autoscaling Behavior
+   - Monitor session host power states
+   - Verify VMs power on/off according to schedule
+   - Check scaling behavior during different load scenarios
+
+3. Monitor and Adjust
+   - Review Azure Activity Log for scaling events
+   - Check host pool Insights tab for metrics
+   - Adjust thresholds based on usage patterns
+
+Expected Behavior:
+==================
+
+Ramp-Up Phase:
+  - VMs power on 10-15 minutes before users arrive
+  - Minimum percentage of hosts powered on
+  - Additional VMs start based on capacity threshold
+
+Peak Hours:
+  - Scale up/down based on session load
+  - Capacity threshold determines when to start new VMs
+  - Load balancing distributes sessions
+
+Ramp-Down Phase:
+  - Depth-first balancing consolidates sessions
+  - Lightly-loaded hosts drain and shut down
+  - Users receive warning before forced logoff
+
+Off-Peak Hours:
+  - Only minimum hosts remain powered on
+  - Significant cost savings (60-75%)
+  - Weekend: Minimum hosts only
+
+Cost Optimization:
+==================
+
+Typical Savings:
+  - Without autoscaling: 100% VM uptime = High cost
+  - With autoscaling: 25-40% average uptime = 60-75% savings
+
+Example (40 VMs × `$1/hour):
+  - Before: 40 VMs × 24h × 30d = `$28,800/month
+  - After: ~8-12 VMs average × 24h × 30d = `$7,000-9,000/month
+  - Savings: ~`$20,000/month (65-75%)
+
+Troubleshooting:
+================
+
+Issue: VMs not powering on/off
+  - Verify RBAC role assigned
+  - Check scaling plan is enabled
+  - Verify schedules are configured
+  - Wait 15-20 minutes for first cycle
+  - Review Azure Activity Log for errors
+
+Issue: Too many/few VMs running
+  - Adjust capacity thresholds
+  - Change minimum host percentages
+  - Review session load patterns
+  - Modify schedule times
+
+Issue: Users complaining about forced logoff
+  - Increase wait time (20→30 minutes)
+  - Adjust ramp-down start time
+  - Customize notification message
+  - Consider excluding certain users
+
+"@
+
+      if ($failedChecks -gt 0) {
+        $reportContent += @"
+Action Required:
+  Review failed checks above and re-run autoscaling configuration operations
+
+"@
+      }
+
+      $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8
+
+      if ($exitCode -eq 0) {
+        Write-Host "[SUCCESS] Autoscaling verification completed successfully"
+        Write-Host ""
+        Write-Host "Next Steps:"
+        Write-Host "  1. Configure scaling schedules in Azure Portal"
+        Write-Host "  2. Monitor autoscaling activity for 1 week"
+        Write-Host "  3. Adjust schedules based on usage patterns"
+        Write-Host "  4. Review cost savings in Azure Cost Management"
+        Write-Host ""
+      } else {
+        Write-Host "[ERROR] Autoscaling verification failed - see report for details"
+      }
+
+      exit $exitCode
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/autoscaling-03-wrapper.ps1
+      rm -f /tmp/autoscaling-03-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
