@@ -622,7 +622,7 @@ discovery:
   scope: "$scope"
   target: "$target"
   duration_seconds: $duration
-  total_resources: $total_resources
+  total_resources: ${total_resources//$'\n'/}
 
 resource_counts:
   compute:
@@ -857,11 +857,11 @@ discover() {
     log_info "  Total Resources:    $total_resources" "discovery"
     log_info "" "discovery"
     log_info "  Resource Breakdown:" "discovery"
-    log_info "    - Compute:        $compute_count" "discovery"
-    log_info "    - Networking:     $networking_count" "discovery"
-    log_info "    - Storage:        $storage_count" "discovery"
-    log_info "    - Identity:       $identity_count" "discovery"
-    log_info "    - AVD:            $avd_count" "discovery"
+    log_info "    - Compute:        ${compute_count//$'\n'/}" "discovery"
+    log_info "    - Networking:     ${networking_count//$'\n'/}" "discovery"
+    log_info "    - Storage:        ${storage_count//$'\n'/}" "discovery"
+    log_info "    - Identity:       ${identity_count//$'\n'/}" "discovery"
+    log_info "    - AVD:            ${avd_count//$'\n'/}" "discovery"
     log_info "" "discovery"
     log_info "  Outputs:" "discovery"
     log_info "    - Summary:        $summary_file" "discovery"

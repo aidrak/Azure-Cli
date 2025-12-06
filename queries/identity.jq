@@ -12,7 +12,7 @@ map({
     objectId: (.objectId? // .id),
     displayName: .displayName,
     mailNickname: .mailNickname,
-    description: .description,
+    description: .description?,
     securityEnabled: .securityEnabled,
     mailEnabled: .mailEnabled,
     groupTypes: (.groupTypes? // []),
