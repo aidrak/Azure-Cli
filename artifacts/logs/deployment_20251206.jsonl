@@ -556,3 +556,18 @@
 {"timestamp":"2025-12-06T17:03:38.937Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:03:40.052Z","level":"WARN","message":"Failed to tag resource in Azure: /subscriptions/demo-sub/resourceGroups/rg-demo/providers/Microsoft.Compute/virtualMachines/demo-vm","operation_id":"","metadata":{}}
 {"timestamp":"2025-12-06T17:03:40.057Z","level":"SUCCESS","message":"Marked as managed: /subscriptions/demo-sub/resourceGroups/rg-demo/providers/Microsoft.Compute/virtualMachines/demo-vm","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.723Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.800Z","level":"INFO","message":"Stored resource: test-vm-01 (Microsoft.Compute/virtualMachines)","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.869Z","level":"INFO","message":"Stored resource: test-vnet (Microsoft.Network/virtualNetworks)","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.909Z","level":"INFO","message":"Added dependency: /subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/virtualMachines/test-vm-01 → /subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet (uses)","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.936Z","level":"INFO","message":"All dependencies satisfied for: /subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/virtualMachines/test-vm-01","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.970Z","level":"INFO","message":"Created operation: test-op-1765041612","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:12.994Z","level":"INFO","message":"Updated operation test-op-1765041612: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.016Z","level":"INFO","message":"3/10: Installing applications","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.062Z","level":"INFO","message":"Updated operation test-op-1765041612: completed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.134Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.141Z","level":"INFO","message":"Building dependency graph...","operation_id":"dependency-resolver","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.349Z","level":"SUCCESS","message":"Dependency graph built: /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.json (0 dependencies)","operation_id":"dependency-resolver","metadata":{}}
+{"timestamp":"2025-12-06T17:20:13.400Z","level":"INFO","message":"Invalidated cache: Microsoft.Compute% (reason: test)","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:21:11.198Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:21:11.268Z","level":"INFO","message":"Stored resource: test-vm-01 (Microsoft.Compute/virtualMachines)","operation_id":"state-manager","metadata":{}}
