@@ -553,3 +553,6 @@
 {"timestamp":"2025-12-06T17:01:36.678Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/state.db","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:01:36.998Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:02:06.335Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:03:38.937Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:03:40.052Z","level":"WARN","message":"Failed to tag resource in Azure: /subscriptions/demo-sub/resourceGroups/rg-demo/providers/Microsoft.Compute/virtualMachines/demo-vm","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T17:03:40.057Z","level":"SUCCESS","message":"Marked as managed: /subscriptions/demo-sub/resourceGroups/rg-demo/providers/Microsoft.Compute/virtualMachines/demo-vm","operation_id":"state-manager","metadata":{}}

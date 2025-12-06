@@ -201,19 +201,20 @@ test_detect_vm_dependencies() {
 
     # Check that dependencies file was created
     if [[ -f "${PROJECT_ROOT}/discovered/dependencies.jsonl" ]]; then
-        local dep_count_file=$(wc -l < "${PROJECT_ROOT}/discovered/dependencies.jsonl")
+        # Count number of complete dependency objects (count "from" fields)
+        local dep_count_file=$(grep -c '"from":' "${PROJECT_ROOT}/discovered/dependencies.jsonl" || echo 0)
         if [[ "$dep_count_file" -eq 4 ]]; then
             test_pass "detect_vm_dependencies (file)"
         else
-            test_fail "detect_vm_dependencies (file)" "Expected 4 lines, got $dep_count_file"
+            test_fail "detect_vm_dependencies (file)" "Expected 4 dependencies, got $dep_count_file"
         fi
     else
         test_fail "detect_vm_dependencies (file)" "Dependencies file not created"
     fi
 
     # Verify dependency types
-    local required_count=$(grep -c '"dependency_type":"required"' "${PROJECT_ROOT}/discovered/dependencies.jsonl" || echo 0)
-    local optional_count=$(grep -c '"dependency_type":"optional"' "${PROJECT_ROOT}/discovered/dependencies.jsonl" || echo 0)
+    local required_count=$(grep '"dependency_type".*"required"' "${PROJECT_ROOT}/discovered/dependencies.jsonl" | wc -l)
+    local optional_count=$(grep '"dependency_type".*"optional"' "${PROJECT_ROOT}/discovered/dependencies.jsonl" | wc -l)
 
     if [[ "$required_count" -eq 3 ]]; then
         test_pass "detect_vm_dependencies (required deps)"
@@ -272,7 +273,7 @@ test_detect_vnet_dependencies() {
     fi
 
     # Verify subnet is "contains" relationship
-    if grep -q '"relationship":"contains"' "${PROJECT_ROOT}/discovered/dependencies.jsonl"; then
+    if grep -q '"relationship".*"contains"' "${PROJECT_ROOT}/discovered/dependencies.jsonl"; then
         test_pass "detect_vnet_dependencies (contains)"
     else
         test_fail "detect_vnet_dependencies (contains)" "Contains relationship not found"
@@ -336,7 +337,7 @@ test_export_dependency_graph_dot() {
         fi
 
         # Verify edges are present
-        if grep -q "->" "${PROJECT_ROOT}/discovered/dependency-graph.dot"; then
+        if grep -q "\->" "${PROJECT_ROOT}/discovered/dependency-graph.dot"; then
             test_pass "export_dependency_graph_dot (edges)"
         else
             test_fail "export_dependency_graph_dot (edges)" "No edges found"

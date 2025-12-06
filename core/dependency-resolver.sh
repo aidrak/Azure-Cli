@@ -132,17 +132,8 @@ add_dependency() {
         mkdir -p "${PROJECT_ROOT}/discovered"
 
         local now=$(date +%s)
-        local dep_json=$(cat <<EOF
-{
-  "from": "$from_id",
-  "to": "$to_id",
-  "dependency_type": "$dep_type",
-  "relationship": "$relationship",
-  "discovered_at": $now
-}
-EOF
-)
-        echo "$dep_json" >> "$dep_file"
+        # Store as compact JSON (true JSONL format - one JSON object per line)
+        echo "{\"from\":\"$from_id\",\"to\":\"$to_id\",\"dependency_type\":\"$dep_type\",\"relationship\":\"$relationship\",\"discovered_at\":$now}" >> "$dep_file"
     fi
 }
 
