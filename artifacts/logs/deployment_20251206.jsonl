@@ -332,3 +332,57 @@
 {"timestamp":"2025-12-06T02:13:19.804Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T02:13:19.868Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T02:13:19.899Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:18.602Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:19.223Z","level":"INFO","message":"Executing module: 00-resource-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:19.304Z","level":"INFO","message":"Executing operation: resource-group-create","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:19.332Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/00-resource-group/operations/01-create.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:19.500Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:19.526Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:27.788Z","level":"INFO","message":"Executing operation: resource-group-validate","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:27.814Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/00-resource-group/operations/02-validate.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:27.956Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:27.977Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:32.200Z","level":"SUCCESS","message":"Module completed: 00-resource-group","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:39.814Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:40.452Z","level":"INFO","message":"Executing module: 01-networking","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:40.515Z","level":"INFO","message":"Executing operation: networking-create-vnet","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:40.538Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/01-create-vnet.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:40.693Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:40.710Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:58.996Z","level":"INFO","message":"Executing operation: networking-create-subnets","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:59.028Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/02-create-subnets.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:59.136Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:10:59.161Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:43.460Z","level":"INFO","message":"Executing operation: networking-create-nsgs","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:43.494Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/03-create-nsgs.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:43.632Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:43.673Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:57.923Z","level":"INFO","message":"Executing operation: networking-configure-nsg-rules","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:57.962Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/04-configure-nsg-rules.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:58.067Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:11:58.100Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:12:20.395Z","level":"INFO","message":"Executing operation: networking-attach-nsgs","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:12:20.446Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/05-attach-nsgs.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:12:20.570Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:12:20.615Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:02.994Z","level":"INFO","message":"Executing operation: networking-configure-service-endpoints","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:03.079Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/06-configure-service-endpoints.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:03.264Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:03.318Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:29.647Z","level":"INFO","message":"Executing operation: networking-create-dns-zones","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:29.721Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/07-create-dns-zones.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:29.854Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:29.899Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:32.140Z","level":"INFO","message":"Executing operation: networking-link-dns-zones","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:32.231Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/08-link-dns-zones.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:32.381Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:32.422Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:34.642Z","level":"INFO","message":"Executing operation: networking-create-peering","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:34.736Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/09-create-peering.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:34.863Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:34.902Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:37.125Z","level":"INFO","message":"Executing operation: networking-configure-route-tables","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:37.231Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/10-configure-route-tables.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:37.373Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:37.419Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T04:13:39.672Z","level":"INFO","message":"Executing operation: networking-validate-all","operation_id":"engine","metadata":{}}

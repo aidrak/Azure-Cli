@@ -1,10 +1,10 @@
 {
-  "current_module": "05-golden-image",
-  "updated_at": "2025-12-06T02:13:19Z",
+  "current_module": "01-networking",
+  "updated_at": "2025-12-06T04:13:37Z",
   "modules": {
     "01-networking": {
-      "status": "completed",
-      "timestamp": "2025-12-05T19:18:23Z"
+      "status": "running",
+      "timestamp": "2025-12-06T04:10:40Z"
     },
     "02-storage": {
       "status": "completed",
@@ -12,7 +12,7 @@
     },
     "00-resource-group": {
       "status": "completed",
-      "timestamp": "2025-12-05T19:15:41Z"
+      "timestamp": "2025-12-06T04:10:32Z"
     },
     "03-entra-group": {
       "status": "completed",
@@ -47,53 +47,53 @@
   "operations": {
     "networking-create-vnet": {
       "status": "completed",
-      "duration": 16,
-      "timestamp": "2025-12-05T19:16:08Z"
+      "duration": 18,
+      "timestamp": "2025-12-06T04:10:58Z"
     },
     "networking-create-subnets": {
       "status": "completed",
-      "duration": 20,
-      "timestamp": "2025-12-05T19:16:29Z"
+      "duration": 44,
+      "timestamp": "2025-12-06T04:11:43Z"
     },
     "networking-create-nsgs": {
       "status": "completed",
-      "duration": 12,
-      "timestamp": "2025-12-05T19:16:41Z"
+      "duration": 14,
+      "timestamp": "2025-12-06T04:11:57Z"
     },
     "networking-configure-nsg-rules": {
       "status": "completed",
-      "duration": 20,
-      "timestamp": "2025-12-05T19:17:01Z"
+      "duration": 22,
+      "timestamp": "2025-12-06T04:12:20Z"
     },
     "networking-attach-nsgs": {
       "status": "completed",
-      "duration": 41,
-      "timestamp": "2025-12-05T19:17:42Z"
+      "duration": 42,
+      "timestamp": "2025-12-06T04:13:02Z"
     },
     "networking-configure-service-endpoints": {
       "status": "completed",
       "duration": 26,
-      "timestamp": "2025-12-05T19:18:08Z"
+      "timestamp": "2025-12-06T04:13:29Z"
     },
     "networking-create-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T19:18:10Z"
+      "timestamp": "2025-12-06T04:13:32Z"
     },
     "networking-link-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T19:18:12Z"
+      "timestamp": "2025-12-06T04:13:34Z"
     },
     "networking-create-peering": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T19:18:15Z"
+      "timestamp": "2025-12-06T04:13:37Z"
     },
     "networking-configure-route-tables": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T19:18:17Z"
+      "timestamp": "2025-12-06T04:13:39Z"
     },
     "networking-validate-all": {
       "status": "completed",
@@ -117,13 +117,13 @@
     },
     "resource-group-create": {
       "status": "completed",
-      "duration": 4,
-      "timestamp": "2025-12-05T19:15:38Z"
+      "duration": 8,
+      "timestamp": "2025-12-06T04:10:27Z"
     },
     "resource-group-validate": {
       "status": "completed",
-      "duration": 2,
-      "timestamp": "2025-12-05T19:15:41Z"
+      "duration": 4,
+      "timestamp": "2025-12-06T04:10:32Z"
     },
     "storage-disable-public-access": {
       "status": "completed",
@@ -286,5 +286,5 @@
       "timestamp": "2025-12-06T01:47:38Z"
     }
   },
-  "current_operation": "golden-image-03-install-apps"
+  "current_operation": "networking-configure-route-tables"
 }
