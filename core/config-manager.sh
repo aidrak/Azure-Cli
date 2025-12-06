@@ -104,7 +104,7 @@ load_config() {
     GOLDEN_IMAGE_APPLICATIONS_CSV=$(yq e '.golden_image.applications | join(",")' "$config_file"); export GOLDEN_IMAGE_APPLICATIONS_CSV
 
     # Load app manifest content and convert to base64-encoded JSON for VM parameter passing
-    local app_manifest_file="modules/05-golden-image/app_manifest.yaml"
+    local app_manifest_file="${PROJECT_ROOT}/modules/05-golden-image/app_manifest.yaml"
     if [[ -f "$app_manifest_file" ]]; then
         APP_MANIFEST_CONTENT=$(cat "$app_manifest_file"); export APP_MANIFEST_CONTENT
         # Convert YAML to JSON and base64 encode (avoids shell escaping issues)
