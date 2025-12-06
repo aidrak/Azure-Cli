@@ -17,60 +17,67 @@ operation:
   validation:
     enabled: true
 
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/networking-09-create-peering-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VNet peering creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
-      echo "[START] VNet peering creation: $(date '+%Y-%m-%d %H:%M:%S')"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $peeringEnabled = (yq e '.networking.peering.enabled' config.yaml)
 
-      PEERING_ENABLED=$(yq e '.networking.peering.enabled' config.yaml)
-
-      if [[ "$PEERING_ENABLED" != "true" ]]; then
-        echo "[INFO] VNet peering disabled - skipping"
+      if ($peeringEnabled -ne "true") {
+        Write-Host "[INFO] VNet peering disabled - skipping"
         exit 0
-      fi
+      }
 
-      HUB_VNET_NAME=$(yq e '.networking.peering.hub_vnet.name' config.yaml)
-      HUB_VNET_RG=$(yq e '.networking.peering.hub_vnet.resource_group' config.yaml)
-      HUB_SUBSCRIPTION=$(yq e '.networking.peering.hub_vnet.subscription_id' config.yaml)
-      ALLOW_VNET_ACCESS=$(yq e '.networking.peering.allow_virtual_network_access' config.yaml)
-      ALLOW_FORWARDED=$(yq e '.networking.peering.allow_forwarded_traffic' config.yaml)
-      ALLOW_GATEWAY_TRANSIT=$(yq e '.networking.peering.allow_gateway_transit' config.yaml)
-      USE_REMOTE_GATEWAYS=$(yq e '.networking.peering.use_remote_gateways' config.yaml)
+      $hubVnetName = (yq e '.networking.peering.hub_vnet.name' config.yaml)
+      $hubVnetRg = (yq e '.networking.peering.hub_vnet.resource_group' config.yaml)
+      $hubSubscription = (yq e '.networking.peering.hub_vnet.subscription_id' config.yaml)
+      $allowVnetAccess = (yq e '.networking.peering.allow_virtual_network_access' config.yaml)
+      $allowForwarded = (yq e '.networking.peering.allow_forwarded_traffic' config.yaml)
+      $allowGatewayTransit = (yq e '.networking.peering.allow_gateway_transit' config.yaml)
+      $useRemoteGateways = (yq e '.networking.peering.use_remote_gateways' config.yaml)
 
-      REMOTE_VNET_ID="/subscriptions/${HUB_SUBSCRIPTION}/resourceGroups/${HUB_VNET_RG}/providers/Microsoft.Network/virtualNetworks/${HUB_VNET_NAME}"
-      PEERING_NAME="${VNET_NAME}-to-${HUB_VNET_NAME}"
+      $remoteVnetId = "/subscriptions/$hubSubscription/resourceGroups/$hubVnetRg/providers/Microsoft.Network/virtualNetworks/$hubVnetName"
+      $peeringName = "$vnetName-to-$hubVnetName"
 
-      echo "[PROGRESS] Creating peering: $PEERING_NAME"
+      Write-Host "[PROGRESS] Creating peering: $peeringName"
 
-      if az network vnet peering show \
-        --resource-group "$RESOURCE_GROUP" \
-        --vnet-name "$VNET_NAME" \
-        --name "$PEERING_NAME" &>/dev/null; then
-        echo "[INFO] Peering already exists: $PEERING_NAME"
+      az network vnet peering show `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $peeringName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Peering already exists: $peeringName"
         exit 0
-      fi
+      }
 
-      if ! az network vnet peering create \
-        --resource-group "$RESOURCE_GROUP" \
-        --vnet-name "$VNET_NAME" \
-        --name "$PEERING_NAME" \
-        --remote-vnet "$REMOTE_VNET_ID" \
-        --allow-vnet-access "$ALLOW_VNET_ACCESS" \
-        --allow-forwarded-traffic "$ALLOW_FORWARDED" \
-        --allow-gateway-transit "$ALLOW_GATEWAY_TRANSIT" \
-        --use-remote-gateways "$USE_REMOTE_GATEWAYS" \
-        --output json > artifacts/outputs/networking-peering.json; then
-        echo "[ERROR] Failed to create peering"
+      az network vnet peering create `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $peeringName `
+        --remote-vnet $remoteVnetId `
+        --allow-vnet-access $allowVnetAccess `
+        --allow-forwarded-traffic $allowForwarded `
+        --allow-gateway-transit $allowGatewayTransit `
+        --use-remote-gateways $useRemoteGateways `
+        --output json > artifacts/outputs/networking-peering.json
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create peering"
         exit 1
-      fi
+      }
 
-      echo "[SUCCESS] VNet peering created: $PEERING_NAME"
+      Write-Host "[SUCCESS] VNet peering created: $peeringName"
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-09-create-peering-wrapper.ps1
+      rm -f /tmp/networking-09-create-peering-wrapper.ps1
 
   fixes: []
