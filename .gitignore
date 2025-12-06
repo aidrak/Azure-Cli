@@ -119,9 +119,8 @@ state.db
 # Discovery outputs (instance-specific runtime data)
 discovered/
 
-# Runtime artifacts (logs, outputs, temporary files)
+# Runtime artifacts (logs, temporary files, workflow tracking)
 artifacts/logs/
-artifacts/outputs/
 artifacts/temp/
 artifacts/workflow-logs/
 artifacts/workflow-state/
@@ -131,7 +130,6 @@ artifacts/*.json
 # Keep artifacts directory structure
 !artifacts/.gitkeep
 !artifacts/logs/.gitkeep
-!artifacts/outputs/.gitkeep
 !artifacts/temp/.gitkeep
 !artifacts/workflow-logs/.gitkeep
 !artifacts/workflow-state/.gitkeep

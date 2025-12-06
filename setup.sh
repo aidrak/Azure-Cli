@@ -172,7 +172,6 @@ REQUIRED_DIRS=(
     "capabilities"
     "artifacts"
     "artifacts/logs"
-    "artifacts/outputs"
     "artifacts/temp"
     "docs"
     "queries"
