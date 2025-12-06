@@ -2,8 +2,8 @@
 # Operation: Register Session Hosts to Host Pool
 # ==============================================================================
 operation:
-  id: "session-host-register-pool"
-  name: "Register to Host Pool"
+  id: "session-host-02-register-pool"
+  name: "02: Register to Host Pool"
   description: "Generate registration token and prepare session hosts for host pool registration"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "session-host-deploy-vms"
+    - operation: "session-host-01-deploy-vms"
       status: "completed"
 
   # Validation checks (run after operation completes)

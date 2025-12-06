@@ -244,6 +244,7 @@ validate_prerequisites() {
     while [[ $i -lt $requires_count ]]; do
         local required_operation
         local required_status
+        local is_optional="false"
 
         # Check if requires entry is a string or an object
         local entry_type
@@ -257,6 +258,7 @@ validate_prerequisites() {
             # Object format: operation and status fields
             required_operation=$(yq e ".operation.requires[$i].operation" "$yaml_file")
             required_status=$(yq e ".operation.requires[$i].status" "$yaml_file")
+            is_optional=$(yq e ".operation.requires[$i].optional // false" "$yaml_file")
         fi
 
         echo "[*] Checking prerequisite: $required_operation (expected status: $required_status)"
@@ -268,9 +270,13 @@ validate_prerequisites() {
             actual_status=$(jq -r ".operations[\"$required_operation\"].status // \"not_found\"" "$state_file")
 
             if [[ "$actual_status" != "$required_status" ]]; then
-                echo "[x] ERROR: Prerequisite not met: $required_operation"
-                echo "[x] Expected status: $required_status, Actual: $actual_status"
-                return 1
+                if [[ "$is_optional" == "true" ]]; then
+                    echo "[!] WARNING: Optional prerequisite not met: $required_operation (skipping)"
+                else
+                    echo "[x] ERROR: Prerequisite not met: $required_operation"
+                    echo "[x] Expected status: $required_status, Actual: $actual_status"
+                    return 1
+                fi
             fi
         else
             echo "[!] WARNING: No state file found, skipping prerequisite checks"

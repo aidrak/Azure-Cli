@@ -1,6 +1,6 @@
 {
-  "current_module": "05-golden-image",
-  "updated_at": "2025-12-06T00:20:06Z",
+  "current_module": "07-rbac",
+  "updated_at": "2025-12-06T01:30:02Z",
   "modules": {
     "01-networking": {
       "status": "completed",
@@ -25,9 +25,17 @@
     "05-golden-image": {
       "status": "failed",
       "timestamp": "2025-12-05T23:07:53Z"
+    },
+    "06-session-host-deployment": {
+      "status": "running",
+      "timestamp": "2025-12-06T01:29:30Z"
+    },
+    "07-rbac": {
+      "status": "running",
+      "timestamp": "2025-12-06T01:30:02Z"
     }
   },
-  "current_operation": "golden-image-03-install-apps",
+  "current_operation": "rbac-verify-assignments",
   "status": "running",
   "operations": {
     "networking-create-vnet": {
@@ -199,6 +207,26 @@
       "status": "completed",
       "duration": 34,
       "timestamp": "2025-12-05T22:53:05Z"
+    },
+    "session-host-register-pool": {
+      "status": "blocked",
+      "duration": 0,
+      "timestamp": "2025-12-06T01:27:45Z"
+    },
+    "session-host-02-register-pool": {
+      "status": "blocked",
+      "duration": 0,
+      "timestamp": "2025-12-06T01:28:21Z"
+    },
+    "session-host-01-deploy-vms": {
+      "status": "failed",
+      "duration": 4,
+      "timestamp": "2025-12-06T01:29:34Z"
+    },
+    "rbac-verify-assignments": {
+      "status": "blocked",
+      "duration": 0,
+      "timestamp": "2025-12-06T01:30:02Z"
     }
   }
 }

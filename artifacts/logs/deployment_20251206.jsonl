@@ -10,3 +10,34 @@
 {"timestamp":"2025-12-06T00:20:06.767Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T00:20:06.830Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T00:20:06.861Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:25.612Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:25.910Z","level":"INFO","message":"Executing module: 06-session-host-deployment","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:25.950Z","level":"INFO","message":"Executing operation: session-host-register-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:25.967Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/06-session-host-deployment/operations/02-register-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:26.040Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:45.314Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:45.575Z","level":"INFO","message":"Executing module: 06-session-host-deployment","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:45.606Z","level":"INFO","message":"Executing operation: session-host-register-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:45.620Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/06-session-host-deployment/operations/02-register-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:27:45.685Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:20.766Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:21.051Z","level":"INFO","message":"Executing module: 06-session-host-deployment","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:21.083Z","level":"INFO","message":"Executing operation: session-host-02-register-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:21.097Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/06-session-host-deployment/operations/02-register-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:21.162Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:57.602Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:57.884Z","level":"INFO","message":"Executing module: 06-session-host-deployment","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:57.918Z","level":"INFO","message":"Executing operation: session-host-01-deploy-vms","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:57.929Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/06-session-host-deployment/operations/01-deploy-session-hosts.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:28:57.994Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.383Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.662Z","level":"INFO","message":"Executing module: 06-session-host-deployment","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.698Z","level":"INFO","message":"Executing operation: session-host-01-deploy-vms","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.709Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/06-session-host-deployment/operations/01-deploy-session-hosts.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.774Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:29:30.806Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:02.032Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:02.335Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:02.370Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:02.396Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:02.469Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
