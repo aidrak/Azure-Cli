@@ -277,4 +277,5 @@ parse_progress_markers() {
     echo ""
     echo "=== Progress Markers ==="
     grep -E "\[(START|PROGRESS|VALIDATE|SUCCESS|ERROR|MONITOR)\]" "$log_file" || echo "(No markers found)"
-    echo "========================
+    echo "========================"
+}

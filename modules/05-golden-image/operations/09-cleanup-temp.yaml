@@ -2,8 +2,8 @@
 # Operation: Cleanup Temporary Files
 # ==============================================================================
 operation:
-  id: "golden-image-cleanup-temp"
-  name: "Cleanup Temporary Files"
+  id: "golden-image-09-cleanup-temp"
+  name: "09: Cleanup Temporary Files"
   description: "Remove temporary files and caches to reduce image size"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "golden-image-configure-default-profile"
+    - operation: "golden-image-08-configure-default-profile"
       status: "completed"
 
   # Validation checks (run after operation completes)
@@ -33,12 +33,12 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/10-cleanup-temp.ps1" \
+        --scripts "@modules/05-golden-image/operations/09-cleanup-temp.ps1" \
         --output json > artifacts/outputs/golden-image-cleanup-temp.json
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "10-cleanup-temp.ps1"
+    file: "09-cleanup-temp.ps1"
     content: |
       # ==============================================================================
       # Cleanup Temporary Files

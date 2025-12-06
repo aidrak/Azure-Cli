@@ -1,6 +1,6 @@
 {
   "current_module": "05-golden-image",
-  "updated_at": "2025-12-05T23:42:27Z",
+  "updated_at": "2025-12-06T00:20:06Z",
   "modules": {
     "01-networking": {
       "status": "completed",
@@ -27,7 +27,7 @@
       "timestamp": "2025-12-05T23:07:53Z"
     }
   },
-  "current_operation": "golden-image-install-apps-parallel",
+  "current_operation": "golden-image-03-install-apps",
   "status": "running",
   "operations": {
     "networking-create-vnet": {
@@ -219,6 +219,11 @@
       "status": "failed",
       "duration": 2,
       "timestamp": "2025-12-05T23:13:33Z"
+    },
+    "golden-image-02-system-prep": {
+      "status": "completed",
+      "duration": 32,
+      "timestamp": "2025-12-05T22:53:37Z"
     }
   }
 }
