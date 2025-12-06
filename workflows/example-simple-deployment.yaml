@@ -1,0 +1,50 @@
+# ==============================================================================
+# Example Workflow: Simple Deployment
+# ==============================================================================
+#
+# This is a basic workflow example demonstrating the YAML format for
+# multi-step workflow execution.
+#
+# Features demonstrated:
+#   - Sequential step execution
+#   - Operation references
+#   - Parameter passing (future enhancement)
+#   - Error handling (continue_on_error flag)
+#
+
+workflow:
+  id: "simple-deployment"
+  name: "Simple Deployment Workflow"
+  description: "Example workflow demonstrating basic sequential execution"
+
+  steps:
+    # Step 1: Create networking infrastructure
+    - name: "Create Virtual Network"
+      operation: "modules/01-networking/operations/01-create-vnet.yaml"
+      continue_on_error: false
+      parameters:
+        vnet_name: "test-vnet"
+        address_space: "10.0.0.0/16"
+
+    # Step 2: Create storage account
+    - name: "Create Storage Account"
+      operation: "modules/02-storage/operations/01-create-storage.yaml"
+      continue_on_error: false
+      parameters:
+        storage_account_name: "teststorage"
+        storage_tier: "Standard"
+
+    # Step 3: Create subnet (depends on VNet creation)
+    - name: "Create Subnet"
+      operation: "modules/01-networking/operations/02-create-subnet.yaml"
+      continue_on_error: false
+      parameters:
+        subnet_name: "test-subnet"
+        address_prefix: "10.0.1.0/24"
+
+    # Step 4: Configure storage (can continue if this fails)
+    - name: "Configure Storage"
+      operation: "modules/02-storage/operations/02-configure-storage.yaml"
+      continue_on_error: true
+      parameters:
+        config_option: "advanced"

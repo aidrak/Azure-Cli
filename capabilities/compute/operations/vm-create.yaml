@@ -1,0 +1,179 @@
+# ==============================================================================
+# Capability Operation: Create Virtual Machine
+# Migrated from: modules/05-golden-image/operations/00-create-vm.yaml
+# ==============================================================================
+
+operation:
+  id: "vm-create"
+  name: "Create Virtual Machine"
+  description: "Create temporary Windows VM with TrustedLaunch security for golden image preparation"
+
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 420   # 7 minutes
+    timeout: 900    # 15 minutes (VM creation can be slow)
+    type: "WAIT"    # WAIT (10+min typical for VM creation)
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the virtual machine"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+      - name: "admin_username"
+        type: "string"
+        description: "Administrator username"
+        default: "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+      - name: "admin_password"
+        type: "string"
+        description: "Administrator password"
+        default: "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+        sensitive: true
+    optional:
+      - name: "image_publisher"
+        type: "string"
+        description: "VM image publisher"
+        default: "{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}"
+      - name: "image_offer"
+        type: "string"
+        description: "VM image offer"
+        default: "{{GOLDEN_IMAGE_IMAGE_OFFER}}"
+      - name: "image_sku"
+        type: "string"
+        description: "VM image SKU"
+        default: "{{GOLDEN_IMAGE_IMAGE_SKU}}"
+      - name: "image_version"
+        type: "string"
+        description: "VM image version"
+        default: "{{GOLDEN_IMAGE_IMAGE_VERSION}}"
+      - name: "vm_size"
+        type: "string"
+        description: "VM size/machine type"
+        default: "{{GOLDEN_IMAGE_VM_SIZE}}"
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "subnet_name"
+        type: "string"
+        description: "Subnet name"
+        default: "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}"
+      - name: "security_type"
+        type: "string"
+        description: "VM security type (Standard or TrustedLaunch)"
+        default: "TrustedLaunch"
+      - name: "enable_secure_boot"
+        type: "boolean"
+        description: "Enable Secure Boot"
+        default: true
+      - name: "enable_vtpm"
+        type: "boolean"
+        description: "Enable vTPM"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/virtualMachines"
+        resource_name: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+        description: "VM created successfully"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "VM provisioned successfully"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-vm-create-wrapper.ps1 << 'PSWRAPPER'
+      # Check if VM already exists (idempotent)
+      $vmExists = az vm show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] VM '{{GOLDEN_IMAGE_TEMP_VM_NAME}}' already exists. Skipping creation."
+        exit 0
+      }
+
+      # Create VM with TrustedLaunch security
+      az vm create `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+        --image "{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}:{{GOLDEN_IMAGE_IMAGE_OFFER}}:{{GOLDEN_IMAGE_IMAGE_SKU}}:{{GOLDEN_IMAGE_IMAGE_VERSION}}" `
+        --size "{{GOLDEN_IMAGE_VM_SIZE}}" `
+        --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" `
+        --admin-password "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" `
+        --vnet-name "{{NETWORKING_VNET_NAME}}" `
+        --subnet "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}" `
+        --public-ip-sku Standard `
+        --security-type TrustedLaunch `
+        --enable-secure-boot true `
+        --enable-vtpm true `
+        --location "{{AZURE_LOCATION}}" `
+        --output json > artifacts/outputs/compute-vm-create.json
+
+      # Get VM details
+      $vmPublicIp = az vm show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+        --show-details `
+        --query "publicIps" `
+        --output tsv
+
+      $vmPrivateIp = az vm show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+        --show-details `
+        --query "privateIps" `
+        --output tsv
+
+      Write-Host "[SUCCESS] VM created successfully"
+      Write-Host "[INFO] Public IP: $vmPublicIp"
+      Write-Host "[INFO] Private IP: $vmPrivateIp"
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-create-wrapper.ps1
+      rm -f /tmp/compute-vm-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Virtual Machine"
+        description: "Remove the VM and associated resources"
+        command: |
+          az vm delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

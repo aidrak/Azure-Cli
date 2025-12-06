@@ -1,0 +1,163 @@
+# ==============================================================================
+# Capability Operation: Create Entra ID Security Group
+# Migrated from: modules/03-entra-group/operations/01-create-users-group.yaml
+# ==============================================================================
+
+operation:
+  id: "group-create"
+  name: "Create Entra ID Security Group"
+  description: "Create Entra ID security group for AVD users with configurable name and description"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/groups"
+
+  # Duration expectations
+  duration:
+    expected: 30    # 30 seconds
+    timeout: 60     # 1 minute
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Display name for the security group"
+        default: "{{ENTRA_GROUP_USERS_STANDARD}}"
+      - name: "group_description"
+        type: "string"
+        description: "Description for the security group"
+        default: "{{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION}}"
+    optional:
+      - name: "mail_nickname"
+        type: "string"
+        description: "Mail nickname for the group (auto-derived from name if not provided)"
+        default: ""
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
+        description: "Users group exists in Entra ID"
+
+      - type: "group_type"
+        expected: "Security"
+        description: "Group is a security group"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az ad group list \
+        --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" \
+        --query "[0].id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/identity-group-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating AVD Users security group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration from config.yaml
+      $groupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $groupDescription = "{{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION}}"
+
+      # Generate mail nickname (lowercase, no spaces)
+      $mailNickname = $groupName -replace ' ', '-' | % { $_.ToLower() }
+
+      # Check if group already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if group exists: $groupName"
+
+      $groupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
+
+      if ([string]::IsNullOrEmpty($groupId) -eq $false -and $groupId -ne "None") {
+        Write-Host "[INFO] Group already exists: $groupName"
+        Write-Host "[INFO]   Group ID: $groupId"
+        Write-Host "[SUCCESS] Users group creation complete (already exists)"
+
+        # Save group details to artifacts
+        az ad group show --group $groupId --output json | Out-File -FilePath "artifacts/outputs/identity-group-create.json"
+        exit 0
+      }
+
+      # Create security group
+      Write-Host "[PROGRESS] Creating security group..."
+      Write-Host "[PROGRESS]   Name: $groupName"
+      Write-Host "[PROGRESS]   Description: $groupDescription"
+      Write-Host "[PROGRESS]   Mail nickname: $mailNickname"
+
+      try {
+        $groupId = az ad group create `
+          --display-name $groupName `
+          --mail-nickname $mailNickname `
+          --description $groupDescription `
+          --query id -o tsv 2>&1
+      } catch {
+        Write-Host "[ERROR] Failed to create security group"
+        Write-Host $groupId
+        exit 1
+      }
+
+      if ([string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[ERROR] Failed to create security group"
+        exit 1
+      }
+
+      # Validate creation
+      Write-Host "[VALIDATE] Verifying group creation..."
+
+      $verifyGroup = @(az ad group show --group $groupId --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($verifyGroup.Count -eq 0) {
+        Write-Host "[ERROR] Group verification failed"
+        exit 1
+      }
+
+      # Get full group details
+      $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
+
+      # Save to artifacts
+      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/identity-group-create.json"
+
+      # Extract security enabled flag
+      $securityEnabled = $groupDetails.securityEnabled
+
+      Write-Host "[SUCCESS] AVD Users group created successfully"
+      Write-Host "[SUCCESS]   Name: $groupName"
+      Write-Host "[SUCCESS]   ID: $groupId"
+      Write-Host "[SUCCESS]   Mail nickname: $mailNickname"
+      Write-Host "[SUCCESS]   Security enabled: $securityEnabled"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Add user members: az ad group member add --group '$groupId' --member-id <user-object-id>"
+      Write-Host "[INFO]   - Use for RBAC assignments"
+      Write-Host "[INFO]   - Use for application group assignments"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/identity-group-create-wrapper.ps1
+      rm -f /tmp/identity-group-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Security Group"
+        description: "Remove the Entra ID security group"
+        command: |
+          az ad group delete \
+            --group "{{ENTRA_GROUP_USERS_STANDARD}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

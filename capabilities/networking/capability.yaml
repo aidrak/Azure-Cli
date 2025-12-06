@@ -1,0 +1,54 @@
+capability:
+  id: "networking"
+  name: "Network Resources"
+  description: "Azure networking resources including virtual networks, subnets, NSGs, network interfaces, and public IPs"
+  version: "1.0.0"
+
+  resource_types:
+    - "Microsoft.Network/virtualNetworks"
+    - "Microsoft.Network/virtualNetworks/subnets"
+    - "Microsoft.Network/networkSecurityGroups"
+    - "Microsoft.Network/networkInterfaces"
+    - "Microsoft.Network/publicIPAddresses"
+    - "Microsoft.Network/routeTables"
+    - "Microsoft.Network/natGateways"
+    - "Microsoft.Network/bastionHosts"
+    - "Microsoft.Network/applicationGatewayWebApplicationFirewallPolicies"
+
+  operations: []  # Will be populated as operations are created
+
+  common_dependencies:
+    - capability: "identity"
+      reason: "Network resources may require RBAC assignments"
+      required: false
+
+  required_providers:
+    - "Microsoft.Network"
+
+  common_tags:
+    - "environment"
+    - "purpose"
+    - "subnet_purpose"
+    - "managed_by"
+
+  validation_rules:
+    - name: "vnet_address_space"
+      description: "Validate VNET address space does not overlap with existing VNETs"
+    - name: "subnet_within_vnet"
+      description: "Ensure subnet address space is within VNET address space"
+    - name: "nsg_rule_priority"
+      description: "Verify NSG rule priorities are unique and valid (100-4096)"
+    - name: "public_ip_sku_compatibility"
+      description: "Ensure public IP SKU is compatible with target resource"
+
+  cost_considerations:
+    - "Standard SKU public IPs incur fixed hourly charges"
+    - "NAT Gateway has hourly and data processing charges"
+    - "Azure Bastion has fixed hourly cost"
+    - "Cross-region VNET peering incurs data transfer costs"
+
+  security_considerations:
+    - "Always apply NSGs to subnets or NICs"
+    - "Follow principle of least privilege for NSG rules"
+    - "Use Azure Bastion instead of public IPs for management access"
+    - "Enable NSG flow logs for security monitoring"

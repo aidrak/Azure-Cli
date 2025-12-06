@@ -1,0 +1,50 @@
+capability:
+  id: "compute"
+  name: "Compute Resources"
+  description: "Azure compute resources including virtual machines, disks, availability sets, and images"
+  version: "1.0.0"
+
+  resource_types:
+    - "Microsoft.Compute/virtualMachines"
+    - "Microsoft.Compute/disks"
+    - "Microsoft.Compute/availabilitySets"
+    - "Microsoft.Compute/images"
+    - "Microsoft.Compute/snapshots"
+    - "Microsoft.Compute/galleries"
+
+  operations: []  # Will be populated as operations are created
+
+  common_dependencies:
+    - capability: "networking"
+      reason: "VMs require network interfaces and subnets"
+      required: true
+    - capability: "storage"
+      reason: "VMs may require storage accounts for diagnostics"
+      required: false
+    - capability: "identity"
+      reason: "VMs can use managed identities for authentication"
+      required: false
+
+  required_providers:
+    - "Microsoft.Compute"
+    - "Microsoft.Network"
+
+  common_tags:
+    - "workload"
+    - "environment"
+    - "costCenter"
+    - "owner"
+
+  validation_rules:
+    - name: "vm_size_availability"
+      description: "Verify VM size is available in target region"
+    - name: "disk_sku_compatibility"
+      description: "Ensure disk SKU is compatible with VM size"
+    - name: "availability_zone_support"
+      description: "Validate availability zone support for selected VM size"
+
+  cost_considerations:
+    - "VM size impacts hourly compute costs"
+    - "Premium SSD disks cost more than Standard HDD"
+    - "Availability zones may incur data transfer costs"
+    - "Shutdown VMs when not in use to reduce costs"
