@@ -1,0 +1,145 @@
+# ==============================================================================
+# Operation: Create VPN Gateway
+# ==============================================================================
+operation:
+  id: "networking-create-vpn-gateway"
+  name: "Create VPN Gateway"
+  description: "Create VPN Gateway for site-to-site or point-to-site connectivity (if enabled)"
+
+  duration:
+    expected: 600
+    timeout: 1200
+    type: "LONG"
+
+  requires:
+    - "networking-create-gateway-subnet"
+
+  validation:
+    enabled: true
+
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-14-create-vpn-gateway-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VPN Gateway creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if VPN gateway is enabled
+      $vpnEnabled = (yq e '.networking.vpn_gateway.enabled' config.yaml)
+
+      if ($vpnEnabled -ne "true") {
+        Write-Host "[INFO] VPN Gateway disabled - skipping"
+        exit 0
+      }
+
+      $gatewayName = (yq e '.networking.vpn_gateway.name' config.yaml)
+      $gatewayType = (yq e '.networking.vpn_gateway.type' config.yaml)
+      $gatewaySku = (yq e '.networking.vpn_gateway.sku' config.yaml)
+      $generation = (yq e '.networking.vpn_gateway.generation' config.yaml)
+      $activeActive = (yq e '.networking.vpn_gateway.active_active' config.yaml)
+
+      Write-Host "[PROGRESS] Gateway Name: $gatewayName, Type: $gatewayType, SKU: $gatewaySku"
+
+      # Check if gateway already exists
+      az network vnet-gateway show `
+        --resource-group $resourceGroup `
+        --name $gatewayName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] VPN Gateway already exists: $gatewayName"
+        exit 0
+      }
+
+      # Create public IP for VPN gateway
+      $publicIpName = "$gatewayName-pip"
+      Write-Host "[PROGRESS] Creating public IP: $publicIpName"
+
+      az network public-ip show `
+        --resource-group $resourceGroup `
+        --name $publicIpName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        az network public-ip create `
+          --resource-group $resourceGroup `
+          --name $publicIpName `
+          --allocation-method Static `
+          --sku Standard `
+          --output none
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create public IP"
+          exit 1
+        }
+      }
+
+      # For active-active, create second public IP
+      if ($activeActive -eq "true") {
+        $publicIpName2 = "$gatewayName-pip2"
+        Write-Host "[PROGRESS] Active-Active mode enabled - creating second public IP: $publicIpName2"
+
+        az network public-ip show `
+          --resource-group $resourceGroup `
+          --name $publicIpName2 `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+          az network public-ip create `
+            --resource-group $resourceGroup `
+            --name $publicIpName2 `
+            --allocation-method Static `
+            --sku Standard `
+            --output none
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "[ERROR] Failed to create second public IP"
+            exit 1
+          }
+        }
+      }
+
+      # Create VPN Gateway
+      Write-Host "[PROGRESS] Creating VPN Gateway: $gatewayName (this may take 10-15 minutes)..."
+
+      if ($activeActive -eq "true") {
+        $createCmd = "az network vnet-gateway create " +
+          "--name $gatewayName " +
+          "--public-ip-addresses $publicIpName $publicIpName2 " +
+          "--resource-group $resourceGroup " +
+          "--vnet $vnetName " +
+          "--gateway-type $gatewayType " +
+          "--vpn-type RouteBased " +
+          "--sku $gatewaySku " +
+          "--no-wait " +
+          "--output none"
+      } else {
+        $createCmd = "az network vnet-gateway create " +
+          "--name $gatewayName " +
+          "--public-ip-address $publicIpName " +
+          "--resource-group $resourceGroup " +
+          "--vnet $vnetName " +
+          "--gateway-type $gatewayType " +
+          "--vpn-type RouteBased " +
+          "--sku $gatewaySku " +
+          "--no-wait " +
+          "--output none"
+      }
+
+      Invoke-Expression $createCmd
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create VPN Gateway"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] VPN Gateway creation initiated: $gatewayName"
+      Write-Host "[INFO] Gateway is being created in the background. This typically takes 10-15 minutes."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-14-create-vpn-gateway-wrapper.ps1
+      rm -f /tmp/networking-14-create-vpn-gateway-wrapper.ps1
+
+  fixes: []
