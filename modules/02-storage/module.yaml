@@ -44,9 +44,15 @@ module:
       duration: 120
       type: "NORMAL"
 
+    - id: "storage-validate-private-links"
+      name: "Validate Private Links Configuration"
+      description: "Comprehensive validation of private endpoint, DNS zone, and VNet integration"
+      duration: 60
+      type: "FAST"
+
   total_duration:
-    expected: 420   # 7 minutes (sum of all operations)
-    timeout: 840    # 14 minutes (2x expected)
+    expected: 480   # 8 minutes (sum of all operations including validation)
+    timeout: 960    # 16 minutes (2x expected)
 
   metadata:
     author: "AVD Deployment Team"

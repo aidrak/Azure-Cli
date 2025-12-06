@@ -119,17 +119,17 @@ networking:
           - "subnet-session-hosts" # Subnets to associate this route table with
   # VPN Gateway Configuration
   vpn_gateway:
-    enabled: false # Set to true to enable VPN gateway
-    name: "vpn-gw"
+    enabled: true # Set to true to enable VPN gateway
+    name: "vpn-gw-ipsec"
     type: "Vpn" # Vpn or ExpressRoute
     sku: "VpnGw1" # VpnGw1, VpnGw2, VpnGw3, VpnGw4, VpnGw5
     generation: "Generation1" # Generation1 or Generation2
     active_active: false # Enable active-active mode for high availability
   # Local Network Gateway Configuration
   local_network_gateways:
-    enabled: false # Set to true to enable local network gateways
+    enabled: true # Set to true to enable local network gateways
     gateways:
-      - name: "lng-onprem"
+      - name: "lng-onprem-ipsec"
         gateway_address: "203.0.113.50" # Public IP of on-premises VPN device
         address_spaces:
           - "192.168.0.0/16" # On-premises network address space
@@ -146,12 +146,12 @@ networking:
       #     asn: 65001
   # VPN Connection Configuration
   vpn_connections:
-    enabled: false # Set to true to enable VPN connections
+    enabled: true # Set to true to enable VPN connections
     connections:
-      - name: "vpn-conn-onprem"
-        local_network_gateway_name: "lng-onprem"
+      - name: "vpn-conn-ipsec"
+        local_network_gateway_name: "lng-onprem-ipsec"
         connection_type: "IPsec" # IPsec or Vnet2Vnet
-        shared_key: "" # Pre-shared key (set via environment variable for security)
+        shared_key: "SharedKeyForIPsec123!" # Pre-shared key (set via environment variable for security)
         enable_bgp: false # Enable BGP for this connection
         # Example with BGP:
         # - name: "vpn-conn-datacenter"
@@ -170,7 +170,7 @@ storage:
   tier: "Premium" # Premium or Standard (use Premium for AVD)
   # File Share Settings
   file_share_name: "fslogix-profiles" # File share name for FSLogix profiles
-  quota_gb: 1024 # File share quota in GB (1024 = 1TB)
+  quota_gb: 1 # File share quota in GB (1 = 1GB for testing)
   # Quota calculation: (Number of users × 50GB) + 20% buffer
   # Examples:
   #   - 20 users: 1024GB (1TB)
@@ -190,6 +190,11 @@ storage:
     enabled: true # Create private endpoint
     subnet_name: "{{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME}}"
     dns_zone_name: "privatelink.file.core.windows.net"
+  # Private DNS Configuration
+  private_dns:
+    enabled: true # Enable private DNS zone for storage
+    zone_name: "privatelink.file.core.windows.net"
+    link_to_vnet: true # Link private DNS zone to VNet
   # Advanced Settings
   enable_large_file_share: true # Support for large file shares
   enable_soft_delete: true # Enable soft delete for file shares
