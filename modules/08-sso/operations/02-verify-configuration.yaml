@@ -64,14 +64,7 @@ operation:
         Write-Host "[WARNING] SSO is disabled in configuration"
         Write-Host "[WARNING] Skipping verification"
 
-        $reportContent = @"
-SSO Verification Skipped
-========================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-SSO is disabled in configuration.
-
-"@
+        $reportContent = "SSO Verification Skipped" + [Environment]::NewLine + "========================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "SSO is disabled in configuration." + [Environment]::NewLine + [Environment]::NewLine
         $reportContent | Out-File -FilePath "artifacts/outputs/sso-verification-complete.txt" -Encoding UTF8
         exit 0
       }
@@ -185,78 +178,10 @@ SSO is disabled in configuration.
       }
 
       # Save detailed verification report
-      $reportContent = @"
-SSO Configuration Verification Report
-======================================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Overall Status: $verificationStatus
-
-Summary:
-  Total Checks: $totalChecks
-  Passed: $passedChecks
-  Failed: $failedChecks
-  Warnings: $warningChecks
-
-Host Pool: $hostPoolName
-Resource Group: $resourceGroup
-
-Automated Checks:
-  1. Host pool exists
-  2. SSO enabled in RDP properties (enablerdsaadauth:i:1)
-  3. Session hosts registered
-  4. VM Login RBAC roles assigned
-
-Manual Verification Required:
-
-The following must be configured manually via Azure Portal:
-
-1. Windows Cloud Login Service Principal
-   - Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45
-   - IsRemoteDesktopProtocolEnabled: True
-   - Configure via Microsoft Graph API or Portal
-
-2. Trusted Device Groups (Optional)
-   - Add device group (e.g., AVD-Devices-Pooled-SSO)
-   - Eliminates consent prompts for managed devices
-   - Max 10 device groups allowed
-
-3. Conditional Access Policies
-   - Required Cloud Apps:
-     * Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)
-     * Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)
-     * Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)
-
-   - IMPORTANT: Do NOT apply sign-in frequency to Windows Cloud Login
-
-4. Session Host Requirements
-   - Session hosts must be Entra-joined (not hybrid)
-   - Run 'dsregcmd /status' on session host to verify:
-     * AzureAdJoined: YES
-     * AzureAdPrt: YES
-
-Testing SSO:
-  1. User launches Windows App or Remote Desktop client
-  2. Signs in with Entra ID credentials
-  3. Desktop should launch WITHOUT additional credential prompt
-  4. If prompted for credentials, SSO is not working correctly
-
-Troubleshooting:
-  - Wait 10-15 minutes for Azure AD changes to propagate
-  - Verify all manual configuration steps completed
-  - Check session hosts are properly Entra-joined
-  - Review Conditional Access policy configuration
-  - Verify RBAC roles assigned (Module 08)
-  - Check for conflicting per-user MFA settings
-
-"@
+      $reportContent = "SSO Configuration Verification Report" + [Environment]::NewLine + "======================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Overall Status: $verificationStatus" + [Environment]::NewLine + [Environment]::NewLine + "Summary:" + [Environment]::NewLine + "  Total Checks: $totalChecks" + [Environment]::NewLine + "  Passed: $passedChecks" + [Environment]::NewLine + "  Failed: $failedChecks" + [Environment]::NewLine + "  Warnings: $warningChecks" + [Environment]::NewLine + [Environment]::NewLine + "Host Pool: $hostPoolName" + [Environment]::NewLine + "Resource Group: $resourceGroup" + [Environment]::NewLine + [Environment]::NewLine + "Automated Checks:" + [Environment]::NewLine + "  1. Host pool exists" + [Environment]::NewLine + "  2. SSO enabled in RDP properties (enablerdsaadauth:i:1)" + [Environment]::NewLine + "  3. Session hosts registered" + [Environment]::NewLine + "  4. VM Login RBAC roles assigned" + [Environment]::NewLine + [Environment]::NewLine + "Manual Verification Required:" + [Environment]::NewLine + [Environment]::NewLine + "The following must be configured manually via Azure Portal:" + [Environment]::NewLine + [Environment]::NewLine + "1. Windows Cloud Login Service Principal" + [Environment]::NewLine + "   - Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45" + [Environment]::NewLine + "   - IsRemoteDesktopProtocolEnabled: True" + [Environment]::NewLine + "   - Configure via Microsoft Graph API or Portal" + [Environment]::NewLine + [Environment]::NewLine + "2. Trusted Device Groups (Optional)" + [Environment]::NewLine + "   - Add device group (e.g., AVD-Devices-Pooled-SSO)" + [Environment]::NewLine + "   - Eliminates consent prompts for managed devices" + [Environment]::NewLine + "   - Max 10 device groups allowed" + [Environment]::NewLine + [Environment]::NewLine + "3. Conditional Access Policies" + [Environment]::NewLine + "   - Required Cloud Apps:" + [Environment]::NewLine + "     * Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)" + [Environment]::NewLine + "     * Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)" + [Environment]::NewLine + "     * Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)" + [Environment]::NewLine + [Environment]::NewLine + "   - IMPORTANT: Do NOT apply sign-in frequency to Windows Cloud Login" + [Environment]::NewLine + [Environment]::NewLine + "4. Session Host Requirements" + [Environment]::NewLine + "   - Session hosts must be Entra-joined (not hybrid)" + [Environment]::NewLine + "   - Run 'dsregcmd /status' on session host to verify:" + [Environment]::NewLine + "     * AzureAdJoined: YES" + [Environment]::NewLine + "     * AzureAdPrt: YES" + [Environment]::NewLine + [Environment]::NewLine + "Testing SSO:" + [Environment]::NewLine + "  1. User launches Windows App or Remote Desktop client" + [Environment]::NewLine + "  2. Signs in with Entra ID credentials" + [Environment]::NewLine + "  3. Desktop should launch WITHOUT additional credential prompt" + [Environment]::NewLine + "  4. If prompted for credentials, SSO is not working correctly" + [Environment]::NewLine + [Environment]::NewLine + "Troubleshooting:" + [Environment]::NewLine + "  - Wait 10-15 minutes for Azure AD changes to propagate" + [Environment]::NewLine + "  - Verify all manual configuration steps completed" + [Environment]::NewLine + "  - Check session hosts are properly Entra-joined" + [Environment]::NewLine + "  - Review Conditional Access policy configuration" + [Environment]::NewLine + "  - Verify RBAC roles assigned (Module 08)" + [Environment]::NewLine + "  - Check for conflicting per-user MFA settings" + [Environment]::NewLine + [Environment]::NewLine
 
       if ($failedChecks -gt 0) {
-        $reportContent += @"
-Action Required:
-  Review failed checks above and re-run SSO configuration operations
-
-"@
+        $reportContent += "Action Required:" + [Environment]::NewLine + "  Review failed checks above and re-run SSO configuration operations" + [Environment]::NewLine + [Environment]::NewLine
       }
 
       $reportContent | Out-File -FilePath "artifacts/outputs/sso-verification-complete.txt" -Encoding UTF8

@@ -186,47 +186,7 @@ operation:
       }
 
       # Save registration details
-      $reportContent = @"
-Host Pool Registration Details
-===============================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Host Pool:
-  Name: $hostPoolName
-  Resource Group: $resourceGroup
-  ID: $hpId
-
-Registration:
-  Total VMs: $vmCount
-  VMs Found: $readyCount
-  VMs Running: $runningCount
-  Token Expiration: 24 hours from generation
-  Token File: $tokenFile
-
-Next Steps:
-  1. Install AVD agent on each session host VM
-  2. Provide registration token during installation
-  3. Complete registration process
-  4. Verify hosts appear in host pool
-  5. Test user access
-
-Manual Registration (if needed):
-  On each session host VM, run:
-  - Download AVD Agent from: https://aka.ms/avdagent
-  - Install with registration token
-  - Complete Entra ID join if not already joined
-
-Verify Registration:
-  az desktopvirtualization sessionhost list `
-    --resource-group "$resourceGroup" `
-    --host-pool-name "$hostPoolName"
-
-Token Security:
-  - Token is valid for 24 hours
-  - Store securely if using for manual registration
-  - Regenerate if token expires before registration completes
-
-"@
+      $reportContent = "Host Pool Registration Details" + [Environment]::NewLine + "===============================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Host Pool:" + [Environment]::NewLine + "  Name: $hostPoolName" + [Environment]::NewLine + "  Resource Group: $resourceGroup" + [Environment]::NewLine + "  ID: $hpId" + [Environment]::NewLine + [Environment]::NewLine + "Registration:" + [Environment]::NewLine + "  Total VMs: $vmCount" + [Environment]::NewLine + "  VMs Found: $readyCount" + [Environment]::NewLine + "  VMs Running: $runningCount" + [Environment]::NewLine + "  Token Expiration: 24 hours from generation" + [Environment]::NewLine + "  Token File: $tokenFile" + [Environment]::NewLine + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Install AVD agent on each session host VM" + [Environment]::NewLine + "  2. Provide registration token during installation" + [Environment]::NewLine + "  3. Complete registration process" + [Environment]::NewLine + "  4. Verify hosts appear in host pool" + [Environment]::NewLine + "  5. Test user access" + [Environment]::NewLine + [Environment]::NewLine + "Manual Registration (if needed):" + [Environment]::NewLine + "  On each session host VM, run:" + [Environment]::NewLine + "  - Download AVD Agent from: https://aka.ms/avdagent" + [Environment]::NewLine + "  - Install with registration token" + [Environment]::NewLine + "  - Complete Entra ID join if not already joined" + [Environment]::NewLine + [Environment]::NewLine + "Verify Registration:" + [Environment]::NewLine + "  az desktopvirtualization sessionhost list ``" + [Environment]::NewLine + "    --resource-group ""$resourceGroup"" ``" + [Environment]::NewLine + "    --host-pool-name ""$hostPoolName""" + [Environment]::NewLine + [Environment]::NewLine + "Token Security:" + [Environment]::NewLine + "  - Token is valid for 24 hours" + [Environment]::NewLine + "  - Store securely if using for manual registration" + [Environment]::NewLine + "  - Regenerate if token expires before registration completes"
       $reportContent | Out-File -FilePath "artifacts/outputs/session-host-registration-details.txt" -Encoding UTF8
 
       Write-Host "[SUCCESS] Host pool registration preparation completed"
