@@ -16,15 +16,34 @@ operation:
       status: "completed"
 
   template:
-    type: "az-vm-run-command"
+    type: "powershell-vm-command"
     command: |
-      az vm run-command invoke \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/03-install-apps.ps1" \
-        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestB64='{{APP_MANIFEST_B64}}' \
-        --output json > artifacts/outputs/golden-image-install-apps.json
+      pwsh -NoProfile -NonInteractive -Command {
+        # Extract PowerShell content from YAML (template engine injects this)
+        $scriptContent = @'
+{{POWERSHELL_CONTENT}}
+'@
+
+        # Write to temporary file
+        $tempScript = "/tmp/golden-image-03-install-apps-$([guid]::NewGuid()).ps1"
+        $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+
+        try {
+          # Execute via az vm run-command with parameters
+          az vm run-command invoke `
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+            --command-id RunPowerShellScript `
+            --scripts "@$tempScript" `
+            --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestB64='{{APP_MANIFEST_B64}}' `
+            --output json > artifacts/outputs/golden-image-install-apps.json
+        } finally {
+          # Cleanup temp file
+          if (Test-Path $tempScript) {
+            Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+          }
+        }
+      }
 
   powershell:
     file: "03-install-apps.ps1"

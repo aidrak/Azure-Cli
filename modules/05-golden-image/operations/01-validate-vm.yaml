@@ -24,54 +24,57 @@ operation:
         description: "VM agent is running"
 
   # Template command
+  # NOTE: Uses PowerShell (pwsh) instead of bash for loop handling
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
-      echo "[INFO] Waiting for VM to be fully ready..."
+      pwsh -NoProfile -NonInteractive -Command {
+        Write-Host "[INFO] Waiting for VM to be fully ready..."
 
-      MAX_ATTEMPTS=20
-      SLEEP_INTERVAL=30
-      ATTEMPT=0
+        $maxAttempts = 20
+        $sleepInterval = 30
+        $attempt = 0
 
-      while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        ATTEMPT=$((ATTEMPT + 1))
-        echo "[INFO] Attempt $ATTEMPT of $MAX_ATTEMPTS: Checking VM agent status..."
+        while ($attempt -lt $maxAttempts) {
+          $attempt++
+          Write-Host "[INFO] Attempt $attempt of $maxAttempts`: Checking VM agent status..."
 
-        # Check VM agent status
-        VM_AGENT_STATUS=$(az vm get-instance-view \
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-          --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-          --query "instanceView.vmAgent.statuses[0].displayStatus" \
-          --output tsv 2>/dev/null)
+          # Check VM agent status
+          $vmAgentStatus = az vm get-instance-view `
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+            --query "instanceView.vmAgent.statuses[0].displayStatus" `
+            --output tsv 2>$null
 
-        echo "[INFO] VM Agent Status: $VM_AGENT_STATUS"
+          Write-Host "[INFO] VM Agent Status: $vmAgentStatus"
 
-        if [[ "$VM_AGENT_STATUS" == "Ready" ]]; then
-          echo "[SUCCESS] VM agent is ready"
+          if ($vmAgentStatus -eq "Ready") {
+            Write-Host "[SUCCESS] VM agent is ready"
 
-          # Try a simple run-command to verify it's actually working
-          echo "[INFO] Testing run-command capability..."
-          if az vm run-command invoke \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-            --command-id RunPowerShellScript \
-            --scripts "Write-Host 'VM is ready'" \
-            --output json > artifacts/outputs/golden-image-validate-vm-test.json 2>&1; then
-            echo "[SUCCESS] VM is fully ready and accepting run-commands"
-            exit 0
-          else
-            echo "[WARNING] VM agent reports ready but run-command failed, waiting..."
-          fi
-        fi
+            # Try a simple run-command to verify it's actually working
+            Write-Host "[INFO] Testing run-command capability..."
+            if (az vm run-command invoke `
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+              --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+              --command-id RunPowerShellScript `
+              --scripts "Write-Host 'VM is ready'" `
+              --output json > artifacts/outputs/golden-image-validate-vm-test.json 2>&1) {
+              Write-Host "[SUCCESS] VM is fully ready and accepting run-commands"
+              exit 0
+            } else {
+              Write-Host "[WARNING] VM agent reports ready but run-command failed, waiting..."
+            }
+          }
 
-        if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-          echo "[INFO] Waiting ${SLEEP_INTERVAL}s before next attempt..."
-          sleep $SLEEP_INTERVAL
-        fi
-      done
+          if ($attempt -lt $maxAttempts) {
+            Write-Host "[INFO] Waiting $($sleepInterval)s before next attempt..."
+            Start-Sleep -Seconds $sleepInterval
+          }
+        }
 
-      echo "[ERROR] VM failed to become ready after $((MAX_ATTEMPTS * SLEEP_INTERVAL)) seconds"
-      exit 1
+        Write-Host "[ERROR] VM failed to become ready after $($maxAttempts * $sleepInterval) seconds"
+        exit 1
+      }
 
   # Self-healing fixes
   fixes:

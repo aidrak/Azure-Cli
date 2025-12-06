@@ -1,6 +1,26 @@
 # ==============================================================================
 # Module: Golden Image Creation
 # ==============================================================================
+#
+# EXECUTION MODEL (Updated 2025-12-06):
+# - All operations use PowerShell (pwsh) as the orchestration layer
+# - Operations 00-01: PowerShell runs locally on Ubuntu, calls Azure CLI (powershell-local)
+# - Operations 02-10: PowerShell runs locally on Ubuntu, invokes remote PowerShell via
+#                      az vm run-command on the Windows golden image VM (powershell-vm-command)
+# - PowerShell content is embedded inline in YAML (no external .ps1 files)
+#
+# MIGRATION FROM BASH:
+# - Previous architecture used bash wrappers to pass scripts to az vm run-command
+# - Bash made complex script passing difficult (special character escaping, quoting)
+# - PowerShell handles script injection natively with here-strings and encoding
+# - Benefits:
+#   * Simpler script passing (no bash quoting/escaping complexity)
+#   * Native JSON handling with ConvertFrom-Json/ConvertTo-Json
+#   * Consistent PowerShell syntax across local and remote operations
+#   * Better error handling with try/catch blocks in PowerShell
+#   * Temporary file cleanup handled by PowerShell finally blocks
+#
+# ==============================================================================
 module:
   id: "05-golden-image"
   name: "Golden Image Creation"
