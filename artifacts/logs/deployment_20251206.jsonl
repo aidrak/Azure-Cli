@@ -541,3 +541,15 @@
 {"timestamp":"2025-12-06T04:39:37.815Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/01-networking/operations/15-create-vpn-connections.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T04:39:37.970Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T04:39:38.049Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T17:00:58.358Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:00:58.367Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:00:58.677Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:09.824Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:09.828Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:10.175Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:22.219Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:22.224Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:36.672Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:36.678Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:01:36.998Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:02:06.335Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
