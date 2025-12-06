@@ -26,202 +26,197 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          STORAGE_ACCOUNT=$(az storage account list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --query "[?starts_with(name, 'fslogix') || name == '{{STORAGE_ACCOUNT_NAME}}'] | [0].name" -o tsv)
+          $ErrorActionPreference = 'Stop'
 
-          if [[ -z "$STORAGE_ACCOUNT" ]]; then
-            echo "[ERROR] Storage account not found"
+          $storageAccount = Get-AzStorageAccount -ResourceGroupName "{{AZURE_RESOURCE_GROUP}}" | Where-Object { $_.StorageAccountName -like 'fslogix*' -or $_.StorageAccountName -eq '{{STORAGE_ACCOUNT_NAME}}' } | Select-Object -First 1
+
+          if (-not $storageAccount) {
+            Write-Host "[ERROR] Storage account not found"
             exit 1
-          fi
+          }
 
-          FILE_SHARE_ID="/subscriptions/{{AZURE_SUBSCRIPTION_ID}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
+          $fileShareId = "/subscriptions/{{AZURE_SUBSCRIPTION_ID}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.Storage/storageAccounts/$($storageAccount.StorageAccountName)/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
 
-          STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv)
+          $stdGroup = Get-AzADGroup -DisplayName "{{ENTRA_GROUP_USERS_STANDARD}}"
 
           # Check standard user assignment
-          if az role assignment list --assignee "$STD_GROUP_ID" --scope "$FILE_SHARE_ID" --query "[?roleDefinitionName=='Storage File Data SMB Share Contributor']" -o tsv | grep -q "Storage"; then
-            echo "[VALIDATE] Standard users have storage permissions"
+          $assignment = Get-AzRoleAssignment -ObjectId $stdGroup.Id -Scope $fileShareId | Where-Object { $_.RoleDefinitionName -eq 'Storage File Data SMB Share Contributor' }
+
+          if ($assignment) {
+            Write-Host "[VALIDATE] Standard users have storage permissions"
             exit 0
-          else
-            echo "[ERROR] Standard users storage permissions not found"
+          } else {
+            Write-Host "[ERROR] Standard users storage permissions not found"
             exit 1
-          fi
+          }
         description: "Verify storage permissions are assigned"
 
-  # Template command (executed via bash)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/rbac-01-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      echo "[START] Storage Permissions Assignment: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      Write-Host "[START] Storage Permissions Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
-      FILE_SHARE_NAME="{{STORAGE_FILE_SHARE_NAME}}"
-      STD_GROUP_NAME="{{ENTRA_GROUP_USERS_STANDARD}}"
-      ADMIN_GROUP_NAME="{{ENTRA_GROUP_USERS_ADMINS}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $fileShareName = "{{STORAGE_FILE_SHARE_NAME}}"
+      $stdGroupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $adminGroupName = "{{ENTRA_GROUP_USERS_ADMINS}}"
 
-      # Step 1: Validate Azure authentication
-      echo "[PROGRESS] Step 1/6: Validating Azure authentication..."
-      if ! az account show &>/dev/null; then
-        echo "[ERROR] Not authenticated to Azure"
-        exit 1
-      fi
-
-      # Step 2: Find storage account (auto-generated name starts with 'fslogix' or explicit name)
-      echo "[PROGRESS] Step 2/6: Finding FSLogix storage account..."
-      STORAGE_ACCOUNT=$(az storage account list \
-        --resource-group "$RESOURCE_GROUP" \
-        --query "[?starts_with(name, 'fslogix')] | [0].name" -o tsv)
-
-      if [[ -z "$STORAGE_ACCOUNT" || "$STORAGE_ACCOUNT" == "null" ]]; then
-        echo "[ERROR] FSLogix storage account not found in resource group: $RESOURCE_GROUP"
-        echo "[ERROR] Please ensure storage account was created (Module 02)"
-        exit 1
-      fi
-
-      echo "[VALIDATE] Found storage account: $STORAGE_ACCOUNT"
-
-      # Get storage account resource ID
-      STORAGE_ID=$(az storage account show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$STORAGE_ACCOUNT" \
-        --query id -o tsv)
-
-      # Construct file share resource ID
-      FILE_SHARE_ID="${STORAGE_ID}/fileServices/default/fileshares/${FILE_SHARE_NAME}"
-
-      echo "[VALIDATE] File share resource ID: $FILE_SHARE_ID"
-
-      # Step 3: Get user group IDs
-      echo "[PROGRESS] Step 3/6: Getting user group IDs..."
-
-      STD_GROUP_ID=$(az ad group list \
-        --filter "displayName eq '${STD_GROUP_NAME}'" \
-        --query "[0].id" -o tsv)
-
-      if [[ -z "$STD_GROUP_ID" || "$STD_GROUP_ID" == "null" ]]; then
-        echo "[ERROR] Standard users group not found: $STD_GROUP_NAME"
-        echo "[ERROR] Please ensure Entra ID groups were created (Module 03)"
-        exit 1
-      fi
-
-      echo "[VALIDATE] Standard users group ID: $STD_GROUP_ID"
-
-      ADMIN_GROUP_ID=$(az ad group list \
-        --filter "displayName eq '${ADMIN_GROUP_NAME}'" \
-        --query "[0].id" -o tsv)
-
-      if [[ -z "$ADMIN_GROUP_ID" || "$ADMIN_GROUP_ID" == "null" ]]; then
-        echo "[ERROR] Admin users group not found: $ADMIN_GROUP_NAME"
-        echo "[ERROR] Please ensure Entra ID groups were created (Module 03)"
-        exit 1
-      fi
-
-      echo "[VALIDATE] Admin users group ID: $ADMIN_GROUP_ID"
-
-      # Step 4: Assign storage permissions to standard users
-      echo "[PROGRESS] Step 4/6: Assigning storage permissions to standard users..."
-      echo "[PROGRESS] Role: Storage File Data SMB Share Contributor"
-      echo "[PROGRESS] Group: $STD_GROUP_NAME"
-
-      if az role assignment create \
-        --assignee "$STD_GROUP_ID" \
-        --role "Storage File Data SMB Share Contributor" \
-        --scope "$FILE_SHARE_ID" \
-        --output none 2>/dev/null; then
-        echo "[SUCCESS] Storage permissions assigned to standard users"
-      else
-        # Check if already exists
-        if az role assignment list \
-          --assignee "$STD_GROUP_ID" \
-          --scope "$FILE_SHARE_ID" \
-          --query "[?roleDefinitionName=='Storage File Data SMB Share Contributor']" -o tsv | grep -q "Storage"; then
-          echo "[SUCCESS] Storage permissions already assigned to standard users"
-        else
-          echo "[ERROR] Failed to assign storage permissions to standard users"
+      try {
+        # Step 1: Validate Azure authentication
+        Write-Host "[PROGRESS] Step 1/6: Validating Azure authentication..."
+        $context = Get-AzContext
+        if (-not $context) {
+          Write-Host "[ERROR] Not authenticated to Azure"
           exit 1
-        fi
-      fi
+        }
 
-      # Step 5: Assign elevated storage permissions to admin users
-      echo "[PROGRESS] Step 5/6: Assigning elevated storage permissions to admin users..."
-      echo "[PROGRESS] Role: Storage File Data SMB Share Elevated Contributor"
-      echo "[PROGRESS] Group: $ADMIN_GROUP_NAME"
+        # Step 2: Find storage account (auto-generated name starts with 'fslogix' or explicit name)
+        Write-Host "[PROGRESS] Step 2/6: Finding FSLogix storage account..."
+        $storageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroup | Where-Object { $_.StorageAccountName -like 'fslogix*' } | Select-Object -First 1
 
-      if az role assignment create \
-        --assignee "$ADMIN_GROUP_ID" \
-        --role "Storage File Data SMB Share Elevated Contributor" \
-        --scope "$FILE_SHARE_ID" \
-        --output none 2>/dev/null; then
-        echo "[SUCCESS] Elevated storage permissions assigned to admin users"
-      else
-        # Check if already exists
-        if az role assignment list \
-          --assignee "$ADMIN_GROUP_ID" \
-          --scope "$FILE_SHARE_ID" \
-          --query "[?roleDefinitionName=='Storage File Data SMB Share Elevated Contributor']" -o tsv | grep -q "Storage"; then
-          echo "[SUCCESS] Elevated storage permissions already assigned to admin users"
-        else
-          echo "[ERROR] Failed to assign elevated storage permissions to admin users"
+        if (-not $storageAccount) {
+          Write-Host "[ERROR] FSLogix storage account not found in resource group: $resourceGroup"
+          Write-Host "[ERROR] Please ensure storage account was created (Module 02)"
           exit 1
-        fi
-      fi
+        }
 
-      # Step 6: Verify assignments
-      echo "[PROGRESS] Step 6/6: Verifying role assignments..."
+        Write-Host "[VALIDATE] Found storage account: $($storageAccount.StorageAccountName)"
 
-      STD_ASSIGNMENTS=$(az role assignment list \
-        --assignee "$STD_GROUP_ID" \
-        --scope "$FILE_SHARE_ID" \
-        --query "[].roleDefinitionName" -o tsv)
+        # Get storage account resource ID
+        $storageId = $storageAccount.Id
 
-      ADMIN_ASSIGNMENTS=$(az role assignment list \
-        --assignee "$ADMIN_GROUP_ID" \
-        --scope "$FILE_SHARE_ID" \
-        --query "[].roleDefinitionName" -o tsv)
+        # Construct file share resource ID
+        $fileShareId = "$storageId/fileServices/default/fileshares/$fileShareName"
 
-      echo "[VALIDATE] Standard users roles: $STD_ASSIGNMENTS"
-      echo "[VALIDATE] Admin users roles: $ADMIN_ASSIGNMENTS"
+        Write-Host "[VALIDATE] File share resource ID: $fileShareId"
 
-      # Save assignment details
-      {
-        echo "Storage RBAC Assignment Details"
-        echo "================================"
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Storage Account:"
-        echo "  Name: $STORAGE_ACCOUNT"
-        echo "  Resource Group: $RESOURCE_GROUP"
-        echo "  File Share: $FILE_SHARE_NAME"
-        echo ""
-        echo "Standard Users ($STD_GROUP_NAME):"
-        echo "  Group ID: $STD_GROUP_ID"
-        echo "  Role: Storage File Data SMB Share Contributor"
-        echo "  Scope: File Share ($FILE_SHARE_NAME)"
-        echo "  Permissions: Read/Write own FSLogix profile"
-        echo ""
-        echo "Admin Users ($ADMIN_GROUP_NAME):"
-        echo "  Group ID: $ADMIN_GROUP_ID"
-        echo "  Role: Storage File Data SMB Share Elevated Contributor"
-        echo "  Scope: File Share ($FILE_SHARE_NAME)"
-        echo "  Permissions: Manage all FSLogix profiles (elevated)"
-        echo ""
-        echo "Next Steps:"
-        echo "  1. Assign VM login permissions (next operation)"
-        echo "  2. Assign application group permissions"
-        echo "  3. Test user access to FSLogix profiles"
-        echo ""
-      } > "artifacts/outputs/rbac-storage-permissions.txt"
+        # Step 3: Get user group IDs
+        Write-Host "[PROGRESS] Step 3/6: Getting user group IDs..."
 
-      echo "[SUCCESS] Storage permissions assignment completed"
-      exit 0
+        $stdGroup = Get-AzADGroup -DisplayName $stdGroupName
+
+        if (-not $stdGroup) {
+          Write-Host "[ERROR] Standard users group not found: $stdGroupName"
+          Write-Host "[ERROR] Please ensure Entra ID groups were created (Module 03)"
+          exit 1
+        }
+
+        Write-Host "[VALIDATE] Standard users group ID: $($stdGroup.Id)"
+
+        $adminGroup = Get-AzADGroup -DisplayName $adminGroupName
+
+        if (-not $adminGroup) {
+          Write-Host "[ERROR] Admin users group not found: $adminGroupName"
+          Write-Host "[ERROR] Please ensure Entra ID groups were created (Module 03)"
+          exit 1
+        }
+
+        Write-Host "[VALIDATE] Admin users group ID: $($adminGroup.Id)"
+
+        # Step 4: Assign storage permissions to standard users
+        Write-Host "[PROGRESS] Step 4/6: Assigning storage permissions to standard users..."
+        Write-Host "[PROGRESS] Role: Storage File Data SMB Share Contributor"
+        Write-Host "[PROGRESS] Group: $stdGroupName"
+
+        try {
+          $null = New-AzRoleAssignment -ObjectId $stdGroup.Id -RoleDefinitionName "Storage File Data SMB Share Contributor" -Scope $fileShareId -ErrorAction Stop
+          Write-Host "[SUCCESS] Storage permissions assigned to standard users"
+        }
+        catch {
+          # Check if already exists
+          $existing = Get-AzRoleAssignment -ObjectId $stdGroup.Id -Scope $fileShareId | Where-Object { $_.RoleDefinitionName -eq 'Storage File Data SMB Share Contributor' }
+          if ($existing) {
+            Write-Host "[SUCCESS] Storage permissions already assigned to standard users"
+          }
+          else {
+            Write-Host "[ERROR] Failed to assign storage permissions to standard users"
+            Write-Host "[ERROR] $($_.Exception.Message)"
+            exit 1
+          }
+        }
+
+        # Step 5: Assign elevated storage permissions to admin users
+        Write-Host "[PROGRESS] Step 5/6: Assigning elevated storage permissions to admin users..."
+        Write-Host "[PROGRESS] Role: Storage File Data SMB Share Elevated Contributor"
+        Write-Host "[PROGRESS] Group: $adminGroupName"
+
+        try {
+          $null = New-AzRoleAssignment -ObjectId $adminGroup.Id -RoleDefinitionName "Storage File Data SMB Share Elevated Contributor" -Scope $fileShareId -ErrorAction Stop
+          Write-Host "[SUCCESS] Elevated storage permissions assigned to admin users"
+        }
+        catch {
+          # Check if already exists
+          $existing = Get-AzRoleAssignment -ObjectId $adminGroup.Id -Scope $fileShareId | Where-Object { $_.RoleDefinitionName -eq 'Storage File Data SMB Share Elevated Contributor' }
+          if ($existing) {
+            Write-Host "[SUCCESS] Elevated storage permissions already assigned to admin users"
+          }
+          else {
+            Write-Host "[ERROR] Failed to assign elevated storage permissions to admin users"
+            Write-Host "[ERROR] $($_.Exception.Message)"
+            exit 1
+          }
+        }
+
+        # Step 6: Verify assignments
+        Write-Host "[PROGRESS] Step 6/6: Verifying role assignments..."
+
+        $stdAssignments = Get-AzRoleAssignment -ObjectId $stdGroup.Id -Scope $fileShareId | Select-Object -ExpandProperty RoleDefinitionName
+
+        $adminAssignments = Get-AzRoleAssignment -ObjectId $adminGroup.Id -Scope $fileShareId | Select-Object -ExpandProperty RoleDefinitionName
+
+        Write-Host "[VALIDATE] Standard users roles: $($stdAssignments -join ', ')"
+        Write-Host "[VALIDATE] Admin users roles: $($adminAssignments -join ', ')"
+
+        # Save assignment details
+        $reportContent = @"
+Storage RBAC Assignment Details
+================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+
+Storage Account:
+  Name: $($storageAccount.StorageAccountName)
+  Resource Group: $resourceGroup
+  File Share: $fileShareName
+
+Standard Users ($stdGroupName):
+  Group ID: $($stdGroup.Id)
+  Role: Storage File Data SMB Share Contributor
+  Scope: File Share ($fileShareName)
+  Permissions: Read/Write own FSLogix profile
+
+Admin Users ($adminGroupName):
+  Group ID: $($adminGroup.Id)
+  Role: Storage File Data SMB Share Elevated Contributor
+  Scope: File Share ($fileShareName)
+  Permissions: Manage all FSLogix profiles (elevated)
+
+Next Steps:
+  1. Assign VM login permissions (next operation)
+  2. Assign application group permissions
+  3. Test user access to FSLogix profiles
+
+"@
+        $reportContent | Out-File -FilePath "artifacts/outputs/rbac-storage-permissions.txt" -Encoding UTF8
+
+        Write-Host "[SUCCESS] Storage permissions assignment completed"
+        exit 0
+
+      } catch {
+        Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+        Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/rbac-01-wrapper.ps1
+      rm -f /tmp/rbac-01-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
