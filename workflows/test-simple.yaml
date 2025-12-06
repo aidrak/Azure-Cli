@@ -1,7 +1,0 @@
-workflow:
-  id: "test-workflow"
-  name: "Test Workflow"
-
-  steps:
-    - name: "Step 1"
-      operation: "test.yaml"
