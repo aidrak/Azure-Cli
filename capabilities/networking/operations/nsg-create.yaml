@@ -1,0 +1,157 @@
+# ==============================================================================
+# Capability Operation: Create Network Security Groups
+# Migrated from: modules/01-networking/operations/03-create-nsgs.yaml
+# ==============================================================================
+
+operation:
+  id: "nsg-create"
+  name: "Create Network Security Groups"
+  description: "Create NSGs for each subnet where enabled with optional auto-generated names"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/networkSecurityGroups"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes (for 3-5 NSGs)
+    timeout: 240    # 4 minutes
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "subnets_config"
+        type: "array"
+        description: "Subnet configuration array (read from config.yaml)"
+        default: ".networking.subnets"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_count"
+        resource_type: "Microsoft.Network/networkSecurityGroups"
+        min_count: 1
+        description: "At least one NSG created"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "NSGs provisioned successfully"
+
+  # Idempotency: Check for existing NSGs
+  idempotency:
+    enabled: true
+    check_command: |
+      az network nsg list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "length(@)" -o tsv
+    skip_if_exists: false  # Check count but continue with missing NSGs
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-nsg-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] NSG creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+
+      # Get subnet count
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $nsgCount = 0
+
+      Write-Host "[PROGRESS] Processing $subnetCount subnet(s) for NSG creation..."
+
+      # Iterate through subnets
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        # Check if NSG enabled for this subnet
+        $nsgEnabled = (yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+
+        if ($nsgEnabled -ne "true") {
+          continue
+        }
+
+        # Get subnet name
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+
+        # Get or auto-generate NSG name
+        $nsgName = (yq e ".networking.subnets[$i].nsg.name" config.yaml)
+
+        # Auto-generate if empty
+        if ([string]::IsNullOrEmpty($nsgName) -or $nsgName -eq "null") {
+          $nsgName = "nsg-$subnetName"
+        }
+
+        Write-Host "[PROGRESS] Processing NSG for subnet: $subnetName"
+        Write-Host "[PROGRESS]   NSG name: $nsgName"
+
+        # Check if NSG already exists (idempotent)
+        az network nsg show `
+          --resource-group $resourceGroup `
+          --name $nsgName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] NSG already exists: $nsgName"
+          $nsgCount++
+          continue
+        }
+
+        # Create NSG
+        Write-Host "[PROGRESS] Creating NSG: $nsgName"
+
+        $outputFile = "artifacts/outputs/networking-nsg-create-$nsgName.json"
+        az network nsg create `
+          --resource-group $resourceGroup `
+          --name $nsgName `
+          --location $location `
+          --output json > $outputFile
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create NSG: $nsgName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] NSG created: $nsgName"
+        $nsgCount++
+      }
+
+      Write-Host "[SUCCESS] All NSGs created successfully"
+      Write-Host "[SUCCESS]   Total NSGs: $nsgCount"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-nsg-create-wrapper.ps1
+      rm -f /tmp/networking-nsg-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Network Security Groups"
+        description: "Remove created NSGs"
+        command: |
+          for nsg in $(az network nsg list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --query "[].name" -o tsv); do
+            az network nsg delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --name "$nsg" \
+              --yes
+          done
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

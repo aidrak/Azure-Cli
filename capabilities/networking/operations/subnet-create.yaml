@@ -1,0 +1,179 @@
+# ==============================================================================
+# Capability Operation: Create Subnets
+# Migrated from: modules/01-networking/operations/02-create-subnets.yaml
+# ==============================================================================
+
+operation:
+  id: "subnet-create"
+  name: "Create Subnets"
+  description: "Create all configured subnets from array in config.yaml"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks/subnets"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes (for 3-5 subnets)
+    timeout: 240    # 4 minutes
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name containing subnets"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "subnets_config"
+        type: "array"
+        description: "Subnet configuration array from config.yaml"
+        default: ".networking.subnets"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_count"
+        resource_type: "Microsoft.Network/virtualNetworks/subnets"
+        min_count: 1
+        description: "At least one subnet created"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Subnets provisioned successfully"
+
+  # Idempotency: Check for existing subnets
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet subnet list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --query "length(@)" -o tsv
+    skip_if_exists: false  # Check count but continue with missing subnets
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-subnet-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count from config array
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+
+      Write-Host "[PROGRESS] Processing $subnetCount subnet(s) from config..."
+
+      # Iterate through subnet array
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        # Extract subnet properties
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+        $subnetPrefix = (yq e ".networking.subnets[$i].address_prefix" config.yaml)
+        $delegation = (yq e ".networking.subnets[$i].delegation" config.yaml)
+        $pePolicies = (yq e ".networking.subnets[$i].private_endpoint_network_policies" config.yaml)
+        $plPolicies = (yq e ".networking.subnets[$i].private_link_service_network_policies" config.yaml)
+
+        $displayIndex = $i + 1
+        Write-Host "[PROGRESS] [$displayIndex/$subnetCount] Processing subnet: $subnetName"
+
+        # Check if subnet already exists (idempotent)
+        az network vnet subnet show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] Subnet already exists: $subnetName"
+          continue
+        }
+
+        # Create subnet
+        Write-Host "[PROGRESS] Creating subnet: $subnetName ($subnetPrefix)"
+
+        # Build command arguments
+        $cmdArgs = @(
+          "network", "vnet", "subnet", "create",
+          "--resource-group", $resourceGroup,
+          "--vnet-name", $vnetName,
+          "--name", $subnetName,
+          "--address-prefix", $subnetPrefix
+        )
+
+        # Add delegation if configured
+        if ($delegation -and $delegation -ne "null" -and $delegation -ne "") {
+          $cmdArgs += @("--delegations", $delegation)
+          Write-Host "[PROGRESS]   Delegation: $delegation"
+        }
+
+        # Add private endpoint policies
+        if ($pePolicies -and $pePolicies -ne "null") {
+          $cmdArgs += @("--private-endpoint-network-policies", $pePolicies)
+        }
+
+        # Add private link service policies
+        if ($plPolicies -and $plPolicies -ne "null") {
+          $cmdArgs += @("--private-link-service-network-policies", $plPolicies)
+        }
+
+        $cmdArgs += @("--output", "json")
+
+        # Execute command
+        $outputFile = "artifacts/outputs/networking-subnet-create-$subnetName.json"
+        & az @cmdArgs > $outputFile
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create subnet: $subnetName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Subnet created: $subnetName"
+      }
+
+      # Validate all subnets created
+      Write-Host "[VALIDATE] Verifying all subnets..."
+      $createdCount = az network vnet subnet list `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --query "length(@)" -o tsv
+
+      Write-Host "[SUCCESS] All subnets created successfully"
+      Write-Host "[SUCCESS]   Expected: $subnetCount"
+      Write-Host "[SUCCESS]   Created: $createdCount"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-subnet-create-wrapper.ps1
+      rm -f /tmp/networking-subnet-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Subnets"
+        description: "Remove created subnets"
+        command: |
+          for subnet in $(az network vnet subnet list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[].name" -o tsv); do
+            az network vnet subnet delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$subnet" \
+              --yes
+          done
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

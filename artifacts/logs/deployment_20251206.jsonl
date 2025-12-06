@@ -969,3 +969,8 @@
 {"timestamp":"2025-12-06T18:34:38.209Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T18:34:38.225Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
 {"timestamp":"2025-12-06T18:34:38.294Z","level":"SUCCESS","message":"Workflow validation passed: simple-deployment (4 steps)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:40:01.540Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:40:11.684Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:40:21.261Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:40:37.815Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:40:37.846Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
