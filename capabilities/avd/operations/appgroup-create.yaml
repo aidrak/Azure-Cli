@@ -1,0 +1,135 @@
+# ==============================================================================
+# Capability Operation: Create AVD Application Group
+# Migrated from: modules/04-host-pool-workspace/operations/03-create-app-group.yaml
+# ==============================================================================
+
+operation:
+  id: "appgroup-create"
+  name: "Create AVD Application Group"
+  description: "Create a desktop application group and associate it with the host pool"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/applicationGroups"
+
+  # Duration expectations
+  duration:
+    expected: 90
+    timeout: 180
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "appgroup_name"
+        type: "string"
+        description: "Name of the application group"
+        default: "{{APP_GROUP_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the associated host pool"
+        default: "{{HOST_POOL_NAME}}"
+    optional:
+      - name: "appgroup_friendly_name"
+        type: "string"
+        description: "Friendly display name for the application group"
+        default: "{{APP_GROUP_FRIENDLY_NAME}}"
+      - name: "appgroup_type"
+        type: "string"
+        description: "Application group type (Desktop or RemoteApp)"
+        default: "Desktop"
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/applicationGroups"
+        resource_name: "{{APP_GROUP_NAME}}"
+        description: "Application group exists"
+
+      - type: "property_equals"
+        property: "applicationGroupType"
+        expected: "Desktop"
+        description: "Application group type is Desktop"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization applicationgroup show \
+        --name "{{APP_GROUP_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-appgroup-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+      $appGroupFriendlyName = "{{APP_GROUP_FRIENDLY_NAME}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      Write-Host "[START] Starting 'Create AVD Application Group' operation..."
+
+      Write-Host "[PROGRESS] Checking if application group '$appGroupName' already exists..."
+      $appGroupExists = @(az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($appGroupExists.Count -gt 0) {
+        Write-Host "[SUCCESS] Application group '$appGroupName' already exists."
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Application group '$appGroupName' not found. Creating..."
+      $hostPoolId = az desktopvirtualization hostpool show --name $hostPoolName --resource-group $resourceGroup --query "id" -o tsv
+
+      az desktopvirtualization applicationgroup create `
+        --name $appGroupName `
+        --resource-group $resourceGroup `
+        --location $location `
+        --application-group-type "Desktop" `
+        --host-pool-arm-path $hostPoolId `
+        --friendly-name $appGroupFriendlyName `
+        --tags $tags `
+        --output none
+
+      Write-Host "[SUCCESS] Successfully created application group '$appGroupName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-appgroup-create-wrapper.ps1
+      rm -f /tmp/avd-appgroup-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete AVD Application Group"
+        description: "Remove the application group and associated resources"
+        command: |
+          az desktopvirtualization applicationgroup delete \
+            --name "{{APP_GROUP_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

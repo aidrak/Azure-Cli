@@ -1,0 +1,142 @@
+# ==============================================================================
+# Capability Operation: Create AVD Workspace
+# Migrated from: modules/04-host-pool-workspace/operations/04-create-workspace.yaml
+# ==============================================================================
+
+operation:
+  id: "workspace-create"
+  name: "Create AVD Workspace"
+  description: "Create the AVD workspace and register the application group to it"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/workspaces"
+
+  # Duration expectations
+  duration:
+    expected: 90
+    timeout: 180
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "workspace_name"
+        type: "string"
+        description: "Name of the workspace"
+        default: "{{WORKSPACE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+      - name: "appgroup_name"
+        type: "string"
+        description: "Name of the application group to associate"
+        default: "{{APP_GROUP_NAME}}"
+    optional:
+      - name: "workspace_friendly_name"
+        type: "string"
+        description: "Friendly display name for the workspace"
+        default: "{{WORKSPACE_FRIENDLY_NAME}}"
+      - name: "workspace_description"
+        type: "string"
+        description: "Description of the workspace"
+        default: "{{WORKSPACE_DESCRIPTION}}"
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/workspaces"
+        resource_name: "{{WORKSPACE_NAME}}"
+        description: "Workspace exists"
+
+      - type: "property_contains"
+        property: "applicationGroupReferences"
+        expected: "{{APP_GROUP_NAME}}"
+        description: "Application group is registered to workspace"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization workspace show \
+        --name "{{WORKSPACE_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-workspace-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $workspaceName = "{{WORKSPACE_NAME}}"
+      $workspaceFriendlyName = "{{WORKSPACE_FRIENDLY_NAME}}"
+      $workspaceDescription = "{{WORKSPACE_DESCRIPTION}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      Write-Host "[START] Starting 'Create AVD Workspace' operation..."
+
+      Write-Host "[PROGRESS] Checking if workspace '$workspaceName' already exists..."
+      $workspaceExists = @(az desktopvirtualization workspace show --name $workspaceName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($workspaceExists.Count -eq 0) {
+        Write-Host "[PROGRESS] Workspace '$workspaceName' not found. Creating..."
+        az desktopvirtualization workspace create `
+          --name $workspaceName `
+          --resource-group $resourceGroup `
+          --location $location `
+          --description $workspaceDescription `
+          --friendly-name $workspaceFriendlyName `
+          --tags $tags `
+          --output none
+        Write-Host "[SUCCESS] Successfully created workspace '$workspaceName'."
+      } else {
+        Write-Host "[INFO] Workspace '$workspaceName' already exists."
+      }
+
+      Write-Host "[PROGRESS] Ensuring application group '$appGroupName' is registered to the workspace..."
+      $appGroupId = az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "id" -o tsv
+
+      az desktopvirtualization workspace update `
+        --name $workspaceName `
+        --resource-group $resourceGroup `
+        --application-group-references $appGroupId `
+        --output none
+
+      Write-Host "[SUCCESS] Application group '$appGroupName' is registered to workspace '$workspaceName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-workspace-create-wrapper.ps1
+      rm -f /tmp/avd-workspace-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete AVD Workspace"
+        description: "Remove the workspace and associated resources"
+        command: |
+          az desktopvirtualization workspace delete \
+            --name "{{WORKSPACE_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
