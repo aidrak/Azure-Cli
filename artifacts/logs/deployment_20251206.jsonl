@@ -965,3 +965,4 @@
 {"timestamp":"2025-12-06T18:32:34.221Z","level":"INFO","message":"Starting","operation_id":"","metadata":{}}
 {"timestamp":"2025-12-06T18:32:34.227Z","level":"INFO","message":"Before loop","operation_id":"","metadata":{}}
 {"timestamp":"2025-12-06T18:32:34.232Z","level":"INFO","message":"In loop","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:48.383Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
