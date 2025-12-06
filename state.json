@@ -1,10 +1,10 @@
 {
   "current_module": "01-networking",
-  "updated_at": "2025-12-06T04:13:37Z",
+  "updated_at": "2025-12-06T04:33:21Z",
   "modules": {
     "01-networking": {
       "status": "running",
-      "timestamp": "2025-12-06T04:10:40Z"
+      "timestamp": "2025-12-06T04:33:06Z"
     },
     "02-storage": {
       "status": "completed",
@@ -47,18 +47,18 @@
   "operations": {
     "networking-create-vnet": {
       "status": "completed",
-      "duration": 18,
-      "timestamp": "2025-12-06T04:10:58Z"
+      "duration": 2,
+      "timestamp": "2025-12-06T04:33:08Z"
     },
     "networking-create-subnets": {
       "status": "completed",
-      "duration": 44,
-      "timestamp": "2025-12-06T04:11:43Z"
+      "duration": 6,
+      "timestamp": "2025-12-06T04:33:15Z"
     },
     "networking-create-nsgs": {
       "status": "completed",
-      "duration": 14,
-      "timestamp": "2025-12-06T04:11:57Z"
+      "duration": 6,
+      "timestamp": "2025-12-06T04:33:21Z"
     },
     "networking-configure-nsg-rules": {
       "status": "completed",
@@ -286,5 +286,5 @@
       "timestamp": "2025-12-06T01:47:38Z"
     }
   },
-  "current_operation": "networking-configure-route-tables"
+  "current_operation": "networking-configure-nsg-rules"
 }
