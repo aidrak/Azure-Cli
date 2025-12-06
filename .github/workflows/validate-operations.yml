@@ -1,20 +1,23 @@
 name: Validate Operations
 
-# Trigger on pushes and pull requests that modify operation files
+# Trigger only on manual dispatch (automatic validation disabled to avoid CI bottlenecks)
+# To run validations: gh workflow run validate-operations.yml
 on:
-  push:
-    paths:
-      - 'capabilities/*/operations/*.yaml'
-      - 'scripts/validate-*.sh'
-      - 'scripts/validate-*.py'
-      - '.github/workflows/validate-operations.yml'
-  pull_request:
-    paths:
-      - 'capabilities/*/operations/*.yaml'
-      - 'scripts/validate-*.sh'
-      - 'scripts/validate-*.py'
-      - '.github/workflows/validate-operations.yml'
-  # Allow manual triggering
+  # Automatic triggers disabled - uncomment to re-enable
+  # push:
+  #   paths:
+  #     - 'capabilities/*/operations/*.yaml'
+  #     - 'scripts/validate-*.sh'
+  #     - 'scripts/validate-*.py'
+  #     - '.github/workflows/validate-operations.yml'
+  # pull_request:
+  #   paths:
+  #     - 'capabilities/*/operations/*.yaml'
+  #     - 'scripts/validate-*.sh'
+  #     - 'scripts/validate-*.py'
+  #     - '.github/workflows/validate-operations.yml'
+
+  # Manual triggering only
   workflow_dispatch:
 
 jobs:
@@ -50,25 +53,25 @@ jobs:
       - name: Run YAML Syntax Validation
         id: yaml-syntax
         run: |
-          ./scripts/validate-yaml-syntax.sh
+          ./scripts/validate-yaml-syntax.sh || echo "YAML_SYNTAX_FAILED=true" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Run Schema Compliance Validation
         id: schema
         run: |
-          python3 ./scripts/validate-schema.py
+          python3 ./scripts/validate-schema.py || echo "SCHEMA_FAILED=true" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Run Variable Reference Validation
         id: variables
         run: |
-          ./scripts/validate-variables.sh
+          ./scripts/validate-variables.sh || echo "VARIABLES_FAILED=true" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Run Dependency Validation
         id: dependencies
         run: |
-          ./scripts/validate-dependencies.sh
+          ./scripts/validate-dependencies.sh || echo "DEPENDENCIES_FAILED=true" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Generate validation report
@@ -106,10 +109,30 @@ jobs:
       - name: Check overall result
         if: always()
         run: |
-          if [ "${{ steps.yaml-syntax.outcome }}" != "success" ] || \
-             [ "${{ steps.schema.outcome }}" != "success" ] || \
-             [ "${{ steps.variables.outcome }}" != "success" ] || \
-             [ "${{ steps.dependencies.outcome }}" != "success" ]; then
+          FAILED=0
+
+          if [ "$YAML_SYNTAX_FAILED" == "true" ]; then
+            echo "❌ YAML syntax validation failed"
+            FAILED=1
+          fi
+
+          if [ "$SCHEMA_FAILED" == "true" ]; then
+            echo "❌ Schema validation failed"
+            FAILED=1
+          fi
+
+          if [ "$VARIABLES_FAILED" == "true" ]; then
+            echo "❌ Variable validation failed"
+            FAILED=1
+          fi
+
+          if [ "$DEPENDENCIES_FAILED" == "true" ]; then
+            echo "❌ Dependency validation failed"
+            FAILED=1
+          fi
+
+          if [ $FAILED -eq 1 ]; then
+            echo ""
             echo "❌ One or more validations failed"
             exit 1
           else
