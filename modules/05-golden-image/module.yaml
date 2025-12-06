@@ -33,12 +33,22 @@ module:
       duration: 60  # 1 minute
       type: "FAST"
 
-    # Install all applications selected in config.yaml using the app manifest
+    # Install all simple applications selected in config.yaml using the app manifest
     - id: "golden-image-install-apps"
       name: "Install Applications"
-      description: "Install all selected applications in parallel with heartbeat monitoring"
-      duration: 2400 # 40 minutes (accounts for Office, Adobe, Chrome, etc.)
+      description: "Install all selected simple applications in parallel with heartbeat monitoring"
+      duration: 1200 # 20 minutes
       type: "HEARTBEAT"
+
+    # Office runs alone due to its complex ODT process
+    - id: "golden-image-install-office"
+      name: "Install Office 365"
+      description: "Download and install Office 365 using ODT"
+      duration: 1800  # 30 minutes
+      type: "WAIT"
+      requires:
+        - operation: "golden-image-install-apps"
+          status: "completed"
 
     # Sequential configuration steps
     - id: "golden-image-configure-defaults"
