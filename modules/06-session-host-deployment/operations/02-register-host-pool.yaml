@@ -103,10 +103,19 @@ operation:
       # Step 3: Generate registration token
       echo "[PROGRESS] Step 3/5: Generating host pool registration token..."
 
+      # Calculate expiration time (24 hours from now) - cross-platform compatible
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS/BSD uses different date syntax
+        EXPIRATION=$(date -u -v+24H '+%Y-%m-%dT%H:%M:%S.000Z')
+      else
+        # Linux with GNU date
+        EXPIRATION=$(date -u -d '+24 hours' '+%Y-%m-%dT%H:%M:%S.000Z')
+      fi
+
       TOKEN_OUTPUT=$(az desktopvirtualization hostpool update \
         --resource-group "$RESOURCE_GROUP" \
         --name "$HOST_POOL_NAME" \
-        --registration-info expiration-time=$(date -u -d '+24 hours' '+%Y-%m-%dT%H:%M:%S.000Z') registration-token-operation='Update' \
+        --registration-info expiration-time="$EXPIRATION" registration-token-operation='Update' \
         --output json 2>&1)
 
       # Retrieve the registration token

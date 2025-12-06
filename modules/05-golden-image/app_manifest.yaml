@@ -2,6 +2,7 @@
 # The installation engine will select from this list based on config.yaml.
 chrome:
   name: "Google Chrome"
+  source_type: "Url"
   url_type: "permalink" # The standalone enterprise installer is regularly updated at this link.
   url: "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
   outfile: "C:\\Temp\\Chrome.msi"
@@ -11,6 +12,7 @@ chrome:
 
 adobereader:
   name: "Adobe Acrobat DC"
+  source_type: "Url"
   url_type: "static" # This URL is version-specific and will need to be updated.
   url: "https://trials.adobe.com/AdobeProducts/APRO/Acrobat_HelpX/win32/Acrobat_DC_Web_x64_WWMUI.zip"
   outfile: "C:\\Temp\\Acrobat_DC_Web.zip"
@@ -22,6 +24,7 @@ adobereader:
 
 vscode:
   name: "Visual Studio Code"
+  source_type: "Url"
   url_type: "permalink" # Official permalink for the latest stable system installer.
   url: "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-system"
   outfile: "C:\\Temp\\VSCodeSetup.exe"
@@ -31,6 +34,7 @@ vscode:
 
 teams:
   name: "Microsoft Teams for VDI"
+  source_type: "Url"
   url_type: "permalink" # Official FWLink for the latest VDI machine-wide installer.
   url: "https://go.microsoft.com/fwlink/?linkid=2196106"
   outfile: "C:\\Temp\\Teams_windows_x64.msi"

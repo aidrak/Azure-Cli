@@ -2,7 +2,7 @@
 # Module: Autoscaling Configuration
 # ==============================================================================
 module:
-  id: "10-autoscaling"
+  id: "09-autoscaling"
   name: "Autoscaling Configuration"
   description: "Configure autoscaling for AVD host pool to optimize costs based on demand"
 
@@ -56,7 +56,7 @@ module:
     timeout: 720    # 12 minutes (2x expected)
 
   # Module state file
-  state_file: "modules/10-autoscaling/state.json"
+  state_file: "modules/09-autoscaling/state.json"
 
   # Artifacts
   artifacts:

@@ -2,7 +2,7 @@
 # Module: SSO Configuration
 # ==============================================================================
 module:
-  id: "09-sso"
+  id: "08-sso"
   name: "SSO Configuration"
   description: "Configure Single Sign-On (SSO) for Azure Virtual Desktop using Entra ID"
 
@@ -60,7 +60,7 @@ module:
     timeout: 720    # 12 minutes (2x expected)
 
   # Module state file
-  state_file: "modules/09-sso/state.json"
+  state_file: "modules/08-sso/state.json"
 
   # Artifacts
   artifacts:
