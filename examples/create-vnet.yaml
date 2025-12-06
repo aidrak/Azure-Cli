@@ -1,0 +1,53 @@
+# ==============================================================================
+# Operation: Create Virtual Network with Subnets
+# ==============================================================================
+
+operation:
+  id: "create-vnet-subnets"
+  name: "Create Virtual Network with Multiple Subnets"
+  type: "create"
+  resource_type: "Microsoft.Network/virtualNetworks"
+  resource_name: "${NETWORKING_VNET_NAME}"
+
+prerequisites: []
+
+steps:
+  - name: "Create virtual network"
+    command: |
+      az network vnet create \
+        --name ${NETWORKING_VNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --location ${AZURE_LOCATION} \
+        --address-prefixes 10.0.0.0/16 \
+        --tags Environment=Production
+
+  - name: "Create session hosts subnet"
+    command: |
+      az network vnet subnet create \
+        --vnet-name ${NETWORKING_VNET_NAME} \
+        --name ${NETWORKING_SESSION_HOST_SUBNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --address-prefix 10.0.1.0/24
+
+  - name: "Create private endpoints subnet"
+    command: |
+      az network vnet subnet create \
+        --vnet-name ${NETWORKING_VNET_NAME} \
+        --name ${NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --address-prefix 10.0.2.0/24
+
+  - name: "Create management subnet"
+    command: |
+      az network vnet subnet create \
+        --vnet-name ${NETWORKING_VNET_NAME} \
+        --name ${NETWORKING_MANAGEMENT_SUBNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --address-prefix 10.0.3.0/24
+
+rollback:
+  - name: "Delete virtual network (cascades to subnets)"
+    command: |
+      az network vnet delete \
+        --name ${NETWORKING_VNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP}

@@ -1,0 +1,65 @@
+# ==============================================================================
+# Operation: Create Virtual Machine
+# ==============================================================================
+
+operation:
+  id: "create-virtual-machine"
+  name: "Create Ubuntu Virtual Machine"
+  type: "create"
+  resource_type: "Microsoft.Compute/virtualMachines"
+  resource_name: "test-vm-01"
+
+prerequisites:
+  - resource_type: "Microsoft.Network/virtualNetworks"
+    name_from_config: "NETWORKING_VNET_NAME"
+
+steps:
+  - name: "Create network interface"
+    command: |
+      SUBNET_ID=$(az network vnet subnet show \
+        --vnet-name ${NETWORKING_VNET_NAME} \
+        --name ${NETWORKING_MANAGEMENT_SUBNET_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --query id -o tsv)
+
+      az network nic create \
+        --name test-vm-01-nic \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --location ${AZURE_LOCATION} \
+        --subnet $SUBNET_ID
+
+  - name: "Create virtual machine"
+    command: |
+      az vm create \
+        --name test-vm-01 \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --location ${AZURE_LOCATION} \
+        --nics test-vm-01-nic \
+        --image Ubuntu2204 \
+        --size Standard_B2s \
+        --admin-username azureuser \
+        --generate-ssh-keys \
+        --tags Environment=Development Purpose=Testing
+
+  - name: "Open SSH port (optional)"
+    command: |
+      az vm open-port \
+        --name test-vm-01 \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --port 22 \
+        --priority 1000
+    continue_on_error: true
+
+rollback:
+  - name: "Delete virtual machine"
+    command: |
+      az vm delete \
+        --name test-vm-01 \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --yes
+
+  - name: "Delete network interface"
+    command: |
+      az network nic delete \
+        --name test-vm-01-nic \
+        --resource-group ${AZURE_RESOURCE_GROUP}

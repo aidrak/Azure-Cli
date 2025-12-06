@@ -1,0 +1,75 @@
+# ==============================================================================
+# Operation: Configure Existing Resource
+# ==============================================================================
+# This example shows a configuration-only operation (no resource creation)
+
+operation:
+  id: "configure-storage-security"
+  name: "Configure Storage Account Security Settings"
+  type: "configure"
+  resource_type: "Microsoft.Storage/storageAccounts"
+  resource_name: "${STORAGE_ACCOUNT_NAME}"
+
+prerequisites:
+  - resource_type: "Microsoft.Storage/storageAccounts"
+    name_from_config: "STORAGE_ACCOUNT_NAME"
+
+steps:
+  - name: "Enable blob versioning"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-versioning true
+
+  - name: "Enable soft delete for blobs"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-delete-retention true \
+        --delete-retention-days 7
+
+  - name: "Enable soft delete for containers"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-container-delete-retention true \
+        --container-delete-retention-days 7
+
+  - name: "Require secure transfer"
+    command: |
+      az storage account update \
+        --name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --https-only true
+
+  - name: "Set minimum TLS version to 1.2"
+    command: |
+      az storage account update \
+        --name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --min-tls-version TLS1_2
+
+rollback:
+  - name: "Disable blob versioning"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-versioning false
+
+  - name: "Disable blob soft delete"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-delete-retention false
+
+  - name: "Disable container soft delete"
+    command: |
+      az storage account blob-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-container-delete-retention false
