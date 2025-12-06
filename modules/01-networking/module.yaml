@@ -74,6 +74,30 @@ module:
       duration: 90        # 1.5 minutes
       type: "FAST"
 
+    - id: "networking-create-gateway-subnet"
+      name: "Create Gateway Subnet"
+      description: "Create GatewaySubnet for VPN Gateway (if enabled)"
+      duration: 60        # 1 minute
+      type: "FAST"
+
+    - id: "networking-create-local-network-gateways"
+      name: "Create Local Network Gateways"
+      description: "Create local network gateways for on-premises sites (if enabled)"
+      duration: 120       # 2 minutes
+      type: "FAST"
+
+    - id: "networking-create-vpn-gateway"
+      name: "Create VPN Gateway"
+      description: "Create VPN Gateway for site-to-site connectivity (if enabled)"
+      duration: 600       # 10 minutes (can take up to 15 minutes)
+      type: "LONG"
+
+    - id: "networking-create-vpn-connections"
+      name: "Create VPN Connections"
+      description: "Create VPN connections between gateways (if enabled)"
+      duration: 180       # 3 minutes
+      type: "FAST"
+
     - id: "networking-validate-all"
       name: "Validate Network Configuration"
       description: "Comprehensive validation of all networking components"
@@ -98,8 +122,8 @@ module:
 
   # Expected total duration
   total_duration:
-    expected: 1140      # 19 minutes (sum of all operations)
-    timeout: 2280       # 38 minutes (2x expected)
+    expected: 1980      # 33 minutes (sum of all operations including VPN)
+    timeout: 3960       # 66 minutes (2x expected)
 
   # Module state file
   state_file: "modules/01-networking/state.json"
