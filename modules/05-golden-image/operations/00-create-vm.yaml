@@ -25,53 +25,58 @@ operation:
         description: "VM created successfully"
 
   # Template command (variables substituted at runtime)
+  # NOTE: Uses PowerShell (pwsh) instead of bash for consistent syntax
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
-      # Check if VM already exists (idempotent)
-      if az vm show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --output none 2>/dev/null; then
-        echo "[INFO] VM '{{GOLDEN_IMAGE_TEMP_VM_NAME}}' already exists. Skipping creation."
-        exit 0
-      fi
+      pwsh -NoProfile -NonInteractive -Command {
+        # Check if VM already exists (idempotent)
+        $vmExists = az vm show `
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+          --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+          --output none 2>$null
 
-      # Create VM with TrustedLaunch security
-      az vm create \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --image "{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}:{{GOLDEN_IMAGE_IMAGE_OFFER}}:{{GOLDEN_IMAGE_IMAGE_SKU}}:{{GOLDEN_IMAGE_IMAGE_VERSION}}" \
-        --size "{{GOLDEN_IMAGE_VM_SIZE}}" \
-        --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" \
-        --admin-password "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" \
-        --vnet-name "{{NETWORKING_VNET_NAME}}" \
-        --subnet "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}" \
-        --public-ip-sku Standard \
-        --security-type TrustedLaunch \
-        --enable-secure-boot true \
-        --enable-vtpm true \
-        --location "{{AZURE_LOCATION}}" \
-        --output json > artifacts/outputs/golden-image-create-vm.json
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] VM '{{GOLDEN_IMAGE_TEMP_VM_NAME}}' already exists. Skipping creation."
+          exit 0
+        }
 
-      # Get VM details
-      VM_PUBLIC_IP=$(az vm show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --show-details \
-        --query "publicIps" \
-        --output tsv)
+        # Create VM with TrustedLaunch security
+        az vm create `
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+          --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+          --image "{{GOLDEN_IMAGE_IMAGE_PUBLISHER}}:{{GOLDEN_IMAGE_IMAGE_OFFER}}:{{GOLDEN_IMAGE_IMAGE_SKU}}:{{GOLDEN_IMAGE_IMAGE_VERSION}}" `
+          --size "{{GOLDEN_IMAGE_VM_SIZE}}" `
+          --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" `
+          --admin-password "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" `
+          --vnet-name "{{NETWORKING_VNET_NAME}}" `
+          --subnet "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}" `
+          --public-ip-sku Standard `
+          --security-type TrustedLaunch `
+          --enable-secure-boot true `
+          --enable-vtpm true `
+          --location "{{AZURE_LOCATION}}" `
+          --output json > artifacts/outputs/golden-image-create-vm.json
 
-      VM_PRIVATE_IP=$(az vm show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --show-details \
-        --query "privateIps" \
-        --output tsv)
+        # Get VM details
+        $vmPublicIp = az vm show `
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+          --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+          --show-details `
+          --query "publicIps" `
+          --output tsv
 
-      echo "[SUCCESS] VM created successfully"
-      echo "[INFO] Public IP: $VM_PUBLIC_IP"
-      echo "[INFO] Private IP: $VM_PRIVATE_IP"
+        $vmPrivateIp = az vm show `
+          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+          --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+          --show-details `
+          --query "privateIps" `
+          --output tsv
+
+        Write-Host "[SUCCESS] VM created successfully"
+        Write-Host "[INFO] Public IP: $vmPublicIp"
+        Write-Host "[INFO] Private IP: $vmPrivateIp"
+      }
 
   # Self-healing: Previous fixes applied to this template
   fixes:
