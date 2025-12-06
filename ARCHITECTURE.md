@@ -13,7 +13,7 @@ Complete technical reference for the YAML-based deployment engine.
 - **Active System**: YAML engine (`core/` + `capabilities/`)
 - **User Guide & Ops**: See the main [.claude/CLAUDE.md](.claude/CLAUDE.md) for operational guides.
 - **Configuration**: `config.yaml` (single source of truth)
-- **Execution**: `./core/engine.sh run [module] [operation]`
+- **Execution**: `./core/engine.sh run <operation-id>`
 - **State**: `state.json` (centralized tracking)
 - **Legacy**: `legacy/` directory (reference only, never execute)
 
@@ -105,7 +105,7 @@ azure-cli/
 │   └── checkpoint_*.json        # Resume files
 │
 ├── tools/
-│   └── create-module.sh         # Module generator
+│   └── capability-cli.sh        # Capability/operation generator
 │
 ├── docs/
 │   ├── config-migration.md
@@ -203,7 +203,7 @@ operation:
 ### Commands
 
 ```bash
-# Run operations by capability (current system)
+# Run capability operations
 ./core/engine.sh run golden-image-install-apps
 ./core/engine.sh run vnet-create
 ./core/engine.sh run storage-account-create
@@ -219,7 +219,7 @@ operation:
 
 ```
 1. User Command
-   ./core/engine.sh run 05-golden-image
+   ./core/engine.sh run golden-image-install-apps
 
 2. Initialize State
    ├─ Create state.json if missing
@@ -308,14 +308,14 @@ Each operation defines:
 
 ---
 
-## Module Development
+## Operation Development
 
-### Creating a New Module
+### Creating a New Operation
 
-Use the generator:
+Use the capability CLI:
 
 ```bash
-./tools/create-module.sh 06 "Session Host Deployment"
+./tools/capability-cli.sh create-operation <capability> <operation-name>
 ```
 
 Or manually:
@@ -556,21 +556,21 @@ grep '\[ERROR\]' artifacts/logs/*.jsonl
 | Management | 2 | ✅ Migrated | Resource groups, validation |
 | Test-Capability | 1 | ✅ Migrated | Testing framework |
 
-**Total:** 79 operations across 7 capabilities
+**Total:** 83 operations across 7 capabilities
 **Migration Status:** ✅ COMPLETE (2025-12-06)
 
-See [MIGRATION-INDEX.md](MIGRATION-INDEX.md) for complete operation catalog.
+See [docs/migration/](docs/migration/) for migration history and operation catalog.
 
 ---
 
 ## Additional Resources
 
-- **Quick Start**: [README.md](README.md)
+- **Quick Start**: [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
+- **README**: [README.md](README.md) - Project overview
 - **Main Hub & User Guide**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
 - **Remote Execution**: [AZURE-VM-REMOTE-EXECUTION.md](AZURE-VM-REMOTE-EXECUTION.md)
 - **Configuration**: [config.yaml](config.yaml)
 - **Legacy Reference**: [legacy/README.md](legacy/README.md)
-- **Config Migration**: [docs/config-migration.md](docs/config-migration.md)
 
 ---
 

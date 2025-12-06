@@ -1,8 +1,10 @@
 # Azure Virtual Desktop - YAML Deployment Engine
 
 > **AI ASSISTANTS**: Read [`.claude/CLAUDE.md`](.claude/CLAUDE.md) first, then [`ARCHITECTURE.md`](ARCHITECTURE.md) for system details.
+>
+> **NEW USERS**: See [QUICKSTART.md](QUICKSTART.md) for 5-minute setup guide.
 
-Production-ready Azure Virtual Desktop (AVD) deployment using a YAML-based template engine with centralized configuration, self-healing, and real-time progress tracking.
+Production-ready Azure Virtual Desktop (AVD) deployment using a YAML-based capability engine with centralized configuration, self-healing, and real-time progress tracking.
 
 ## Quick Start
 
@@ -36,7 +38,7 @@ Secrets in `secrets.yaml` automatically override values in `config.yaml`. This k
 # Load configuration
 source core/config-manager.sh && load_config
 
-# Run operations by capability (current system)
+# Run capability operations
 ./core/engine.sh run golden-image-install-apps
 ./core/engine.sh run vnet-create
 ./core/engine.sh run storage-account-create
@@ -90,17 +92,18 @@ For capability system documentation, see [ARCHITECTURE.md#capability-system](ARC
 - **100% PowerShell** logic preserved
 - **Legacy system** archived in `legacy/modules/` (reference only)
 
-See [MIGRATION-INDEX.md](MIGRATION-INDEX.md) for complete catalog.
+See [docs/migration/](docs/migration/) for migration history.
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
+| [QUICKSTART.md](QUICKSTART.md) | 5-minute getting started guide |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Complete system architecture |
-| [.claude/CLAUDE.md](.claude/CLAUDE.md) | Main operational guide and development hub |
-| [AZURE-VM-REMOTE-EXECUTION.md](AZURE-VM-REMOTE-EXECUTION.md) | Details on `az vm run-command` pattern |
-| [MIGRATION-INDEX.md](MIGRATION-INDEX.md) | Complete operation catalog |
+| [.claude/CLAUDE.md](.claude/CLAUDE.md) | AI operational guide and development hub |
+| [AZURE-VM-REMOTE-EXECUTION.md](AZURE-VM-REMOTE-EXECUTION.md) | Remote execution patterns |
 | [config.yaml](config.yaml) | Configuration reference |
+| [docs/](docs/) | Comprehensive documentation |
 
 ### Legacy Reference
 - [legacy/](legacy/) - Archived module system (reference only, do not execute)
