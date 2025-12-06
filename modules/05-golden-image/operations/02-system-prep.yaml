@@ -25,15 +25,35 @@ operation:
         description: "Temp directory created"
 
   # Template command (variables substituted at runtime)
+  # NOTE: Uses PowerShell (pwsh) instead of bash for simpler script handling
   template:
-    type: "az-vm-run-command"
+    type: "powershell-vm-command"
     command: |
-      az vm run-command invoke \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/02-system-prep.ps1" \
-        --output json > artifacts/outputs/golden-image-system-prep.json
+      pwsh -NoProfile -NonInteractive -Command {
+        # Extract PowerShell content from YAML (template engine injects this)
+        $scriptContent = @'
+{{POWERSHELL_CONTENT}}
+'@
+
+        # Write to temporary file
+        $tempScript = "/tmp/golden-image-02-system-prep-$([guid]::NewGuid()).ps1"
+        $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+
+        try {
+          # Execute via az vm run-command
+          az vm run-command invoke `
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+            --command-id RunPowerShellScript `
+            --scripts "@$tempScript" `
+            --output json > artifacts/outputs/golden-image-system-prep.json
+        } finally {
+          # Cleanup temp file
+          if (Test-Path $tempScript) {
+            Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+          }
+        }
+      }
 
   # PowerShell script (can be inline or external file)
   powershell:

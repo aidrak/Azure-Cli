@@ -150,6 +150,26 @@ substitute_variables() {
     # Project paths
     result="${result//\{\{PROJECT_ROOT\}\}/$PROJECT_ROOT}"
 
+    # PowerShell content (for powershell-vm-command template type)
+    # Replace {{POWERSHELL_CONTENT}} with the actual PowerShell script from YAML
+    if [[ -n "$POWERSHELL_CONTENT" && "$POWERSHELL_CONTENT" != "null" ]]; then
+        # Use a temporary marker to avoid issues with special characters
+        local ps_marker="___POWERSHELL_CONTENT___"
+        result="${result//\{\{POWERSHELL_CONTENT\}\}/$ps_marker}"
+
+        # Create temp file with PowerShell content
+        local temp_ps_file=$(mktemp)
+        echo "$POWERSHELL_CONTENT" > "$temp_ps_file"
+
+        # Read it back and substitute
+        local ps_content
+        ps_content=$(<"$temp_ps_file")
+        rm -f "$temp_ps_file"
+
+        # Replace marker with actual content (using printf to handle special characters)
+        result="${result//$ps_marker/$ps_content}"
+    fi
+
     echo "$result"
 }
 
