@@ -9,70 +9,75 @@ operation:
     type: "FAST"
 
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
+      cat > /tmp/storage-02-wrapper.ps1 << 'PSWRAPPER'
       # Get storage account name (from previous operation or config)
-      if [ -f /tmp/storage-account-name.txt ]; then
-        STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
-      else
-        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
-      fi
+      if (Test-Path /tmp/storage-account-name.txt) {
+        $storageName = Get-Content /tmp/storage-account-name.txt
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
 
-      echo "[START] Enabling Entra Kerberos authentication at $(date +%H:%M:%S)"
-      echo "  Storage account: $STORAGE_NAME"
+      Write-Host "[START] Enabling Entra Kerberos authentication at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "  Storage account: $storageName"
 
       # Check current Kerberos configuration
-      echo "[PROGRESS] Checking current authentication configuration..."
+      Write-Host "[PROGRESS] Checking current authentication configuration..."
 
-      CURRENT_CONFIG=$(az storage account show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" \
-        --query "azureFilesIdentityBasedAuthentication.directoryServiceOptions" \
-        -o tsv 2>/dev/null || echo "None")
+      $currentConfig = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "azureFilesIdentityBasedAuthentication.directoryServiceOptions" `
+        -o tsv 2>$null
 
-      if [[ "$CURRENT_CONFIG" == "AADKERB" ]] || [[ "$CURRENT_CONFIG" == "AADDS" ]]; then
-        echo "[SUCCESS] Kerberos authentication already enabled: $CURRENT_CONFIG"
+      if ($currentConfig -eq "AADKERB" -or $currentConfig -eq "AADDS") {
+        Write-Host "[SUCCESS] Kerberos authentication already enabled: $currentConfig"
         exit 0
-      fi
+      }
 
-      echo "[PROGRESS] Enabling Microsoft Entra Kerberos (AADKERB)..."
+      Write-Host "[PROGRESS] Enabling Microsoft Entra Kerberos (AADKERB)..."
 
       # Enable Entra Kerberos authentication
-      if az storage account update \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" \
-        --enable-files-aadkerb true \
-        --output json > /tmp/kerberos-config.json; then
+      $updateOutput = az storage account update `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --enable-files-aadkerb true `
+        --output json 2>&1
 
-        echo "[VALIDATE] Verifying Kerberos configuration..."
-
-        # Wait 5 seconds for configuration to propagate
-        sleep 5
-
-        # Verify Kerberos is enabled
-        NEW_CONFIG=$(az storage account show \
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-          --name "$STORAGE_NAME" \
-          --query "azureFilesIdentityBasedAuthentication.directoryServiceOptions" \
-          -o tsv)
-
-        if [[ "$NEW_CONFIG" == "AADKERB" ]]; then
-          echo "[SUCCESS] Entra Kerberos authentication enabled"
-          echo "  Authentication method: $NEW_CONFIG"
-          echo "  Domain name: Entra-only (no domain GUID required)"
-          echo "  Users can now mount shares with domain credentials"
-          exit 0
-        else
-          echo "[ERROR] Kerberos configuration verification failed"
-          echo "  Expected: AADKERB"
-          echo "  Got: $NEW_CONFIG"
-          exit 1
-        fi
-      else
-        echo "[ERROR] Failed to enable Kerberos authentication"
-        cat /tmp/kerberos-config.json
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to enable Kerberos authentication"
+        Write-Host $updateOutput
         exit 1
-      fi
+      }
+
+      Write-Host "[VALIDATE] Verifying Kerberos configuration..."
+
+      # Wait 5 seconds for configuration to propagate
+      Start-Sleep -Seconds 5
+
+      # Verify Kerberos is enabled
+      $newConfig = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "azureFilesIdentityBasedAuthentication.directoryServiceOptions" `
+        -o tsv
+
+      if ($newConfig -eq "AADKERB") {
+        Write-Host "[SUCCESS] Entra Kerberos authentication enabled"
+        Write-Host "  Authentication method: $newConfig"
+        Write-Host "  Domain name: Entra-only (no domain GUID required)"
+        Write-Host "  Users can now mount shares with domain credentials"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Kerberos configuration verification failed"
+        Write-Host "  Expected: AADKERB"
+        Write-Host "  Got: $newConfig"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-02-wrapper.ps1
+      rm -f /tmp/storage-02-wrapper.ps1
 
   validation:
     enabled: true

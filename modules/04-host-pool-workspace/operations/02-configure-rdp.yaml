@@ -15,24 +15,28 @@ operation:
     - "hostpool-create-pool"
 
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/hostpool-02-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
 
-      echo "[START] Starting 'Configure Host Pool RDP Properties' operation..."
+      Write-Host "[START] Starting 'Configure Host Pool RDP Properties' operation..."
 
-      RDP_PROPERTIES="audiocapturemode:i:0;audiomode:i:0;camerastoredirect:s:*;clipboardredirect:i:1;drivestoredirect:s:;usbdevicestoredirect:s:*;use multimon:i:1;promptcredentialonce:i:0;promptfordestinationcert:i:1;devicestoredirect:s:*"
+      $rdpProperties = "audiocapturemode:i:0;audiomode:i:0;camerastoredirect:s:*;clipboardredirect:i:1;drivestoredirect:s:;usbdevicestoredirect:s:*;use multimon:i:1;promptcredentialonce:i:0;promptfordestinationcert:i:1;devicestoredirect:s:*"
 
-      echo "[PROGRESS] Applying RDP properties to host pool '$HOST_POOL_NAME'..."
+      Write-Host "[PROGRESS] Applying RDP properties to host pool '$hostPoolName'..."
 
-      az desktopvirtualization hostpool update \
-        --name "$HOST_POOL_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --custom-rdp-property "$RDP_PROPERTIES" \
+      az desktopvirtualization hostpool update `
+        --name $hostPoolName `
+        --resource-group $resourceGroup `
+        --custom-rdp-property $rdpProperties `
         --output none
 
-      echo "[SUCCESS] Successfully configured RDP properties on host pool '$HOST_POOL_NAME'."
+      Write-Host "[SUCCESS] Successfully configured RDP properties on host pool '$hostPoolName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/hostpool-02-wrapper.ps1
+      rm -f /tmp/hostpool-02-wrapper.ps1

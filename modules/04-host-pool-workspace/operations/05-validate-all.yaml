@@ -15,47 +15,57 @@ operation:
     - "hostpool-create-workspace"
 
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/hostpool-05-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
-      APP_GROUP_NAME="{{APP_GROUP_NAME}}"
-      WORKSPACE_NAME="{{WORKSPACE_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+      $workspaceName = "{{WORKSPACE_NAME}}"
 
-      echo "[START] Starting 'Validate Host Pool and Workspace' operation..."
+      Write-Host "[START] Starting 'Validate Host Pool and Workspace' operation..."
 
-      ALL_VALID=true
+      $allValid = $true
 
-      echo "[VALIDATE] Validating host pool '$HOST_POOL_NAME'..."
-      if az desktopvirtualization hostpool show --name "$HOST_POOL_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-        echo "[INFO] Host pool '$HOST_POOL_NAME' exists."
-      else
-        echo "[ERROR] Host pool '$HOST_POOL_NAME' not found."
-        ALL_VALID=false
-      fi
+      Write-Host "[VALIDATE] Validating host pool '$hostPoolName'..."
+      $poolExists = @(az desktopvirtualization hostpool show --name $hostPoolName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
 
-      echo "[VALIDATE] Validating application group '$APP_GROUP_NAME'..."
-      if az desktopvirtualization applicationgroup show --name "$APP_GROUP_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-        echo "[INFO] Application group '$APP_GROUP_NAME' exists."
-      else
-        echo "[ERROR] Application group '$APP_GROUP_NAME' not found."
-        ALL_VALID=false
-      fi
+      if ($poolExists.Count -gt 0) {
+        Write-Host "[INFO] Host pool '$hostPoolName' exists."
+      } else {
+        Write-Host "[ERROR] Host pool '$hostPoolName' not found."
+        $allValid = $false
+      }
 
-      echo "[VALIDATE] Validating workspace '$WORKSPACE_NAME'..."
-      if az desktopvirtualization workspace show --name "$WORKSPACE_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-        echo "[INFO] Workspace '$WORKSPACE_NAME' exists."
-      else
-        echo "[ERROR] Workspace '$WORKSPACE_NAME' not found."
-        ALL_VALID=false
-      fi
+      Write-Host "[VALIDATE] Validating application group '$appGroupName'..."
+      $appGroupExists = @(az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
 
-      if [ "$ALL_VALID" = true ]; then
-        echo "[SUCCESS] All Host Pool and Workspace resources are correctly provisioned."
-      else
-        echo "[ERROR] One or more Host Pool and Workspace resources are missing. Please check the logs."
+      if ($appGroupExists.Count -gt 0) {
+        Write-Host "[INFO] Application group '$appGroupName' exists."
+      } else {
+        Write-Host "[ERROR] Application group '$appGroupName' not found."
+        $allValid = $false
+      }
+
+      Write-Host "[VALIDATE] Validating workspace '$workspaceName'..."
+      $workspaceExists = @(az desktopvirtualization workspace show --name $workspaceName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($workspaceExists.Count -gt 0) {
+        Write-Host "[INFO] Workspace '$workspaceName' exists."
+      } else {
+        Write-Host "[ERROR] Workspace '$workspaceName' not found."
+        $allValid = $false
+      }
+
+      if ($allValid) {
+        Write-Host "[SUCCESS] All Host Pool and Workspace resources are correctly provisioned."
+        exit 0
+      } else {
+        Write-Host "[ERROR] One or more Host Pool and Workspace resources are missing. Please check the logs."
         exit 1
-      fi
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/hostpool-05-wrapper.ps1
+      rm -f /tmp/hostpool-05-wrapper.ps1

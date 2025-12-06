@@ -21,49 +21,58 @@ operation:
         description: "SSO device group exists"
 
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/entra-03-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      echo "[START] Creating SSO device security group: $(date '+%Y-%m-%d %H:%M:%S')"
+      Write-Host "[START] Creating SSO device security group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
-      GROUP_NAME="{{ENTRA_GROUP_DEVICES_SSO}}"
-      GROUP_DESCRIPTION="{{ENTRA_GROUP_DEVICES_SSO_DESCRIPTION}}"
-      MAIL_NICKNAME=$(echo "$GROUP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+      $groupName = "{{ENTRA_GROUP_DEVICES_SSO}}"
+      $groupDescription = "{{ENTRA_GROUP_DEVICES_SSO_DESCRIPTION}}"
+      $mailNickname = $groupName -replace ' ', '-' | % { $_.ToLower() }
 
-      echo "[PROGRESS] Checking if group exists: $GROUP_NAME"
+      Write-Host "[PROGRESS] Checking if group exists: $groupName"
 
-      GROUP_ID=$(az ad group list \
-        --filter "displayName eq '$GROUP_NAME'" \
-        --query "[0].id" -o tsv 2>/dev/null || echo "")
+      $groupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
 
-      if [[ -n "$GROUP_ID" && "$GROUP_ID" != "None" ]]; then
-        echo "[INFO] Group already exists: $GROUP_NAME"
-        echo "[SUCCESS] SSO device group creation complete (already exists)"
-        az ad group show --group "$GROUP_ID" \
-          --output json > artifacts/outputs/entra-create-sso-group.json
+      if ([string]::IsNullOrEmpty($groupId) -eq $false -and $groupId -ne "None") {
+        Write-Host "[INFO] Group already exists: $groupName"
+        Write-Host "[SUCCESS] SSO device group creation complete (already exists)"
+        az ad group show --group $groupId --output json | Out-File -FilePath "artifacts/outputs/entra-create-sso-group.json"
         exit 0
-      fi
+      }
 
-      echo "[PROGRESS] Creating security group for SSO devices..."
+      Write-Host "[PROGRESS] Creating security group for SSO devices..."
 
-      if ! GROUP_ID=$(az ad group create \
-        --display-name "$GROUP_NAME" \
-        --mail-nickname "$MAIL_NICKNAME" \
-        --description "$GROUP_DESCRIPTION" \
-        --query id -o tsv 2>&1); then
-        echo "[ERROR] Failed to create security group: $GROUP_ID"
+      try {
+        $groupId = az ad group create `
+          --display-name $groupName `
+          --mail-nickname $mailNickname `
+          --description $groupDescription `
+          --query id -o tsv 2>&1
+      } catch {
+        Write-Host "[ERROR] Failed to create security group: $groupId"
         exit 1
-      fi
+      }
 
-      echo "[VALIDATE] Verifying group creation..."
-      GROUP_DETAILS=$(az ad group show --group "$GROUP_ID" --output json)
-      echo "$GROUP_DETAILS" > artifacts/outputs/entra-create-sso-group.json
+      if ([string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[ERROR] Failed to create security group"
+        exit 1
+      }
 
-      echo "[SUCCESS] SSO device group created: $GROUP_NAME (ID: $GROUP_ID)"
-      echo "[INFO] Use this group for Intune/Conditional Access SSO policies"
+      Write-Host "[VALIDATE] Verifying group creation..."
+      $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
+      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/entra-create-sso-group.json"
+
+      Write-Host "[SUCCESS] SSO device group created: $groupName (ID: $groupId)"
+      Write-Host "[INFO] Use this group for Intune/Conditional Access SSO policies"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/entra-03-wrapper.ps1
+      rm -f /tmp/entra-03-wrapper.ps1
 
   fixes: []

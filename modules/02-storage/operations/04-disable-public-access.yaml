@@ -9,71 +9,80 @@ operation:
     type: "FAST"
 
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
+      cat > /tmp/storage-04-wrapper.ps1 << 'PSWRAPPER'
       # Get storage account name (from previous operation or config)
-      if [ -f /tmp/storage-account-name.txt ]; then
-        STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
-      else
-        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
-      fi
+      if (Test-Path /tmp/storage-account-name.txt) {
+        $storageName = Get-Content /tmp/storage-account-name.txt
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
 
-      echo "[START] Disabling public network access at $(date +%H:%M:%S)"
-      echo "  Storage account: $STORAGE_NAME"
+      Write-Host "[START] Disabling public network access at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "  Storage account: $storageName"
 
       # Check current public network access setting
-      echo "[PROGRESS] Checking current network access configuration..."
+      Write-Host "[PROGRESS] Checking current network access configuration..."
 
-      CURRENT_ACCESS=$(az storage account show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" \
-        --query publicNetworkAccess \
-        -o tsv 2>/dev/null || echo "Enabled")
+      $currentAccess = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query publicNetworkAccess `
+        -o tsv 2>$null
 
-      if [[ "$CURRENT_ACCESS" == "Disabled" ]]; then
-        echo "[SUCCESS] Public network access already disabled"
+      if ([string]::IsNullOrEmpty($currentAccess)) {
+        $currentAccess = "Enabled"
+      }
+
+      if ($currentAccess -eq "Disabled") {
+        Write-Host "[SUCCESS] Public network access already disabled"
         exit 0
-      fi
+      }
 
-      echo "[PROGRESS] Disabling public network access..."
-      echo "[WARNING] After this operation, storage will only be accessible via private endpoint"
+      Write-Host "[PROGRESS] Disabling public network access..."
+      Write-Host "[WARNING] After this operation, storage will only be accessible via private endpoint"
 
       # Disable public network access
-      if az storage account update \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" \
-        --public-network-access Disabled \
-        --output json > /tmp/public-access.json; then
+      $updateOutput = az storage account update `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --public-network-access Disabled `
+        --output json 2>&1
 
-        echo "[VALIDATE] Verifying network access configuration..."
-
-        # Wait 3 seconds for configuration to propagate
-        sleep 3
-
-        # Verify public access is disabled
-        NEW_ACCESS=$(az storage account show \
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-          --name "$STORAGE_NAME" \
-          --query publicNetworkAccess \
-          -o tsv)
-
-        if [[ "$NEW_ACCESS" == "Disabled" ]]; then
-          echo "[SUCCESS] Public network access disabled"
-          echo "  Network access: Private endpoint only"
-          echo "  Public internet: Blocked"
-          echo "  Security: Enhanced (zero-trust networking)"
-          exit 0
-        else
-          echo "[ERROR] Network access configuration verification failed"
-          echo "  Expected: Disabled"
-          echo "  Got: $NEW_ACCESS"
-          exit 1
-        fi
-      else
-        echo "[ERROR] Failed to disable public network access"
-        cat /tmp/public-access.json
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to disable public network access"
+        Write-Host $updateOutput
         exit 1
-      fi
+      }
+
+      Write-Host "[VALIDATE] Verifying network access configuration..."
+
+      # Wait 3 seconds for configuration to propagate
+      Start-Sleep -Seconds 3
+
+      # Verify public access is disabled
+      $newAccess = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query publicNetworkAccess `
+        -o tsv
+
+      if ($newAccess -eq "Disabled") {
+        Write-Host "[SUCCESS] Public network access disabled"
+        Write-Host "  Network access: Private endpoint only"
+        Write-Host "  Public internet: Blocked"
+        Write-Host "  Security: Enhanced (zero-trust networking)"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Network access configuration verification failed"
+        Write-Host "  Expected: Disabled"
+        Write-Host "  Got: $newAccess"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-04-wrapper.ps1
+      rm -f /tmp/storage-04-wrapper.ps1
 
   validation:
     enabled: true
