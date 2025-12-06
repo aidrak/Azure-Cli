@@ -21,230 +21,208 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          if [[ -f "artifacts/outputs/sso-configure-service-principal.txt" ]]; then
-            echo "[VALIDATE] Service principal configuration completed"
+          if (Test-Path "artifacts/outputs/sso-configure-service-principal.txt") {
+            Write-Host "[VALIDATE] Service principal configuration completed"
             exit 0
-          else
-            echo "[ERROR] Service principal configuration file not found"
+          } else {
+            Write-Host "[ERROR] Service principal configuration file not found"
             exit 1
-          fi
+          }
         description: "Verify service principal configuration completed"
 
-  # Template command (PowerShell via bash wrapper)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
-
-      echo "[START] Windows Cloud Login Service Principal Configuration: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      cat > /tmp/sso-03-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Windows Cloud Login Service Principal Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      SSO_ENABLED="{{SSO_ENABLED}}"
-      DEVICE_GROUP_NAME="{{ENTRA_GROUP_DEVICES_SSO}}"
+      $ssoEnabled = "{{SSO_ENABLED}}"
+      $deviceGroupName = "{{ENTRA_GROUP_DEVICES_SSO}}"
 
       # Check if SSO is enabled
-      if [[ "$SSO_ENABLED" != "true" ]]; then
-        echo "[WARNING] SSO is disabled in configuration"
-        echo "Configuration skipped" > "artifacts/outputs/sso-configure-service-principal.txt"
+      if ($ssoEnabled -ne "true") {
+        Write-Host "[WARNING] SSO is disabled in configuration"
+        "Configuration skipped" | Out-File -FilePath "artifacts/outputs/sso-configure-service-principal.txt" -Encoding UTF8
         exit 0
-      fi
+      }
 
-      echo "[PROGRESS] Configuring Windows Cloud Login service principal via PowerShell..."
-
-      # Create PowerShell script
-      cat > /tmp/configure-sso-sp.ps1 << 'PWSH_EOF'
-      # Windows Cloud Login Service Principal Configuration
-      Write-Host "[START] Configuring Windows Cloud Login Service Principal" -ForegroundColor Cyan
+      Write-Host "[PROGRESS] Configuring Windows Cloud Login service principal via Microsoft Graph..."
 
       try {
-          # Step 1: Connect to Microsoft Graph
-          Write-Host "[PROGRESS] Step 1/5: Connecting to Microsoft Graph..." -ForegroundColor Yellow
+        # Step 1: Connect to Microsoft Graph
+        Write-Host "[PROGRESS] Step 1/5: Connecting to Microsoft Graph..."
 
-          # Check if already connected
-          $context = Get-MgContext -ErrorAction SilentlyContinue
-          if (-not $context) {
-              Write-Host "[PROGRESS] Connecting to Microsoft Graph (user authentication required)..." -ForegroundColor Yellow
-              Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
-          } else {
-              Write-Host "[SUCCESS] Already connected to Microsoft Graph" -ForegroundColor Green
+        # Check if already connected
+        $context = Get-MgContext -ErrorAction SilentlyContinue
+        if (-not $context) {
+          Write-Host "[PROGRESS] Connecting to Microsoft Graph (user authentication required)..."
+          Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
+        } else {
+          Write-Host "[SUCCESS] Already connected to Microsoft Graph"
+        }
+
+        # Verify connection
+        $context = Get-MgContext
+        Write-Host "[VALIDATE] Connected to tenant: $($context.TenantId)"
+
+        # Step 2: Get Windows Cloud Login Service Principal
+        Write-Host "[PROGRESS] Step 2/5: Finding Windows Cloud Login service principal..."
+
+        $appId = "270efc09-cd0d-444b-a71f-39af4910ec45"  # Windows Cloud Login
+        $servicePrincipal = Get-MgServicePrincipal -Filter "appId eq '$appId'" -ErrorAction Stop
+
+        if (-not $servicePrincipal) {
+          Write-Host "[ERROR] Windows Cloud Login service principal not found"
+          Write-Host "[ERROR] This service principal should exist in all Azure AD tenants"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Found service principal: $($servicePrincipal.DisplayName)"
+        Write-Host "[VALIDATE] Service Principal ID: $($servicePrincipal.Id)"
+
+        # Step 3: Enable RDP Protocol
+        Write-Host "[PROGRESS] Step 3/5: Enabling RDP protocol..."
+
+        # Check current RDP enablement status
+        $remoteDesktopSecurityConfig = $servicePrincipal.RemoteDesktopSecurityConfiguration
+
+        if ($remoteDesktopSecurityConfig.IsRemoteDesktopProtocolEnabled) {
+          Write-Host "[SUCCESS] RDP protocol already enabled"
+        } else {
+          Write-Host "[PROGRESS] Enabling RDP protocol on service principal..."
+
+          # Enable RDP protocol
+          $body = @{
+            "@odata.type" = "#microsoft.graph.remoteDesktopSecurityConfiguration"
+            isRemoteDesktopProtocolEnabled = $true
           }
 
-          # Verify connection
-          $context = Get-MgContext
-          Write-Host "[VALIDATE] Connected to tenant: $($context.TenantId)" -ForegroundColor Green
+          Update-MgServicePrincipalRemoteDesktopSecurityConfiguration `
+            -ServicePrincipalId $servicePrincipal.Id `
+            -BodyParameter $body `
+            -ErrorAction Stop
 
-          # Step 2: Get Windows Cloud Login Service Principal
-          Write-Host "[PROGRESS] Step 2/5: Finding Windows Cloud Login service principal..." -ForegroundColor Yellow
+          Write-Host "[SUCCESS] RDP protocol enabled"
+        }
 
-          $appId = "270efc09-cd0d-444b-a71f-39af4910ec45"  # Windows Cloud Login
-          $servicePrincipal = Get-MgServicePrincipal -Filter "appId eq '$appId'" -ErrorAction Stop
+        # Step 4: Configure Trusted Device Groups (Optional)
+        Write-Host "[PROGRESS] Step 4/5: Configuring trusted device groups..."
 
-          if (-not $servicePrincipal) {
-              Write-Host "[ERROR] Windows Cloud Login service principal not found" -ForegroundColor Red
-              Write-Host "[ERROR] This service principal should exist in all Azure AD tenants" -ForegroundColor Red
-              exit 1
-          }
+        if ([string]::IsNullOrEmpty($deviceGroupName) -or $deviceGroupName -eq "{{ENTRA_GROUP_DEVICES_SSO}}") {
+          Write-Host "[WARNING] Device group name not configured, skipping trusted device group setup"
+        } else {
+          # Find the device group
+          Write-Host "[PROGRESS] Searching for device group: $deviceGroupName"
+          $deviceGroup = Get-MgGroup -Filter "displayName eq '$deviceGroupName'" -ErrorAction SilentlyContinue
 
-          Write-Host "[SUCCESS] Found service principal: $($servicePrincipal.DisplayName)" -ForegroundColor Green
-          Write-Host "[VALIDATE] Service Principal ID: $($servicePrincipal.Id)" -ForegroundColor Green
+          if ($deviceGroup) {
+            Write-Host "[SUCCESS] Found device group: $($deviceGroup.DisplayName) ($($deviceGroup.Id))"
 
-          # Step 3: Enable RDP Protocol
-          Write-Host "[PROGRESS] Step 3/5: Enabling RDP protocol..." -ForegroundColor Yellow
-
-          # Check current RDP enablement status
-          $remoteDesktopSecurityConfig = $servicePrincipal.RemoteDesktopSecurityConfiguration
-
-          if ($remoteDesktopSecurityConfig.IsRemoteDesktopProtocolEnabled) {
-              Write-Host "[SUCCESS] RDP protocol already enabled" -ForegroundColor Green
-          } else {
-              Write-Host "[PROGRESS] Enabling RDP protocol on service principal..." -ForegroundColor Yellow
-
-              # Enable RDP protocol
-              $body = @{
-                  "@odata.type" = "#microsoft.graph.remoteDesktopSecurityConfiguration"
-                  isRemoteDesktopProtocolEnabled = $true
-              }
-
-              Update-MgServicePrincipalRemoteDesktopSecurityConfiguration `
-                  -ServicePrincipalId $servicePrincipal.Id `
-                  -BodyParameter $body `
-                  -ErrorAction Stop
-
-              Write-Host "[SUCCESS] RDP protocol enabled" -ForegroundColor Green
-          }
-
-          # Step 4: Configure Trusted Device Groups (Optional)
-          Write-Host "[PROGRESS] Step 4/5: Configuring trusted device groups..." -ForegroundColor Yellow
-
-          $deviceGroupName = $env:DEVICE_GROUP_NAME
-          if ([string]::IsNullOrEmpty($deviceGroupName) -or $deviceGroupName -eq "{{ENTRA_GROUP_DEVICES_SSO}}") {
-              Write-Host "[WARNING] Device group name not configured, skipping trusted device group setup" -ForegroundColor Yellow
-          } else {
-              # Find the device group
-              Write-Host "[PROGRESS] Searching for device group: $deviceGroupName" -ForegroundColor Yellow
-              $deviceGroup = Get-MgGroup -Filter "displayName eq '$deviceGroupName'" -ErrorAction SilentlyContinue
-
-              if ($deviceGroup) {
-                  Write-Host "[SUCCESS] Found device group: $($deviceGroup.DisplayName) ($($deviceGroup.Id))" -ForegroundColor Green
-
-                  # Get current target device groups
-                  $currentGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
-                      -ServicePrincipalId $servicePrincipal.Id `
-                      -ErrorAction SilentlyContinue
-
-                  # Check if group already added
-                  $alreadyAdded = $currentGroups | Where-Object { $_.Id -eq $deviceGroup.Id }
-
-                  if ($alreadyAdded) {
-                      Write-Host "[SUCCESS] Device group already configured as trusted" -ForegroundColor Green
-                  } else {
-                      Write-Host "[PROGRESS] Adding device group to trusted list..." -ForegroundColor Yellow
-
-                      # Add the device group
-                      New-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
-                          -ServicePrincipalId $servicePrincipal.Id `
-                          -BodyParameter @{ id = $deviceGroup.Id } `
-                          -ErrorAction Stop
-
-                      Write-Host "[SUCCESS] Device group added to trusted list" -ForegroundColor Green
-                      Write-Host "[SUCCESS] Users connecting from devices in this group will not see consent prompts" -ForegroundColor Green
-                  }
-              } else {
-                  Write-Host "[WARNING] Device group not found: $deviceGroupName" -ForegroundColor Yellow
-                  Write-Host "[WARNING] Users may see consent prompts when connecting" -ForegroundColor Yellow
-              }
-          }
-
-          # Step 5: Verify Configuration
-          Write-Host "[PROGRESS] Step 5/5: Verifying configuration..." -ForegroundColor Yellow
-
-          $finalConfig = Get-MgServicePrincipal -ServicePrincipalId $servicePrincipal.Id `
-              -Property "Id,DisplayName,RemoteDesktopSecurityConfiguration"
-
-          Write-Host "[VALIDATE] Configuration Summary:" -ForegroundColor Cyan
-          Write-Host "  Service Principal: $($finalConfig.DisplayName)" -ForegroundColor White
-          Write-Host "  RDP Enabled: $($finalConfig.RemoteDesktopSecurityConfiguration.IsRemoteDesktopProtocolEnabled)" -ForegroundColor White
-
-          $trustedGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+            # Get current target device groups
+            $currentGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
               -ServicePrincipalId $servicePrincipal.Id `
               -ErrorAction SilentlyContinue
 
-          if ($trustedGroups) {
-              Write-Host "  Trusted Device Groups: $($trustedGroups.Count)" -ForegroundColor White
-              foreach ($group in $trustedGroups) {
-                  $groupDetails = Get-MgGroup -GroupId $group.Id -ErrorAction SilentlyContinue
-                  if ($groupDetails) {
-                      Write-Host "    - $($groupDetails.DisplayName)" -ForegroundColor Gray
-                  }
-              }
+            # Check if group already added
+            $alreadyAdded = $currentGroups | Where-Object { $_.Id -eq $deviceGroup.Id }
+
+            if ($alreadyAdded) {
+              Write-Host "[SUCCESS] Device group already configured as trusted"
+            } else {
+              Write-Host "[PROGRESS] Adding device group to trusted list..."
+
+              # Add the device group
+              New-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+                -ServicePrincipalId $servicePrincipal.Id `
+                -BodyParameter @{ id = $deviceGroup.Id } `
+                -ErrorAction Stop
+
+              Write-Host "[SUCCESS] Device group added to trusted list"
+              Write-Host "[SUCCESS] Users connecting from devices in this group will not see consent prompts"
+            }
           } else {
-              Write-Host "  Trusted Device Groups: None configured" -ForegroundColor White
+            Write-Host "[WARNING] Device group not found: $deviceGroupName"
+            Write-Host "[WARNING] Users may see consent prompts when connecting"
           }
+        }
 
-          Write-Host "[SUCCESS] Service principal configuration completed successfully" -ForegroundColor Green
+        # Step 5: Verify Configuration
+        Write-Host "[PROGRESS] Step 5/5: Verifying configuration..."
 
-          # Disconnect
-          Disconnect-MgGraph | Out-Null
+        $finalConfig = Get-MgServicePrincipal -ServicePrincipalId $servicePrincipal.Id `
+          -Property "Id,DisplayName,RemoteDesktopSecurityConfiguration"
 
-          exit 0
+        Write-Host "[VALIDATE] Configuration Summary:"
+        Write-Host "  Service Principal: $($finalConfig.DisplayName)"
+        Write-Host "  RDP Enabled: $($finalConfig.RemoteDesktopSecurityConfiguration.IsRemoteDesktopProtocolEnabled)"
+
+        $trustedGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+          -ServicePrincipalId $servicePrincipal.Id `
+          -ErrorAction SilentlyContinue
+
+        if ($trustedGroups) {
+          Write-Host "  Trusted Device Groups: $($trustedGroups.Count)"
+          foreach ($group in $trustedGroups) {
+            $groupDetails = Get-MgGroup -GroupId $group.Id -ErrorAction SilentlyContinue
+            if ($groupDetails) {
+              Write-Host "    - $($groupDetails.DisplayName)"
+            }
+          }
+        } else {
+          Write-Host "  Trusted Device Groups: None configured"
+        }
+
+        Write-Host "[SUCCESS] Service principal configuration completed successfully"
+
+        # Disconnect
+        Disconnect-MgGraph | Out-Null
+
+        # Save details
+        $reportContent = @"
+Windows Cloud Login Service Principal Configuration
+===================================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+
+Configuration Completed:
+  - RDP protocol enabled on Windows Cloud Login SP
+  - Trusted device group configured (if available)
+
+Service Principal:
+  App ID: 270efc09-cd0d-444b-a71f-39af4910ec45
+  Name: Windows Cloud Login
+
+What This Enables:
+  - Passwordless SSO for AVD connections
+  - No consent prompts for trusted device groups
+  - Seamless authentication experience
+
+Next Steps:
+  1. Configure Conditional Access policies
+  2. Test SSO with end users
+  3. Monitor authentication logs
+
+"@
+        $reportContent | Out-File -FilePath "artifacts/outputs/sso-configure-service-principal.txt" -Encoding UTF8
+
+        Write-Host "[SUCCESS] Windows Cloud Login service principal configured"
+        exit 0
 
       } catch {
-          Write-Host "[ERROR] Failed to configure service principal: $($_.Exception.Message)" -ForegroundColor Red
-          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to configure service principal: $($_.Exception.Message)"
+        Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
 
-          # Try to disconnect on error
-          try { Disconnect-MgGraph | Out-Null } catch { }
+        # Try to disconnect on error
+        try { Disconnect-MgGraph | Out-Null } catch { }
 
-          exit 1
-      }
-      PWSH_EOF
-
-      # Export device group name for PowerShell
-      export DEVICE_GROUP_NAME="$DEVICE_GROUP_NAME"
-
-      # Execute PowerShell script
-      if pwsh -NoProfile -NonInteractive -File /tmp/configure-sso-sp.ps1; then
-        echo "[SUCCESS] Service principal configuration completed"
-      else
-        echo "[ERROR] Service principal configuration failed"
-        echo "[ERROR] Check PowerShell output above for details"
         exit 1
-      fi
-
-      # Save details
-      {
-        echo "Windows Cloud Login Service Principal Configuration"
-        echo "==================================================="
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Configuration Completed:"
-        echo "  - RDP protocol enabled on Windows Cloud Login SP"
-        echo "  - Trusted device group configured (if available)"
-        echo ""
-        echo "Service Principal:"
-        echo "  App ID: 270efc09-cd0d-444b-a71f-39af4910ec45"
-        echo "  Name: Windows Cloud Login"
-        echo ""
-        echo "What This Enables:"
-        echo "  - Passwordless SSO for AVD connections"
-        echo "  - No consent prompts for trusted device groups"
-        echo "  - Seamless authentication experience"
-        echo ""
-        echo "Next Steps:"
-        echo "  1. Configure Conditional Access policies"
-        echo "  2. Test SSO with end users"
-        echo "  3. Monitor authentication logs"
-        echo ""
-      } > "artifacts/outputs/sso-configure-service-principal.txt"
-
-      # Cleanup
-      rm -f /tmp/configure-sso-sp.ps1
-
-      echo "[SUCCESS] Windows Cloud Login service principal configured"
-      exit 0
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/sso-03-wrapper.ps1
+      rm -f /tmp/sso-03-wrapper.ps1
 
   # Self-healing
   fixes:
