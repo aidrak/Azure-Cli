@@ -32,7 +32,7 @@
 #
 # ==============================================================================
 
-set -euo pipefail
+set -uo pipefail
 
 # ==============================================================================
 # CONFIGURATION
@@ -51,7 +51,7 @@ mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_LOGS_DIR"
 # SOURCE DEPENDENCIES
 # ==============================================================================
 
-# Source logger for structured logging
+# Source logger for structured logging (required before other modules)
 if [[ -f "${PROJECT_ROOT}/core/logger.sh" ]]; then
     source "${PROJECT_ROOT}/core/logger.sh"
 else
@@ -60,26 +60,11 @@ else
 fi
 
 # Source executor for operation execution
+# (executor.sh sources state-manager, query, and config-manager internally)
 if [[ -f "${PROJECT_ROOT}/core/executor.sh" ]]; then
     source "${PROJECT_ROOT}/core/executor.sh"
 else
     echo "[x] ERROR: executor.sh not found" >&2
-    exit 1
-fi
-
-# Source config manager for variable substitution
-if [[ -f "${PROJECT_ROOT}/core/config-manager.sh" ]]; then
-    source "${PROJECT_ROOT}/core/config-manager.sh"
-else
-    echo "[x] ERROR: config-manager.sh not found" >&2
-    exit 1
-fi
-
-# Source state manager for tracking
-if [[ -f "${PROJECT_ROOT}/core/state-manager.sh" ]]; then
-    source "${PROJECT_ROOT}/core/state-manager.sh"
-else
-    echo "[x] ERROR: state-manager.sh not found" >&2
     exit 1
 fi
 
@@ -249,8 +234,8 @@ validate_workflow() {
     # Validate each step
     local i=0
     while [[ $i -lt $step_count ]]; do
-        local step_name=$(yq e ".workflow.steps[$i].name" "$workflow_file" 2>/dev/null)
-        local step_operation=$(yq e ".workflow.steps[$i].operation" "$workflow_file" 2>/dev/null)
+        local step_name=$(yq e ".workflow.steps[$i].name" "$workflow_file" 2>/dev/null) || true
+        local step_operation=$(yq e ".workflow.steps[$i].operation" "$workflow_file" 2>/dev/null) || true
 
         if [[ -z "$step_name" ]] || [[ "$step_name" == "null" ]]; then
             log_error "Step $((i+1)) missing required field: name"
@@ -428,6 +413,7 @@ list_workflow_executions() {
         fi
     done
     echo ""
+    return 0
 }
 
 # ==============================================================================
@@ -479,6 +465,7 @@ preview_workflow() {
 
     echo "=========================================================================="
     echo ""
+    return 0
 }
 
 # ==============================================================================
@@ -520,6 +507,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 exit 1
             fi
             execute_workflow "$workflow_file" "$force_mode"
+            exit $?
             ;;
         validate)
             workflow_file="${1:-}"
@@ -528,6 +516,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 exit 1
             fi
             validate_workflow "$workflow_file"
+            exit $?
             ;;
         preview)
             workflow_file="${1:-}"
@@ -536,6 +525,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 exit 1
             fi
             preview_workflow "$workflow_file"
+            exit $?
             ;;
         status)
             workflow_exec_id="${1:-}"
@@ -544,9 +534,11 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 exit 1
             fi
             get_workflow_status "$workflow_exec_id"
+            exit $?
             ;;
         list)
             list_workflow_executions
+            exit $?
             ;;
         *)
             log_error "Unknown command: $command"

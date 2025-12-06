@@ -870,3 +870,98 @@
 {"timestamp":"2025-12-06T17:57:22.694Z","level":"INFO","message":"=====================================================================","operation_id":"discovery","metadata":{}}
 {"timestamp":"2025-12-06T18:08:22.000Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T18:18:25.845Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:02.238Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:02.263Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:02.269Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.246Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.267Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.274Z","level":"INFO","message":"Validating workflow: /mnt/cache_pool/development/azure-cli/workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.893Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.914Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:10.932Z","level":"INFO","message":"Capability Executor loaded","operation_id":"capability-executor","metadata":{}}
+{"timestamp":"2025-12-06T18:21:27.565Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:27.585Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:27.590Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:38.829Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:38.849Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:38.855Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.594Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.599Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.614Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.620Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.626Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.629Z","level":"INFO","message":"Capability Executor loaded","operation_id":"capability-executor","metadata":{}}
+{"timestamp":"2025-12-06T18:21:48.684Z","level":"SUCCESS","message":"Workflow validation passed: simple-deployment (4 steps)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:54.114Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:54.133Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:21:54.149Z","level":"INFO","message":"Capability Executor loaded","operation_id":"capability-executor","metadata":{}}
+{"timestamp":"2025-12-06T18:21:54.154Z","level":"INFO","message":"Listing operations for capability: test-capability","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:21:54.185Z","level":"INFO","message":"Found 2 operations in capability: test-capability","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:22:00.667Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:00.689Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:00.707Z","level":"INFO","message":"Capability Executor loaded","operation_id":"capability-executor","metadata":{}}
+{"timestamp":"2025-12-06T18:22:00.713Z","level":"INFO","message":"Validating capability operation: test-capability/test-operation","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:22:00.773Z","level":"SUCCESS","message":"Operation validated: test-capability/test-operation","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:22:24.200Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:24.219Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:24.225Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:22:33.253Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:44.236Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:44.257Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:44.263Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:22:56.058Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:56.079Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:22:56.085Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:23:06.042Z","level":"SUCCESS","message":"Test message","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:23:35.553Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:23:35.570Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:23:46.944Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:23:46.959Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:24:00.259Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:00.284Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:00.300Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:24:14.464Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:14.491Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:14.508Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:24:26.280Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:26.308Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:26.326Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:24:37.377Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:37.404Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:24:37.423Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:25:49.076Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:25:49.093Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:25:49.161Z","level":"SUCCESS","message":"Workflow validation passed: simple-deployment (4 steps)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:26:05.039Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:26:19.119Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:26:19.136Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:26:39.776Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:26:39.792Z","level":"INFO","message":"Validating workflow: workflows/example-simple-deployment.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:27:21.755Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:27:21.773Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:27:38.785Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:27:38.801Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:28:08.394Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:28:08.410Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:28:49.917Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:28:49.931Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:28:49.962Z","level":"SUCCESS","message":"Workflow validation passed: test-workflow (1 steps)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:29:36.529Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:29:36.547Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:29:36.581Z","level":"SUCCESS","message":"Workflow validation passed: test-workflow (1 steps)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:30:19.365Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:30:19.381Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:30:39.914Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:30:39.938Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:30:39.953Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:30:54.669Z","level":"SUCCESS","message":"Test message","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:31:25.172Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:31:25.186Z","level":"INFO","message":"Validating workflow: workflows/test-simple.yaml","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:20.432Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:32:20.445Z","level":"INFO","message":"Starting validation","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:20.451Z","level":"INFO","message":"Before loop","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:20.456Z","level":"INFO","message":"In loop: i=0","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:34.203Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:32:34.221Z","level":"INFO","message":"Starting","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:34.227Z","level":"INFO","message":"Before loop","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:32:34.232Z","level":"INFO","message":"In loop","operation_id":"","metadata":{}}
