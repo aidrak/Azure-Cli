@@ -2,8 +2,8 @@
 # Operation: Deploy Session Host VMs from Golden Image
 # ==============================================================================
 operation:
-  id: "session-host-deploy-vms"
-  name: "Deploy Session Host VMs"
+  id: "session-host-01-deploy-vms"
+  name: "01: Deploy Session Host VMs"
   description: "Deploy multiple session host VMs from the golden image in the Azure Compute Gallery"
 
   # Duration expectations

@@ -16,18 +16,24 @@ module:
     host_pool_name: "{{HOST_POOL_NAME}}"
 
   # Operations in this module (executed in order)
+  # Note: operations are ordered by their declaration order, with parallel_group defining execution mode
   operations:
-    - id: "session-host-deploy-vms"
-      name: "Deploy Session Host VMs"
+    - id: "session-host-01-deploy-vms"
+      name: "01: Deploy Session Host VMs"
       description: "Deploy multiple session host VMs from golden image"
       duration: 900  # 15 minutes (parallel deployment)
       type: "WAIT"
+      parallel_group: 1
 
-    - id: "session-host-register-pool"
-      name: "Register to Host Pool"
+    - id: "session-host-02-register-pool"
+      name: "02: Register to Host Pool"
       description: "Generate registration token and register session hosts to host pool"
       duration: 600  # 10 minutes
       type: "WAIT"
+      parallel_group: 2
+      requires:
+        - operation: "session-host-01-deploy-vms"
+          status: "completed"
 
   # Module-level validation (run after all operations complete)
   validation:
