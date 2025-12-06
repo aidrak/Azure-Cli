@@ -24,82 +24,81 @@ operation:
         description: "NSGs attached to subnets"
 
   # Template command
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      # ==============================================================================
-      # Attach NSGs to Subnets
-      # ==============================================================================
-
-      set -euo pipefail
-
-      echo "[START] NSG attachment: $(date '+%Y-%m-%d %H:%M:%S')"
+      cat > /tmp/networking-05-attach-nsgs-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] NSG attachment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
       # Get subnet count
-      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
-      ATTACHED_COUNT=0
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $attachedCount = 0
 
-      echo "[PROGRESS] Attaching NSGs to $SUBNET_COUNT subnet(s)..."
+      Write-Host "[PROGRESS] Attaching NSGs to $subnetCount subnet(s)..."
 
       # Iterate through subnets
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+      for ($i = 0; $i -lt $subnetCount; $i++) {
         # Check if NSG enabled
-        NSG_ENABLED=$(yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+        $nsgEnabled = (yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
 
-        if [[ "$NSG_ENABLED" != "true" ]]; then
+        if ($nsgEnabled -ne "true") {
           continue
-        fi
+        }
 
         # Get subnet and NSG names
-        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
-        NSG_NAME=$(yq e ".networking.subnets[$i].nsg.name" config.yaml)
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+        $nsgName = (yq e ".networking.subnets[$i].nsg.name" config.yaml)
 
         # Auto-generate NSG name if empty
-        if [[ -z "$NSG_NAME" || "$NSG_NAME" == "null" || "$NSG_NAME" == "" ]]; then
-          NSG_NAME="nsg-${SUBNET_NAME}"
-        fi
+        if ([string]::IsNullOrEmpty($nsgName) -or $nsgName -eq "null") {
+          $nsgName = "nsg-$subnetName"
+        }
 
-        echo "[PROGRESS] Attaching NSG to subnet: $SUBNET_NAME"
-        echo "[PROGRESS]   NSG: $NSG_NAME"
+        Write-Host "[PROGRESS] Attaching NSG to subnet: $subnetName"
+        Write-Host "[PROGRESS]   NSG: $nsgName"
 
         # Check if NSG is already attached
-        CURRENT_NSG=$(az network vnet subnet show \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$SUBNET_NAME" \
-          --query "networkSecurityGroup.id" -o tsv 2>/dev/null || echo "")
+        $currentNsg = az network vnet subnet show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --query "networkSecurityGroup.id" -o tsv 2>$null
 
-        if [[ -n "$CURRENT_NSG" ]]; then
-          echo "[INFO] NSG already attached to subnet: $SUBNET_NAME"
-          ((ATTACHED_COUNT++)) || true
+        if (-not [string]::IsNullOrEmpty($currentNsg)) {
+          Write-Host "[INFO] NSG already attached to subnet: $subnetName"
+          $attachedCount++
           continue
-        fi
+        }
 
         # Attach NSG to subnet
-        if ! az network vnet subnet update \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$SUBNET_NAME" \
-          --network-security-group "$NSG_NAME" \
-          --output none; then
+        az network vnet subnet update `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --network-security-group $nsgName `
+          --output none
 
-          echo "[ERROR] Failed to attach NSG to subnet: $SUBNET_NAME"
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to attach NSG to subnet: $subnetName"
           exit 1
-        fi
+        }
 
-        echo "[SUCCESS] NSG attached: $NSG_NAME -> $SUBNET_NAME"
-        ((ATTACHED_COUNT++)) || true
-      done
+        Write-Host "[SUCCESS] NSG attached: $nsgName -> $subnetName"
+        $attachedCount++
+      }
 
-      echo "[SUCCESS] All NSGs attached successfully"
-      echo "[SUCCESS]   Total attachments: $ATTACHED_COUNT"
+      Write-Host "[SUCCESS] All NSGs attached successfully"
+      Write-Host "[SUCCESS]   Total attachments: $attachedCount"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-05-attach-nsgs-wrapper.ps1
+      rm -f /tmp/networking-05-attach-nsgs-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:

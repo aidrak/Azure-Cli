@@ -25,97 +25,103 @@ operation:
         description: "At least one subnet created"
 
   # Template command
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      # ==============================================================================
-      # Create Subnets (Array Iteration Pattern)
-      # ==============================================================================
-
-      set -euo pipefail
-
-      echo "[START] Subnet creation: $(date '+%Y-%m-%d %H:%M:%S')"
+      cat > /tmp/networking-02-create-subnets-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
       # Get subnet count from config array
-      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
 
-      echo "[PROGRESS] Processing $SUBNET_COUNT subnet(s) from config..."
+      Write-Host "[PROGRESS] Processing $subnetCount subnet(s) from config..."
 
       # Iterate through subnet array
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+      for ($i = 0; $i -lt $subnetCount; $i++) {
         # Extract subnet properties
-        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
-        SUBNET_PREFIX=$(yq e ".networking.subnets[$i].address_prefix" config.yaml)
-        DELEGATION=$(yq e ".networking.subnets[$i].delegation" config.yaml)
-        PE_POLICIES=$(yq e ".networking.subnets[$i].private_endpoint_network_policies" config.yaml)
-        PL_POLICIES=$(yq e ".networking.subnets[$i].private_link_service_network_policies" config.yaml)
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+        $subnetPrefix = (yq e ".networking.subnets[$i].address_prefix" config.yaml)
+        $delegation = (yq e ".networking.subnets[$i].delegation" config.yaml)
+        $pePolicies = (yq e ".networking.subnets[$i].private_endpoint_network_policies" config.yaml)
+        $plPolicies = (yq e ".networking.subnets[$i].private_link_service_network_policies" config.yaml)
 
-        echo "[PROGRESS] [$((i+1))/$SUBNET_COUNT] Processing subnet: $SUBNET_NAME"
+        $displayIndex = $i + 1
+        Write-Host "[PROGRESS] [$displayIndex/$subnetCount] Processing subnet: $subnetName"
 
         # Check if subnet already exists (idempotent)
-        if az network vnet subnet show \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$SUBNET_NAME" &>/dev/null; then
+        az network vnet subnet show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --output none 2>$null
 
-          echo "[INFO] Subnet already exists: $SUBNET_NAME"
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] Subnet already exists: $subnetName"
           continue
-        fi
+        }
 
         # Create subnet
-        echo "[PROGRESS] Creating subnet: $SUBNET_NAME ($SUBNET_PREFIX)"
+        Write-Host "[PROGRESS] Creating subnet: $subnetName ($subnetPrefix)"
 
-        # Build command based on configuration
-        CMD="az network vnet subnet create \
-          --resource-group \"$RESOURCE_GROUP\" \
-          --vnet-name \"$VNET_NAME\" \
-          --name \"$SUBNET_NAME\" \
-          --address-prefix \"$SUBNET_PREFIX\""
+        # Build command arguments
+        $cmdArgs = @(
+          "network", "vnet", "subnet", "create",
+          "--resource-group", $resourceGroup,
+          "--vnet-name", $vnetName,
+          "--name", $subnetName,
+          "--address-prefix", $subnetPrefix
+        )
 
         # Add delegation if configured
-        if [[ -n "$DELEGATION" && "$DELEGATION" != "null" && "$DELEGATION" != "" ]]; then
-          CMD="$CMD --delegations \"$DELEGATION\""
-          echo "[PROGRESS]   Delegation: $DELEGATION"
-        fi
+        if ($delegation -and $delegation -ne "null" -and $delegation -ne "") {
+          $cmdArgs += @("--delegations", $delegation)
+          Write-Host "[PROGRESS]   Delegation: $delegation"
+        }
 
         # Add private endpoint policies
-        if [[ -n "$PE_POLICIES" && "$PE_POLICIES" != "null" ]]; then
-          CMD="$CMD --private-endpoint-network-policies \"$PE_POLICIES\""
-        fi
+        if ($pePolicies -and $pePolicies -ne "null") {
+          $cmdArgs += @("--private-endpoint-network-policies", $pePolicies)
+        }
 
         # Add private link service policies
-        if [[ -n "$PL_POLICIES" && "$PL_POLICIES" != "null" ]]; then
-          CMD="$CMD --private-link-service-network-policies \"$PL_POLICIES\""
-        fi
+        if ($plPolicies -and $plPolicies -ne "null") {
+          $cmdArgs += @("--private-link-service-network-policies", $plPolicies)
+        }
 
-        CMD="$CMD --output json > artifacts/outputs/networking-create-subnet-${SUBNET_NAME}.json"
+        $cmdArgs += @("--output", "json")
 
         # Execute command
-        if ! eval "$CMD"; then
-          echo "[ERROR] Failed to create subnet: $SUBNET_NAME"
-          exit 1
-        fi
+        $outputFile = "artifacts/outputs/networking-create-subnet-$subnetName.json"
+        & az @cmdArgs > $outputFile
 
-        echo "[SUCCESS] Subnet created: $SUBNET_NAME"
-      done
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create subnet: $subnetName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Subnet created: $subnetName"
+      }
 
       # Validate all subnets created
-      echo "[VALIDATE] Verifying all subnets..."
-      CREATED_COUNT=$(az network vnet subnet list \
-        --resource-group "$RESOURCE_GROUP" \
-        --vnet-name "$VNET_NAME" \
-        --query "length(@)" -o tsv)
+      Write-Host "[VALIDATE] Verifying all subnets..."
+      $createdCount = az network vnet subnet list `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --query "length(@)" -o tsv
 
-      echo "[SUCCESS] All subnets created successfully"
-      echo "[SUCCESS]   Expected: $SUBNET_COUNT"
-      echo "[SUCCESS]   Created: $CREATED_COUNT"
+      Write-Host "[SUCCESS] All subnets created successfully"
+      Write-Host "[SUCCESS]   Expected: $subnetCount"
+      Write-Host "[SUCCESS]   Created: $createdCount"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-02-create-subnets-wrapper.ps1
+      rm -f /tmp/networking-02-create-subnets-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
