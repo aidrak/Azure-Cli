@@ -568,7 +568,7 @@ See [docs/migration/](docs/migration/) for migration history and operation catal
 - **Quick Start**: [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
 - **README**: [README.md](README.md) - Project overview
 - **Main Hub & User Guide**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
-- **Remote Execution**: [docs/features/remote-execution.md](docs/features/remote-execution.md)
+- **Remote Execution**: [docs/features/remote-execution-part1.md](docs/features/remote-execution-part1.md)
 - **Configuration**: [config.yaml](config.yaml)
 - **Legacy Reference**: [legacy/README.md](legacy/README.md)
 

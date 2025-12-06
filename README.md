@@ -101,7 +101,7 @@ See [docs/migration/](docs/migration/) for migration history.
 | [QUICKSTART.md](QUICKSTART.md) | 5-minute getting started guide |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Complete system architecture |
 | [.claude/CLAUDE.md](.claude/CLAUDE.md) | AI operational guide and development hub |
-| [docs/features/remote-execution.md](docs/features/remote-execution.md) | Remote execution patterns |
+| [docs/features/remote-execution-part1.md](docs/features/remote-execution-part1.md) | Remote execution patterns |
 | [config.yaml](config.yaml) | Configuration reference |
 | [docs/](docs/) | Comprehensive documentation |
 

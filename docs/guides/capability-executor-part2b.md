@@ -140,8 +140,8 @@ done
 
 ## See Also
 
-- [Executor Guide](executor-guide.md) - Operation execution engine
-- [State Manager Guide](state-manager-guide.md) - State tracking
+- [Executor Guide](executor-overview.md) - Operation execution engine
+- [State Manager Guide](state-manager-overview.md) - State tracking
 - [Query Engine](query-engine.md) - Resource queries
 - [Configuration](../config.yaml) - System configuration
 

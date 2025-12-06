@@ -7,10 +7,10 @@ Complete reference for the Azure VDI capability-based operation system.
 ### Core Concepts
 1. [Architecture Overview](01-architecture-overview.md) - System design and organization
 2. [Capability Domains](02-capability-domains.md) - All 7 capability areas (85 operations)
-3. [Operation Schema](03-operation-schema.md) - Complete YAML schema reference
+3. [Operation Schema](03-03a1-operation-schema-core-part1.md) - Complete YAML schema reference
 
 ### Operation Design
-4. [Operation Lifecycle](04-operation-lifecycle.md) - Execution flow (8 steps)
+4. [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - Execution flow (8 steps)
 5. [Parameter System](05-parameter-system.md) - Required/optional parameters, types, defaults
 6. [Idempotency](06-idempotency.md) - Preventing duplicate executions
 7. [Validation Framework](07-validation-framework.md) - Post-execution verification
@@ -29,7 +29,7 @@ Complete reference for the Azure VDI capability-based operation system.
 ## Quick Links
 
 - **Getting Started:** Start with [Architecture Overview](01-architecture-overview.md)
-- **Creating Operations:** See [Operation Schema](03-operation-schema.md) and [Best Practices](12-best-practices.md)
+- **Creating Operations:** See [Operation Schema](03-03a1-operation-schema-core-part1.md) and [Best Practices](12-best-practices.md)
 - **Migrating Operations:** See [Migration Guide](11-migration-guide.md)
 - **Examples:** See [Operation Examples](10-operation-examples.md)
 

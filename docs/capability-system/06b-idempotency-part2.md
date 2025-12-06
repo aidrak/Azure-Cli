@@ -196,8 +196,8 @@ idempotency:
 
 ## Related Documentation
 
-- [Operation Lifecycle](04-operation-lifecycle.md) - Where idempotency fits in execution
-- [Operation Schema](03-operation-schema.md) - Idempotency schema details
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - Where idempotency fits in execution
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Idempotency schema details
 - [Best Practices](12-best-practices.md) - Idempotency design guidelines
 
 ---

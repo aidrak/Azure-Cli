@@ -256,7 +256,7 @@ azure:
 
 ## Related Documentation
 
-- [Operation Schema](03-operation-schema.md) - Template types
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Template types
 - [Validation Framework](07-validation-framework.md) - Custom validation
 - [Operation Examples](10-operation-examples.md) - Real examples
 - [Best Practices](12-best-practices.md) - Design guidelines

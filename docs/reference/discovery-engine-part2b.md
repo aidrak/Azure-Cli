@@ -158,6 +158,6 @@ cat artifacts/logs/deployment_*.jsonl | jq 'select(.operation_id | contains("dis
 ## See Also
 
 - [State Manager Documentation](./state-management.md)
-- [Query Engine Documentation](./query-engine.md)
+- [Query Engine Documentation](./query-engine-part1a.md)
 - [Dependency Resolver Documentation](./dependency-resolver.md)
 - [Architecture Documentation](../ARCHITECTURE.md)

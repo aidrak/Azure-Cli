@@ -35,8 +35,8 @@
 | README.md | 46 | Navigation hub and index |
 | 01-architecture-overview.md | 208 | System design and organization |
 | 02-capability-domains.md | 445 | All 7 capability areas (85 operations) |
-| 03-operation-schema.md | 743 | Complete YAML schema reference |
-| 04-operation-lifecycle.md | 704 | Execution flow (8 phases) |
+| 03-03a1-operation-schema-core-part1.md | 743 | Complete YAML schema reference |
+| 04-04a1-operation-lifecycle-phases1-2.md | 704 | Execution flow (8 phases) |
 | 05-parameter-system.md | 527 | Parameters, types, placeholders |
 | 06-idempotency.md | 415 | Preventing duplicate executions |
 | 07-validation-framework.md | 457 | Post-execution verification |
@@ -56,7 +56,7 @@ New:      7,325 lines (15 files)
 
 Line increase: 263% (due to added navigation, cross-references, and structure)
 Average per file: 488 lines (manageable size)
-Largest file: 743 lines (operation-schema.md)
+Largest file: 743 lines (03a1-operation-schema-core-part1.md)
 Smallest file: 46 lines (README.md)
 ```
 
@@ -117,7 +117,7 @@ Every file includes:
 **User wants to create a new operation:**
 
 1. Start: `README.md` → "Creating Operations"
-2. Read: `03-operation-schema.md` (schema reference)
+2. Read: `03-03a1-operation-schema-core-part1.md` (schema reference)
 3. Review: `10-operation-examples.md` (real examples)
 4. Apply: `12-best-practices.md` (design guidelines)
 5. Reference: `06-idempotency.md`, `07-validation-framework.md` (specific topics)

@@ -155,7 +155,7 @@ operation:
 ## Related Documentation
 
 - [Capability Domains](02-capability-domains.md) - All capability details
-- [Operation Schema](03-operation-schema.md) - Schema reference
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Schema reference
 - [Best Practices](12-best-practices.md) - Design guidelines
 - [Migration Guide](11-migration-guide.md) - Converting to capability format
 

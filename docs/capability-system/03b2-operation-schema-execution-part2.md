@@ -174,7 +174,7 @@ fixes:
 ## Related Documentation
 
 - [Architecture Overview](01-architecture-overview.md) - System design principles
-- [Operation Lifecycle](04-operation-lifecycle.md) - How operations execute
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - How operations execute
 - [Best Practices](12-best-practices.md) - Schema design guidelines
 
 ---

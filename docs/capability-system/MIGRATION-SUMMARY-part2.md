@@ -74,7 +74,7 @@
 ### For Creating Operations
 
 **Read these:**
-1. `03-operation-schema.md` - Schema reference
+1. `03-03a1-operation-schema-core-part1.md` - Schema reference
 2. `12-best-practices.md` - Design guidelines
 3. `10-operation-examples.md` - Examples to follow
 
@@ -82,7 +82,7 @@
 
 **Follow this path:**
 1. `11-migration-guide.md` - Step-by-step process
-2. `03-operation-schema.md` - Schema details
+2. `03-03a1-operation-schema-core-part1.md` - Schema details
 3. `12-best-practices.md` - Standards to follow
 
 ### For Advanced Scenarios
@@ -122,7 +122,7 @@ Median:  510 lines per file
 - **Total cross-references:** 60+ across all files
 - **Average per file:** 4 references
 - **Most referenced:** Operation Schema (03), Best Practices (12)
-- **Hub files:** README.md, 03-operation-schema.md
+- **Hub files:** README.md, 03-03a1-operation-schema-core-part1.md
 
 ---
 

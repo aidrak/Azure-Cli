@@ -156,7 +156,7 @@ fixes:
 
 ## Related Documentation
 
-- [Operation Schema](03-operation-schema.md) - YAML schema details
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - YAML schema details
 - [Idempotency](06-idempotency.md) - Detailed idempotency patterns
 - [Validation Framework](07-validation-framework.md) - Validation check details
 - [Rollback Procedures](08-rollback-procedures.md) - Rollback design

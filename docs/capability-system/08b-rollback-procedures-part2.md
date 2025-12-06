@@ -241,8 +241,8 @@ command: |
 
 ## Related Documentation
 
-- [Operation Lifecycle](04-operation-lifecycle.md) - When rollback triggers
-- [Operation Schema](03-operation-schema.md) - Rollback schema details
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - When rollback triggers
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Rollback schema details
 - [Best Practices](12-best-practices.md) - Rollback design guidelines
 
 ---

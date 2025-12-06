@@ -216,7 +216,7 @@ retry_count: 3
 
 ## Related Documentation
 
-- [Operation Lifecycle](04-operation-lifecycle.md) - Where self-healing fits in execution
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - Where self-healing fits in execution
 - [Validation Framework](07-validation-framework.md) - What triggers self-healing
 - [Rollback Procedures](08-rollback-procedures.md) - Alternative to self-healing
 

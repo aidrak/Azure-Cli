@@ -212,7 +212,7 @@ Used for:
 ## Related Documentation
 
 - [Architecture Overview](01-architecture-overview.md) - System design principles
-- [Operation Schema](03-operation-schema.md) - YAML schema for operations
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - YAML schema for operations
 - [Operation Examples](10-operation-examples.md) - Real operation examples
 
 ---

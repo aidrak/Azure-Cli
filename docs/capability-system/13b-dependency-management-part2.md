@@ -261,8 +261,8 @@ prerequisites:
 
 ## Related Documentation
 
-- [Operation Lifecycle](04-operation-lifecycle.md) - Execution flow
-- [Operation Schema](03-operation-schema.md) - prerequisites schema
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - Execution flow
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - prerequisites schema
 - [Best Practices](12-best-practices.md) - Design guidelines
 
 ---

@@ -233,7 +233,7 @@ find capabilities/ -name "*.yaml" -path "*/operations/*" | \
 ### Deep Dives
 - **Creating Operations:** [docs/guides/creating-operations.md](docs/capability-system/12-best-practices.md)
 - **State Management:** [docs/reference/state-management.md](docs/state-manager-guide.md)
-- **Remote Execution:** [docs/features/remote-execution.md](docs/features/remote-execution.md)
+- **Remote Execution:** [docs/features/remote-execution-part1.md](docs/features/remote-execution-part1.md)
 
 ### Advanced Features
 - **Self-Healing:** Automatic error recovery and retry

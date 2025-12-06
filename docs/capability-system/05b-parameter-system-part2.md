@@ -253,7 +253,7 @@ avd:
 
 ## Related Documentation
 
-- [Operation Schema](03-operation-schema.md) - Complete schema reference
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Complete schema reference
 - [Best Practices](12-best-practices.md) - Parameter design guidelines
 - [Operation Examples](10-operation-examples.md) - Real parameter usage
 

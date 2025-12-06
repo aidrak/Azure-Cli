@@ -217,8 +217,8 @@ validation:
 
 ## Related Documentation
 
-- [Operation Lifecycle](04-operation-lifecycle.md) - Where validation fits in execution
-- [Operation Schema](03-operation-schema.md) - Validation schema details
+- [Operation Lifecycle](04-04a1-operation-lifecycle-phases1-2.md) - Where validation fits in execution
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Validation schema details
 - [Best Practices](12-best-practices.md) - Validation design guidelines
 - [Self-Healing](09-self-healing.md) - What happens when validation fails
 

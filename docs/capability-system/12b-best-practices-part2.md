@@ -244,7 +244,7 @@ validation:
 
 ## Related Documentation
 
-- [Operation Schema](03-operation-schema.md) - Schema details
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Schema details
 - [Migration Guide](11-migration-guide.md) - Converting operations
 - [Operation Examples](10-operation-examples.md) - Real examples
 

@@ -200,7 +200,7 @@ This rich metadata enables:
 ## Related Documentation
 
 - [Capability Domains](02-capability-domains.md) - Detailed breakdown of all 7 capabilities
-- [Operation Schema](03-operation-schema.md) - Complete YAML schema reference
+- [Operation Schema](03-03a1-operation-schema-core-part1.md) - Complete YAML schema reference
 - [Migration Guide](11-migration-guide.md) - How to convert module-based operations
 
 ---

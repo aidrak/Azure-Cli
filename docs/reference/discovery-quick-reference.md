@@ -196,7 +196,7 @@ xdg-open graph.png  # Linux
 
 ## See Also
 
-- [Full Documentation](./discovery-engine.md)
+- [Full Documentation](./discovery-engine-part1a.md)
 - [Architecture](../ARCHITECTURE.md)
 - [State Manager](./state-management.md)
 - [Examples](../examples/discovery-example.sh)
