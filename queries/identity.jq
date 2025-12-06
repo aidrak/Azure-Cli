@@ -9,13 +9,13 @@
 
 map({
     id: .id,
-    objectId: .objectId? // .id,
+    objectId: (.objectId? // .id),
     displayName: .displayName,
     mailNickname: .mailNickname,
     description: .description,
     securityEnabled: .securityEnabled,
     mailEnabled: .mailEnabled,
-    groupTypes: .groupTypes? // [],
+    groupTypes: (.groupTypes? // []),
     onPremisesSyncEnabled: .onPremisesSyncEnabled?,
     membershipRule: .membershipRule?
 })
