@@ -68,14 +68,7 @@ operation:
         Write-Host "[WARNING] Autoscaling is disabled in configuration"
         Write-Host "[WARNING] Skipping verification"
 
-        $reportContent = @"
-Autoscaling Verification Skipped
-=================================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Autoscaling is disabled in configuration.
-
-"@
+        $reportContent = "Autoscaling Verification Skipped" + [Environment]::NewLine + "=================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Autoscaling is disabled in configuration." + [Environment]::NewLine + [Environment]::NewLine
         $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8
         exit 0
       }
@@ -187,123 +180,10 @@ Autoscaling is disabled in configuration.
       }
 
       # Save detailed verification report
-      $reportContent = @"
-Autoscaling Configuration Verification Report
-==============================================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Overall Status: $verificationStatus
-
-Summary:
-  Total Checks: $totalChecks
-  Passed: $passedChecks
-  Failed: $failedChecks
-  Warnings: $warningChecks
-
-Host Pool: $hostPoolName
-Scaling Plan: $scalingPlanName
-Resource Group: $resourceGroup
-
-Automated Checks:
-  1. Host pool exists
-  2. Scaling plan exists
-  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)
-  4. Session hosts registered
-
-Manual Configuration Required:
-==============================
-
-The scaling plan was created but schedules must be configured manually:
-
-1. Configure Scaling Schedules (via Azure Portal)
-   - Navigate to: Azure Virtual Desktop → Scaling plans
-   - Select: $scalingPlanName
-   - Click: 'Schedules' → '+ Add schedule'
-
-   Recommended Weekday Schedule:
-     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)
-     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)
-     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)
-     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)
-
-   Recommended Weekend Schedule:
-     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)
-
-2. Test Autoscaling Behavior
-   - Monitor session host power states
-   - Verify VMs power on/off according to schedule
-   - Check scaling behavior during different load scenarios
-
-3. Monitor and Adjust
-   - Review Azure Activity Log for scaling events
-   - Check host pool Insights tab for metrics
-   - Adjust thresholds based on usage patterns
-
-Expected Behavior:
-==================
-
-Ramp-Up Phase:
-  - VMs power on 10-15 minutes before users arrive
-  - Minimum percentage of hosts powered on
-  - Additional VMs start based on capacity threshold
-
-Peak Hours:
-  - Scale up/down based on session load
-  - Capacity threshold determines when to start new VMs
-  - Load balancing distributes sessions
-
-Ramp-Down Phase:
-  - Depth-first balancing consolidates sessions
-  - Lightly-loaded hosts drain and shut down
-  - Users receive warning before forced logoff
-
-Off-Peak Hours:
-  - Only minimum hosts remain powered on
-  - Significant cost savings (60-75%)
-  - Weekend: Minimum hosts only
-
-Cost Optimization:
-==================
-
-Typical Savings:
-  - Without autoscaling: 100% VM uptime = High cost
-  - With autoscaling: 25-40% average uptime = 60-75% savings
-
-Example (40 VMs × `$1/hour):
-  - Before: 40 VMs × 24h × 30d = `$28,800/month
-  - After: ~8-12 VMs average × 24h × 30d = `$7,000-9,000/month
-  - Savings: ~`$20,000/month (65-75%)
-
-Troubleshooting:
-================
-
-Issue: VMs not powering on/off
-  - Verify RBAC role assigned
-  - Check scaling plan is enabled
-  - Verify schedules are configured
-  - Wait 15-20 minutes for first cycle
-  - Review Azure Activity Log for errors
-
-Issue: Too many/few VMs running
-  - Adjust capacity thresholds
-  - Change minimum host percentages
-  - Review session load patterns
-  - Modify schedule times
-
-Issue: Users complaining about forced logoff
-  - Increase wait time (20→30 minutes)
-  - Adjust ramp-down start time
-  - Customize notification message
-  - Consider excluding certain users
-
-"@
+      $reportContent = "Autoscaling Configuration Verification Report" + [Environment]::NewLine + "==============================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Overall Status: $verificationStatus" + [Environment]::NewLine + [Environment]::NewLine + "Summary:" + [Environment]::NewLine + "  Total Checks: $totalChecks" + [Environment]::NewLine + "  Passed: $passedChecks" + [Environment]::NewLine + "  Failed: $failedChecks" + [Environment]::NewLine + "  Warnings: $warningChecks" + [Environment]::NewLine + [Environment]::NewLine + "Host Pool: $hostPoolName" + [Environment]::NewLine + "Scaling Plan: $scalingPlanName" + [Environment]::NewLine + "Resource Group: $resourceGroup" + [Environment]::NewLine + [Environment]::NewLine + "Automated Checks:" + [Environment]::NewLine + "  1. Host pool exists" + [Environment]::NewLine + "  2. Scaling plan exists" + [Environment]::NewLine + "  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)" + [Environment]::NewLine + "  4. Session hosts registered" + [Environment]::NewLine + [Environment]::NewLine + "Manual Configuration Required:" + [Environment]::NewLine + "==============================" + [Environment]::NewLine + [Environment]::NewLine + "The scaling plan was created but schedules must be configured manually:" + [Environment]::NewLine + [Environment]::NewLine + "1. Configure Scaling Schedules (via Azure Portal)" + [Environment]::NewLine + "   - Navigate to: Azure Virtual Desktop → Scaling plans" + [Environment]::NewLine + "   - Select: $scalingPlanName" + [Environment]::NewLine + "   - Click: 'Schedules' → '+ Add schedule'" + [Environment]::NewLine + [Environment]::NewLine + "   Recommended Weekday Schedule:" + [Environment]::NewLine + "     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)" + [Environment]::NewLine + "     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)" + [Environment]::NewLine + "     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)" + [Environment]::NewLine + "     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)" + [Environment]::NewLine + [Environment]::NewLine + "   Recommended Weekend Schedule:" + [Environment]::NewLine + "     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)" + [Environment]::NewLine + [Environment]::NewLine + "2. Test Autoscaling Behavior" + [Environment]::NewLine + "   - Monitor session host power states" + [Environment]::NewLine + "   - Verify VMs power on/off according to schedule" + [Environment]::NewLine + "   - Check scaling behavior during different load scenarios" + [Environment]::NewLine + [Environment]::NewLine + "3. Monitor and Adjust" + [Environment]::NewLine + "   - Review Azure Activity Log for scaling events" + [Environment]::NewLine + "   - Check host pool Insights tab for metrics" + [Environment]::NewLine + "   - Adjust thresholds based on usage patterns" + [Environment]::NewLine + [Environment]::NewLine + "Expected Behavior:" + [Environment]::NewLine + "==================" + [Environment]::NewLine + [Environment]::NewLine + "Ramp-Up Phase:" + [Environment]::NewLine + "  - VMs power on 10-15 minutes before users arrive" + [Environment]::NewLine + "  - Minimum percentage of hosts powered on" + [Environment]::NewLine + "  - Additional VMs start based on capacity threshold" + [Environment]::NewLine + [Environment]::NewLine + "Peak Hours:" + [Environment]::NewLine + "  - Scale up/down based on session load" + [Environment]::NewLine + "  - Capacity threshold determines when to start new VMs" + [Environment]::NewLine + "  - Load balancing distributes sessions" + [Environment]::NewLine + [Environment]::NewLine + "Ramp-Down Phase:" + [Environment]::NewLine + "  - Depth-first balancing consolidates sessions" + [Environment]::NewLine + "  - Lightly-loaded hosts drain and shut down" + [Environment]::NewLine + "  - Users receive warning before forced logoff" + [Environment]::NewLine + [Environment]::NewLine + "Off-Peak Hours:" + [Environment]::NewLine + "  - Only minimum hosts remain powered on" + [Environment]::NewLine + "  - Significant cost savings (60-75%)" + [Environment]::NewLine + "  - Weekend: Minimum hosts only" + [Environment]::NewLine + [Environment]::NewLine + "Cost Optimization:" + [Environment]::NewLine + "==================" + [Environment]::NewLine + [Environment]::NewLine + "Typical Savings:" + [Environment]::NewLine + "  - Without autoscaling: 100% VM uptime = High cost" + [Environment]::NewLine + "  - With autoscaling: 25-40% average uptime = 60-75% savings" + [Environment]::NewLine + [Environment]::NewLine + "Example (40 VMs × `$1/hour):" + [Environment]::NewLine + "  - Before: 40 VMs × 24h × 30d = `$28,800/month" + [Environment]::NewLine + "  - After: ~8-12 VMs average × 24h × 30d = `$7,000-9,000/month" + [Environment]::NewLine + "  - Savings: ~`$20,000/month (65-75%)" + [Environment]::NewLine + [Environment]::NewLine + "Troubleshooting:" + [Environment]::NewLine + "================" + [Environment]::NewLine + [Environment]::NewLine + "Issue: VMs not powering on/off" + [Environment]::NewLine + "  - Verify RBAC role assigned" + [Environment]::NewLine + "  - Check scaling plan is enabled" + [Environment]::NewLine + "  - Verify schedules are configured" + [Environment]::NewLine + "  - Wait 15-20 minutes for first cycle" + [Environment]::NewLine + "  - Review Azure Activity Log for errors" + [Environment]::NewLine + [Environment]::NewLine + "Issue: Too many/few VMs running" + [Environment]::NewLine + "  - Adjust capacity thresholds" + [Environment]::NewLine + "  - Change minimum host percentages" + [Environment]::NewLine + "  - Review session load patterns" + [Environment]::NewLine + "  - Modify schedule times" + [Environment]::NewLine + [Environment]::NewLine + "Issue: Users complaining about forced logoff" + [Environment]::NewLine + "  - Increase wait time (20→30 minutes)" + [Environment]::NewLine + "  - Adjust ramp-down start time" + [Environment]::NewLine + "  - Customize notification message" + [Environment]::NewLine + "  - Consider excluding certain users" + [Environment]::NewLine + [Environment]::NewLine
 
       if ($failedChecks -gt 0) {
-        $reportContent += @"
-Action Required:
-  Review failed checks above and re-run autoscaling configuration operations
-
-"@
+        $reportContent += "Action Required:" + [Environment]::NewLine + "  Review failed checks above and re-run autoscaling configuration operations" + [Environment]::NewLine + [Environment]::NewLine
       }
 
       $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8

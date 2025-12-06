@@ -183,36 +183,8 @@ operation:
       }
 
       # Save deployment details
-      $reportContent = @"
-Session Host Deployment Summary
-================================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Configuration:
-  Resource Group: $resourceGroup
-  Location: $location
-  VM Count: $vmCount
-  VM Size: $vmSize
-  VM Prefix: $vmPrefix
-
-Image Source:
-  Gallery: $galleryName
-  Definition: $imageDefinition
-  Image ID: $imageId
-
-Network:
-  VNet: $vnetName
-  Subnet: $subnetName
-
-Deployed VMs:
-$($deployedVms | ForEach-Object { "  - $_" })
-
-Next Steps:
-  1. Wait for VMs to fully initialize
-  2. Register VMs with host pool (next operation)
-  3. Verify connectivity and join status
-
-"@
+      $deployedVmsList = $($deployedVms | ForEach-Object { "  - $_" }) -join [Environment]::NewLine
+      $reportContent = "Session Host Deployment Summary" + [Environment]::NewLine + "================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Configuration:" + [Environment]::NewLine + "  Resource Group: $resourceGroup" + [Environment]::NewLine + "  Location: $location" + [Environment]::NewLine + "  VM Count: $vmCount" + [Environment]::NewLine + "  VM Size: $vmSize" + [Environment]::NewLine + "  VM Prefix: $vmPrefix" + [Environment]::NewLine + [Environment]::NewLine + "Image Source:" + [Environment]::NewLine + "  Gallery: $galleryName" + [Environment]::NewLine + "  Definition: $imageDefinition" + [Environment]::NewLine + "  Image ID: $imageId" + [Environment]::NewLine + [Environment]::NewLine + "Network:" + [Environment]::NewLine + "  VNet: $vnetName" + [Environment]::NewLine + "  Subnet: $subnetName" + [Environment]::NewLine + [Environment]::NewLine + "Deployed VMs:" + [Environment]::NewLine + $deployedVmsList + [Environment]::NewLine + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Wait for VMs to fully initialize" + [Environment]::NewLine + "  2. Register VMs with host pool (next operation)" + [Environment]::NewLine + "  3. Verify connectivity and join status"
       $reportContent | Out-File -FilePath "artifacts/outputs/session-host-deploy-summary.txt" -Encoding UTF8
 
       Write-Host "[SUCCESS] Session host deployment completed successfully"

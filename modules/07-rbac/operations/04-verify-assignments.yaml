@@ -301,66 +301,15 @@ operation:
       }
 
       # Save detailed verification report
-      $reportContent = @"
-RBAC Verification Report
-========================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Overall Status: $verificationStatus
-
-Summary:
-  Total Checks: $totalChecks
-  Passed: $passedChecks
-  Failed: $failedChecks
-  Warnings: $warningChecks
-
-Resource Group: $resourceGroup ($rgId)
-
-Standard Users Group:
-  Name: $stdGroupName
-  ID: $stdGroupId
-
-Admin Users Group:
-  Name: $adminGroupName
-  ID: $adminGroupId
-
-Required Permissions (Standard Users):
-  - Storage File Data SMB Share Contributor (file share scope)
-  - Virtual Machine User Login (resource group scope)
-  - Desktop Virtualization User (application group scope)
-
-Required Permissions (Admin Users):
-  - Storage File Data SMB Share Elevated Contributor (file share scope)
-  - Virtual Machine Administrator Login (resource group scope)
-  - Desktop Virtualization User (application group scope)
-  - Desktop Virtualization Power On Off Contributor (optional)
-
-"@
+      $reportContent = "RBAC Verification Report" + [Environment]::NewLine + "========================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Overall Status: $verificationStatus" + [Environment]::NewLine + [Environment]::NewLine + "Summary:" + [Environment]::NewLine + "  Total Checks: $totalChecks" + [Environment]::NewLine + "  Passed: $passedChecks" + [Environment]::NewLine + "  Failed: $failedChecks" + [Environment]::NewLine + "  Warnings: $warningChecks" + [Environment]::NewLine + [Environment]::NewLine + "Resource Group: $resourceGroup ($rgId)" + [Environment]::NewLine + [Environment]::NewLine + "Standard Users Group:" + [Environment]::NewLine + "  Name: $stdGroupName" + [Environment]::NewLine + "  ID: $stdGroupId" + [Environment]::NewLine + [Environment]::NewLine + "Admin Users Group:" + [Environment]::NewLine + "  Name: $adminGroupName" + [Environment]::NewLine + "  ID: $adminGroupId" + [Environment]::NewLine + [Environment]::NewLine + "Required Permissions (Standard Users):" + [Environment]::NewLine + "  - Storage File Data SMB Share Contributor (file share scope)" + [Environment]::NewLine + "  - Virtual Machine User Login (resource group scope)" + [Environment]::NewLine + "  - Desktop Virtualization User (application group scope)" + [Environment]::NewLine + [Environment]::NewLine + "Required Permissions (Admin Users):" + [Environment]::NewLine + "  - Storage File Data SMB Share Elevated Contributor (file share scope)" + [Environment]::NewLine + "  - Virtual Machine Administrator Login (resource group scope)" + [Environment]::NewLine + "  - Desktop Virtualization User (application group scope)" + [Environment]::NewLine + "  - Desktop Virtualization Power On Off Contributor (optional)" + [Environment]::NewLine + [Environment]::NewLine
 
       if ($failedChecks -gt 0) {
-        $reportContent += @"
-Action Required:
-  Review failed checks above and re-run RBAC assignment operations
-
-"@
+        $reportContent += "Action Required:" + [Environment]::NewLine + "  Review failed checks above and re-run RBAC assignment operations" + [Environment]::NewLine + [Environment]::NewLine
       } else {
-        $reportContent += @"
-Next Steps:
-  1. Add users to appropriate security groups in Entra ID
-  2. Test user access to AVD desktops
-  3. Verify FSLogix profile creation
-  4. Confirm admin users have elevated access
-
-"@
+        $reportContent += "Next Steps:" + [Environment]::NewLine + "  1. Add users to appropriate security groups in Entra ID" + [Environment]::NewLine + "  2. Test user access to AVD desktops" + [Environment]::NewLine + "  3. Verify FSLogix profile creation" + [Environment]::NewLine + "  4. Confirm admin users have elevated access" + [Environment]::NewLine + [Environment]::NewLine
       }
 
-      $reportContent += @"
-Troubleshooting:
-  - RBAC changes can take 5-10 minutes to propagate
-  - Users may need to sign out and back in
-  - Check Azure Portal IAM for role assignments
-
-"@
+      $reportContent += "Troubleshooting:" + [Environment]::NewLine + "  - RBAC changes can take 5-10 minutes to propagate" + [Environment]::NewLine + "  - Users may need to sign out and back in" + [Environment]::NewLine + "  - Check Azure Portal IAM for role assignments" + [Environment]::NewLine + [Environment]::NewLine
 
       $reportContent | Out-File -FilePath "artifacts/outputs/rbac-verification-complete.txt" -Encoding UTF8
 

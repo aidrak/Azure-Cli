@@ -213,39 +213,7 @@ operation:
       Write-Host "[VALIDATE] Admin users roles: $adminAssignments"
 
       # Save assignment details
-      $reportContent = @"
-Application Group RBAC Assignment Details
-==========================================
-Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-
-Application Group:
-  Name: $appGroupName
-  Resource Group: $resourceGroup
-  ID: $appGroupId
-
-Standard Users ($stdGroupName):
-  Group ID: $stdGroupId
-  Role: Desktop Virtualization User
-  Scope: Application Group
-  Permissions: Access to AVD desktop/applications
-
-Admin Users ($adminGroupName):
-  Group ID: $adminGroupId
-  Role: Desktop Virtualization User
-  Scope: Application Group
-  Permissions: Access to AVD desktop/applications
-
-Next Steps:
-  1. Verify all RBAC assignments (next operation)
-  2. Test user access to AVD desktops
-  3. Verify users can see desktops in AVD client
-
-User Access Verification:
-  - Standard users should see desktop in AVD web client
-  - Admin users should have both desktop access AND admin rights on VMs
-  - Both groups should have FSLogix profiles working
-
-"@
+      $reportContent = "\n" + [Environment]::NewLine + "Application Group RBAC Assignment Details" + [Environment]::NewLine + "==========================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Application Group:" + [Environment]::NewLine + "  Name: $appGroupName" + [Environment]::NewLine + "  Resource Group: $resourceGroup" + [Environment]::NewLine + "  ID: $appGroupId" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Standard Users ($stdGroupName):" + [Environment]::NewLine + "  Group ID: $stdGroupId" + [Environment]::NewLine + "  Role: Desktop Virtualization User" + [Environment]::NewLine + "  Scope: Application Group" + [Environment]::NewLine + "  Permissions: Access to AVD desktop/applications" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Admin Users ($adminGroupName):" + [Environment]::NewLine + "  Group ID: $adminGroupId" + [Environment]::NewLine + "  Role: Desktop Virtualization User" + [Environment]::NewLine + "  Scope: Application Group" + [Environment]::NewLine + "  Permissions: Access to AVD desktop/applications" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Verify all RBAC assignments (next operation)" + [Environment]::NewLine + "  2. Test user access to AVD desktops" + [Environment]::NewLine + "  3. Verify users can see desktops in AVD client" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "User Access Verification:" + [Environment]::NewLine + "  - Standard users should see desktop in AVD web client" + [Environment]::NewLine + "  - Admin users should have both desktop access AND admin rights on VMs" + [Environment]::NewLine + "  - Both groups should have FSLogix profiles working" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
       $reportContent | Out-File -FilePath "artifacts/outputs/rbac-app-group-permissions.txt" -Encoding UTF8
 
       Write-Host "[SUCCESS] Application group permissions assignment completed"
