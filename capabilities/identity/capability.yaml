@@ -1,0 +1,75 @@
+capability:
+  id: "identity"
+  name: "Identity and Access Management"
+  description: "Azure identity resources including Entra ID groups, service principals, managed identities, and RBAC assignments"
+  version: "1.0.0"
+
+  resource_types:
+    - "Microsoft.ManagedIdentity/userAssignedIdentities"
+    - "Microsoft.Authorization/roleAssignments"
+    - "Microsoft.Authorization/roleDefinitions"
+    - "Microsoft.Graph/groups"
+    - "Microsoft.Graph/servicePrincipals"
+    - "Microsoft.Graph/applications"
+
+  operations: []  # Will be populated as operations are created
+
+  common_dependencies:
+    - capability: "compute"
+      reason: "VMs and other resources use managed identities"
+      required: false
+    - capability: "storage"
+      reason: "Storage access requires RBAC assignments"
+      required: false
+    - capability: "avd"
+      reason: "AVD requires user groups and RBAC for access"
+      required: false
+
+  required_providers:
+    - "Microsoft.ManagedIdentity"
+    - "Microsoft.Authorization"
+
+  required_graph_permissions:
+    - "Group.ReadWrite.All"
+    - "Application.ReadWrite.All"
+    - "RoleManagement.ReadWrite.Directory"
+
+  common_tags:
+    - "environment"
+    - "purpose"
+    - "managed_by"
+    - "cost_center"
+
+  validation_rules:
+    - name: "role_assignment_scope"
+      description: "Validate RBAC scope is appropriate for assignment"
+    - name: "principal_exists"
+      description: "Verify principal (user/group/SP) exists before assignment"
+    - name: "role_definition_exists"
+      description: "Ensure role definition is valid"
+    - name: "managed_identity_uniqueness"
+      description: "Verify managed identity name is unique in resource group"
+
+  security_considerations:
+    - "Follow principle of least privilege for RBAC assignments"
+    - "Use managed identities instead of service principals when possible"
+    - "Regularly audit role assignments"
+    - "Use custom roles for specific permissions"
+    - "Avoid wildcard (*) permissions"
+    - "Document all privileged role assignments"
+
+  rbac_best_practices:
+    - "Assign roles at lowest necessary scope"
+    - "Use groups for user permissions, not individual assignments"
+    - "Prefer built-in roles over custom roles"
+    - "Regular access reviews and cleanup"
+    - "Use Privileged Identity Management (PIM) for sensitive roles"
+
+  managed_identity_types:
+    - type: "SystemAssigned"
+      description: "Lifecycle tied to resource, automatically deleted with resource"
+      use_case: "Single resource, simple scenarios"
+
+    - type: "UserAssigned"
+      description: "Independent lifecycle, can be shared across resources"
+      use_case: "Multiple resources, complex scenarios, reusable identities"

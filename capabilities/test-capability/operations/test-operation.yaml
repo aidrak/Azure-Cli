@@ -1,0 +1,51 @@
+operation:
+  id: "test-operation"
+  name: "Test Operation"
+  mode: "create"
+  type: "test"
+  resource_type: "test-resource"
+
+  duration:
+    expected: 10
+    timeout: 30
+    type: "FAST"
+
+  parameters:
+    test_param:
+      type: "string"
+      required: true
+      description: "A test parameter"
+      default: "default-value"
+
+    number_param:
+      type: "number"
+      required: false
+      description: "A numeric parameter"
+      default: 42
+
+    bool_param:
+      type: "boolean"
+      required: false
+      description: "A boolean parameter"
+      default: true
+
+    config_param:
+      type: "string"
+      required: false
+      description: "Parameter from config"
+      from_config: "AZURE_RESOURCE_GROUP"
+
+prerequisites: []
+
+steps:
+  - name: "Test Step 1"
+    command: |
+      echo "[START] Test operation starting"
+      echo "[PROGRESS] Step 1/2: Running test..."
+      echo "Test param: ${PARAM_TEST_PARAM}"
+      echo "Number param: ${PARAM_NUMBER_PARAM}"
+      echo "Bool param: ${PARAM_BOOL_PARAM}"
+      echo "Config param: ${PARAM_CONFIG_PARAM}"
+      echo "[SUCCESS] Test operation completed"
+
+rollback: []

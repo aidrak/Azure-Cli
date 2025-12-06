@@ -1,0 +1,16 @@
+capability:
+  id: "test-capability"
+  name: "Test Capability"
+  description: "Test capability for capability-executor validation"
+  version: "1.0.0"
+
+  operations:
+    - id: "test-operation"
+      name: "Test Operation"
+      mode: "create"
+      description: "A simple test operation"
+
+    - id: "test-validation"
+      name: "Test Validation"
+      mode: "validate"
+      description: "A validation test operation"
