@@ -116,6 +116,9 @@ package-lock.json
 state.json
 state.db
 
+# Discovery outputs (instance-specific runtime data)
+discovered/
+
 # Runtime artifacts (logs, outputs, temporary files)
 artifacts/logs/
 artifacts/outputs/
