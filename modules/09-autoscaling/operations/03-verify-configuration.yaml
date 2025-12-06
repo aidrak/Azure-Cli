@@ -21,155 +21,170 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          if [[ -f "artifacts/outputs/autoscaling-verification-complete.txt" ]]; then
-            echo "[VALIDATE] Autoscaling verification completed"
+          if (Test-Path "artifacts/outputs/autoscaling-verification-complete.txt") {
+            Write-Host "[VALIDATE] Autoscaling verification completed"
             exit 0
-          else
-            echo "[ERROR] Autoscaling verification file not found"
+          } else {
+            Write-Host "[ERROR] Autoscaling verification file not found"
             exit 1
-          fi
+          }
         description: "Verify autoscaling verification completed"
 
-  # Template command (executed via bash)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
-
-      echo "[START] Autoscaling Configuration Verification: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      cat > /tmp/autoscaling-03-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Autoscaling Configuration Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
-      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
-      AUTOSCALING_ENABLED="{{AUTOSCALING_ENABLED}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $autoscalingEnabled = "{{AUTOSCALING_ENABLED}}"
 
       # Scaling plan name
-      SCALING_PLAN_NAME="ScalingPlan-${HOST_POOL_NAME}"
+      $scalingPlanName = "ScalingPlan-$hostPoolName"
 
       # Counters
-      TOTAL_CHECKS=0
-      PASSED_CHECKS=0
-      FAILED_CHECKS=0
-      WARNING_CHECKS=0
+      $totalChecks = 0
+      $passedChecks = 0
+      $failedChecks = 0
+      $warningChecks = 0
 
       # Step 1: Validate Azure authentication
-      echo "[PROGRESS] Step 1/4: Validating Azure authentication..."
-      if ! az account show &>/dev/null; then
-        echo "[ERROR] Not authenticated to Azure"
+      Write-Host "[PROGRESS] Step 1/4: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
         exit 1
-      fi
+      }
 
       # Step 2: Check if autoscaling is enabled in config
-      echo "[PROGRESS] Step 2/4: Checking autoscaling configuration..."
-      if [[ "$AUTOSCALING_ENABLED" != "true" ]]; then
-        echo "[WARNING] Autoscaling is disabled in configuration"
-        echo "[WARNING] Skipping verification"
+      Write-Host "[PROGRESS] Step 2/4: Checking autoscaling configuration..."
+      if ($autoscalingEnabled -ne "true") {
+        Write-Host "[WARNING] Autoscaling is disabled in configuration"
+        Write-Host "[WARNING] Skipping verification"
 
-        {
-          echo "Autoscaling Verification Skipped"
-          echo "================================="
-          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo ""
-          echo "Autoscaling is disabled in configuration."
-          echo ""
-        } > "artifacts/outputs/autoscaling-verification-complete.txt"
+        $reportContent = @"
+Autoscaling Verification Skipped
+=================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
+Autoscaling is disabled in configuration.
+
+"@
+        $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8
         exit 0
-      fi
+      }
 
       # Step 3: Verify autoscaling configuration
-      echo "[PROGRESS] Step 3/4: Verifying autoscaling configuration..."
+      Write-Host "[PROGRESS] Step 3/4: Verifying autoscaling configuration..."
 
       # Check if host pool exists
-      ((TOTAL_CHECKS++))
-      if az desktopvirtualization hostpool show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$HOST_POOL_NAME" &>/dev/null; then
-        echo "[SUCCESS] ✓ Host pool exists: $HOST_POOL_NAME"
-        ((PASSED_CHECKS++))
-      else
-        echo "[ERROR] ✗ Host pool not found: $HOST_POOL_NAME"
-        ((FAILED_CHECKS++))
-      fi
+      $totalChecks++
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] ✓ Host pool exists: $hostPoolName"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ Host pool not found: $hostPoolName"
+        $failedChecks++
+      }
 
       # Check if scaling plan exists
-      ((TOTAL_CHECKS++))
-      if az desktopvirtualization scaling-plan show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$SCALING_PLAN_NAME" &>/dev/null; then
-        echo "[SUCCESS] ✓ Scaling plan exists: $SCALING_PLAN_NAME"
-        ((PASSED_CHECKS++))
-      else
-        echo "[ERROR] ✗ Scaling plan not found: $SCALING_PLAN_NAME"
-        ((FAILED_CHECKS++))
-      fi
+      $totalChecks++
+      az desktopvirtualization scaling-plan show `
+        --resource-group $resourceGroup `
+        --name $scalingPlanName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] ✓ Scaling plan exists: $scalingPlanName"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ Scaling plan not found: $scalingPlanName"
+        $failedChecks++
+      }
 
       # Check RBAC role assignment
-      ((TOTAL_CHECKS++))
-      echo "[PROGRESS] Checking RBAC assignments..."
+      $totalChecks++
+      Write-Host "[PROGRESS] Checking RBAC assignments..."
 
-      AVD_SP_ID=$(az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>/dev/null || true)
+      $avdSpId = az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>$null
 
-      if [[ -n "$AVD_SP_ID" && "$AVD_SP_ID" != "null" ]]; then
-        SUBSCRIPTION_SCOPE="/subscriptions/$SUBSCRIPTION_ID"
+      if ($LASTEXITCODE -ne 0) {
+        $avdSpId = ""
+      }
 
-        if az role assignment list \
-          --assignee "$AVD_SP_ID" \
-          --scope "$SUBSCRIPTION_SCOPE" \
-          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv | grep -q "Desktop"; then
-          echo "[SUCCESS] ✓ RBAC role assigned to AVD service principal"
-          ((PASSED_CHECKS++))
-        else
-          echo "[WARNING] ⚠ RBAC role not found (may need manual assignment)"
-          ((WARNING_CHECKS++))
-        fi
-      else
-        echo "[WARNING] ⚠ Azure Virtual Desktop service principal not found"
-        ((WARNING_CHECKS++))
-      fi
+      if (-not [string]::IsNullOrEmpty($avdSpId) -and $avdSpId -ne "null") {
+        $subscriptionScope = "/subscriptions/$subscriptionId"
+
+        $roleAssignment = az role assignment list `
+          --assignee $avdSpId `
+          --scope $subscriptionScope `
+          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv 2>$null
+
+        if ($roleAssignment -match "Desktop") {
+          Write-Host "[SUCCESS] ✓ RBAC role assigned to AVD service principal"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] ⚠ RBAC role not found (may need manual assignment)"
+          $warningChecks++
+        }
+      } else {
+        Write-Host "[WARNING] ⚠ Azure Virtual Desktop service principal not found"
+        $warningChecks++
+      }
 
       # Check session hosts exist
-      ((TOTAL_CHECKS++))
-      SESSION_HOST_COUNT=$(az desktopvirtualization sessionhost list \
-        --resource-group "$RESOURCE_GROUP" \
-        --host-pool-name "$HOST_POOL_NAME" \
-        --query "length(@)" -o tsv 2>/dev/null || echo "0")
+      $totalChecks++
+      $sessionHostCount = az desktopvirtualization sessionhost list `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostPoolName `
+        --query "length(@)" -o tsv 2>$null
 
-      if [[ $SESSION_HOST_COUNT -gt 0 ]]; then
-        echo "[SUCCESS] ✓ Session hosts exist: $SESSION_HOST_COUNT host(s)"
-        ((PASSED_CHECKS++))
-      else
-        echo "[WARNING] ⚠ No session hosts found (autoscaling will have no VMs to manage)"
-        ((WARNING_CHECKS++))
-      fi
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($sessionHostCount)) {
+        $sessionHostCount = "0"
+      }
+
+      if ([int]$sessionHostCount -gt 0) {
+        Write-Host "[SUCCESS] ✓ Session hosts exist: $sessionHostCount host(s)"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] ⚠ No session hosts found (autoscaling will have no VMs to manage)"
+        $warningChecks++
+      }
 
       # Step 4: Summary
-      echo "[PROGRESS] Step 4/4: Generating verification summary..."
-      echo ""
-      echo "=========================================="
-      echo "AUTOSCALING VERIFICATION SUMMARY"
-      echo "=========================================="
-      echo "Total Checks: $TOTAL_CHECKS"
-      echo "Passed: $PASSED_CHECKS"
-      echo "Failed: $FAILED_CHECKS"
-      echo "Warnings: $WARNING_CHECKS"
-      echo "=========================================="
+      Write-Host "[PROGRESS] Step 4/4: Generating verification summary..."
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "AUTOSCALING VERIFICATION SUMMARY"
+      Write-Host "=========================================="
+      Write-Host "Total Checks: $totalChecks"
+      Write-Host "Passed: $passedChecks"
+      Write-Host "Failed: $failedChecks"
+      Write-Host "Warnings: $warningChecks"
+      Write-Host "=========================================="
 
       # Determine overall status
-      if [[ $FAILED_CHECKS -eq 0 ]]; then
-        echo "[SUCCESS] Autoscaling configuration verification passed!"
-        VERIFICATION_STATUS="PASSED"
-        EXIT_CODE=0
-      else
-        echo "[ERROR] Some autoscaling configuration checks failed"
-        echo "[ERROR] Please review the failed checks above"
-        VERIFICATION_STATUS="FAILED"
-        EXIT_CODE=1
-      fi
+      if ($failedChecks -eq 0) {
+        Write-Host "[SUCCESS] Autoscaling configuration verification passed!"
+        $verificationStatus = "PASSED"
+        $exitCode = 0
+      } else {
+        Write-Host "[ERROR] Some autoscaling configuration checks failed"
+        Write-Host "[ERROR] Please review the failed checks above"
+        $verificationStatus = "FAILED"
+        $exitCode = 1
+      }
 
       # Save detailed verification report
       {
