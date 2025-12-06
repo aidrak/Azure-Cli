@@ -1,0 +1,93 @@
+cat > /tmp/networking-02-create-subnets-wrapper.ps1 << 'PSWRAPPER'
+Write-Host "[START] Subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+# Configuration
+$vnetName = "avd-vnet"
+$resourceGroup = "RG-Azure-VDI-01"
+
+# Get subnet count from config array
+$subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+
+Write-Host "[PROGRESS] Processing $subnetCount subnet(s) from config..."
+
+# Iterate through subnet array
+for ($i = 0; $i -lt $subnetCount; $i++) {
+  # Extract subnet properties
+  $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+  $subnetPrefix = (yq e ".networking.subnets[$i].address_prefix" config.yaml)
+  $delegation = (yq e ".networking.subnets[$i].delegation" config.yaml)
+  $pePolicies = (yq e ".networking.subnets[$i].private_endpoint_network_policies" config.yaml)
+  $plPolicies = (yq e ".networking.subnets[$i].private_link_service_network_policies" config.yaml)
+
+  $displayIndex = $i + 1
+  Write-Host "[PROGRESS] [$displayIndex/$subnetCount] Processing subnet: $subnetName"
+
+  # Check if subnet already exists (idempotent)
+  az network vnet subnet show `
+    --resource-group $resourceGroup `
+    --vnet-name $vnetName `
+    --name $subnetName `
+    --output none 2>$null
+
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "[INFO] Subnet already exists: $subnetName"
+    continue
+  }
+
+  # Create subnet
+  Write-Host "[PROGRESS] Creating subnet: $subnetName ($subnetPrefix)"
+
+  # Build command arguments
+  $cmdArgs = @(
+    "network", "vnet", "subnet", "create",
+    "--resource-group", $resourceGroup,
+    "--vnet-name", $vnetName,
+    "--name", $subnetName,
+    "--address-prefix", $subnetPrefix
+  )
+
+  # Add delegation if configured
+  if ($delegation -and $delegation -ne "null" -and $delegation -ne "") {
+    $cmdArgs += @("--delegations", $delegation)
+    Write-Host "[PROGRESS]   Delegation: $delegation"
+  }
+
+  # Add private endpoint policies
+  if ($pePolicies -and $pePolicies -ne "null") {
+    $cmdArgs += @("--private-endpoint-network-policies", $pePolicies)
+  }
+
+  # Add private link service policies
+  if ($plPolicies -and $plPolicies -ne "null") {
+    $cmdArgs += @("--private-link-service-network-policies", $plPolicies)
+  }
+
+  $cmdArgs += @("--output", "json")
+
+  # Execute command
+  $outputFile = "artifacts/outputs/networking-create-subnet-$subnetName.json"
+  & az @cmdArgs > $outputFile
+
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Failed to create subnet: $subnetName"
+    exit 1
+  }
+
+  Write-Host "[SUCCESS] Subnet created: $subnetName"
+}
+
+# Validate all subnets created
+Write-Host "[VALIDATE] Verifying all subnets..."
+$createdCount = az network vnet subnet list `
+  --resource-group $resourceGroup `
+  --vnet-name $vnetName `
+  --query "length(@)" -o tsv
+
+Write-Host "[SUCCESS] All subnets created successfully"
+Write-Host "[SUCCESS]   Expected: $subnetCount"
+Write-Host "[SUCCESS]   Created: $createdCount"
+
+exit 0
+PSWRAPPER
+pwsh -NoProfile -NonInteractive -File /tmp/networking-02-create-subnets-wrapper.ps1
+rm -f /tmp/networking-02-create-subnets-wrapper.ps1

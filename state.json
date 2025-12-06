@@ -1,10 +1,10 @@
 {
   "current_module": "01-networking",
-  "updated_at": "2025-12-06T04:33:21Z",
+  "updated_at": "2025-12-06T04:36:57Z",
   "modules": {
     "01-networking": {
       "status": "running",
-      "timestamp": "2025-12-06T04:33:06Z"
+      "timestamp": "2025-12-06T04:35:37Z"
     },
     "02-storage": {
       "status": "completed",
@@ -48,52 +48,52 @@
     "networking-create-vnet": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-06T04:33:08Z"
+      "timestamp": "2025-12-06T04:35:39Z"
     },
     "networking-create-subnets": {
       "status": "completed",
       "duration": 6,
-      "timestamp": "2025-12-06T04:33:15Z"
+      "timestamp": "2025-12-06T04:35:46Z"
     },
     "networking-create-nsgs": {
       "status": "completed",
       "duration": 6,
-      "timestamp": "2025-12-06T04:33:21Z"
+      "timestamp": "2025-12-06T04:35:52Z"
     },
     "networking-configure-nsg-rules": {
       "status": "completed",
-      "duration": 22,
-      "timestamp": "2025-12-06T04:12:20Z"
+      "duration": 24,
+      "timestamp": "2025-12-06T04:36:17Z"
     },
     "networking-attach-nsgs": {
       "status": "completed",
-      "duration": 42,
-      "timestamp": "2025-12-06T04:13:02Z"
+      "duration": 6,
+      "timestamp": "2025-12-06T04:36:23Z"
     },
     "networking-configure-service-endpoints": {
       "status": "completed",
-      "duration": 26,
-      "timestamp": "2025-12-06T04:13:29Z"
+      "duration": 6,
+      "timestamp": "2025-12-06T04:36:30Z"
     },
     "networking-create-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-06T04:13:32Z"
+      "timestamp": "2025-12-06T04:36:32Z"
     },
     "networking-link-dns-zones": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-06T04:13:34Z"
+      "timestamp": "2025-12-06T04:36:35Z"
     },
     "networking-create-peering": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-06T04:13:37Z"
+      "timestamp": "2025-12-06T04:36:37Z"
     },
     "networking-configure-route-tables": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-06T04:13:39Z"
+      "timestamp": "2025-12-06T04:36:40Z"
     },
     "networking-validate-all": {
       "status": "completed",
@@ -284,7 +284,12 @@
       "status": "failed",
       "duration": 32,
       "timestamp": "2025-12-06T01:47:38Z"
+    },
+    "networking-create-gateway-subnet": {
+      "status": "completed",
+      "duration": 16,
+      "timestamp": "2025-12-06T04:36:56Z"
     }
   },
-  "current_operation": "networking-configure-nsg-rules"
+  "current_operation": "networking-create-local-network-gateways"
 }
