@@ -1,0 +1,244 @@
+# ==============================================================================
+# Capability Operation: Add Member to Entra ID Group
+# Migrated from: modules/03-entra-group/operations/07-validate-groups.yaml
+# ==============================================================================
+
+operation:
+  id: "group-member-add"
+  name: "Add Member to Entra ID Group"
+  description: "Add users or service principals as members to Entra ID security groups"
+
+  capability: "identity"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Graph/groups"
+
+  # Duration expectations
+  duration:
+    expected: 30    # 30 seconds
+    timeout: 120    # 2 minutes
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Name of the target security group"
+        default: "{{ENTRA_GROUP_USERS_STANDARD}}"
+      - name: "member_id"
+        type: "string"
+        description: "Object ID of the member to add (user or service principal)"
+        default: ""
+    optional:
+      - name: "member_type"
+        type: "string"
+        description: "Type of member (user, group, or service-principal)"
+        default: "user"
+      - name: "member_email"
+        type: "string"
+        description: "Email address of the member (alternative to member_id)"
+        default: ""
+      - name: "skip_if_exists"
+        type: "boolean"
+        description: "Skip if member already exists in group"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "group_member_exists"
+        group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
+        description: "Member added to group successfully"
+
+  # Idempotency: Member addition is idempotent
+  idempotency:
+    enabled: true
+    check_command: |
+      GROUP_ID=$(az ad group list \
+        --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" \
+        --query "[0].id" -o tsv 2>/dev/null)
+      if [ -z "$GROUP_ID" ]; then
+        echo "[ERROR] Group not found"
+        exit 1
+      fi
+      # Check if member exists
+      az ad group member list \
+        --group "$GROUP_ID" \
+        --query "[?id=='{{MEMBER_ID}}']" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/identity-group-member-add-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Adding Group Member: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration from parameters
+      $groupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $memberId = "{{MEMBER_ID}}"
+      $memberEmail = "{{MEMBER_EMAIL}}"
+      $memberType = "{{MEMBER_TYPE}}"
+      $skipIfExists = $true
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  Group Name: $groupName"
+      Write-Host "  Member Type: $memberType"
+
+      # Step 1: Validate group exists
+      Write-Host "[PROGRESS] Step 1/3: Validating target group exists..."
+
+      $groupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
+
+      if ([string]::IsNullOrEmpty($groupId) -or $groupId -eq "None") {
+        Write-Host "[ERROR] Group not found: $groupName"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Group found: $groupName"
+      Write-Host "[VALIDATE] Group ID: $groupId"
+
+      # Step 2: Resolve member ID if not provided
+      Write-Host "[PROGRESS] Step 2/3: Resolving member identity..."
+
+      if ([string]::IsNullOrEmpty($memberId) -or $memberId -eq "") {
+        if ([string]::IsNullOrEmpty($memberEmail) -or $memberEmail -eq "") {
+          Write-Host "[ERROR] Either member_id or member_email must be provided"
+          exit 1
+        }
+
+        Write-Host "[PROGRESS] Resolving member by email: $memberEmail"
+
+        # Try to resolve as user first
+        $memberId = az ad user list `
+          --filter "mail eq '$memberEmail' or userPrincipalName eq '$memberEmail'" `
+          --query "[0].id" -o tsv 2>$null
+
+        if ([string]::IsNullOrEmpty($memberId) -or $memberId -eq "None") {
+          # Try to resolve as service principal
+          $memberId = az ad sp list `
+            --filter "servicePrincipalNames/any(c:c eq '$memberEmail')" `
+            --query "[0].id" -o tsv 2>$null
+        }
+
+        if ([string]::IsNullOrEmpty($memberId) -or $memberId -eq "None") {
+          Write-Host "[ERROR] Member not found: $memberEmail"
+          exit 1
+        }
+      }
+
+      Write-Host "[VALIDATE] Member ID: $memberId"
+
+      # Get member details
+      $memberInfo = az ad user show --id $memberId --output json 2>$null | ConvertFrom-Json
+
+      if ($memberInfo) {
+        Write-Host "[VALIDATE] Member: $($memberInfo.displayName) ($($memberInfo.userPrincipalName))"
+      }
+
+      # Step 3: Check if member already exists and add if needed
+      Write-Host "[PROGRESS] Step 3/3: Checking membership and adding if necessary..."
+
+      # Check if member already exists in group
+      $existingMember = az ad group member list `
+        --group $groupId `
+        --query "[?id=='$memberId']" `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Member already exists in group: $groupName"
+
+        if ($skipIfExists) {
+          Write-Host "[SUCCESS] Skipping (skipIfExists=true)"
+          exit 0
+        }
+      }
+
+      # Add member to group
+      Write-Host "[PROGRESS] Adding member to group..."
+
+      try {
+        az ad group member add `
+          --group $groupId `
+          --member-id $memberId `
+          2>&1 | Out-Null
+
+        Write-Host "[SUCCESS] Member added to group successfully"
+      } catch {
+        Write-Host "[ERROR] Failed to add member to group"
+        Write-Host "[ERROR] $($_.Exception.Message)"
+        exit 1
+      }
+
+      # Verify addition
+      Write-Host "[VALIDATE] Verifying member was added..."
+
+      $verifyMember = az ad group member list `
+        --group $groupId `
+        --query "[?id=='$memberId']" `
+        -o json 2>$null
+
+      if ([string]::IsNullOrEmpty($verifyMember)) {
+        Write-Host "[ERROR] Member verification failed"
+        exit 1
+      }
+
+      # Get updated member count
+      $memberCount = az ad group member list `
+        --group $groupId `
+        --query "length(@)" -o tsv 2>$null
+
+      Write-Host "[SUCCESS] Member addition completed"
+      Write-Host "[SUCCESS] Group: $groupName"
+      Write-Host "[SUCCESS] Group ID: $groupId"
+      Write-Host "[SUCCESS] Member ID: $memberId"
+      Write-Host "[SUCCESS] Total members: $memberCount"
+
+      # Save operation details
+      $operationDetails = @{
+        "timestamp" = (Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ")
+        "operation" = "group_member_add"
+        "group_name" = $groupName
+        "group_id" = $groupId
+        "member_id" = $memberId
+        "member_type" = $memberType
+        "total_members" = $memberCount
+        "status" = "success"
+      }
+
+      $operationDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/identity-group-member-add.json"
+
+      Write-Host ""
+      Write-Host "[INFO] Member has been successfully added to the group"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/identity-group-member-add-wrapper.ps1
+      rm -f /tmp/identity-group-member-add-wrapper.ps1
+
+  # Rollback: Remove member from group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Member from Group"
+        description: "Remove the member from the Entra ID group"
+        command: |
+          GROUP_ID=$(az ad group list \
+            --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" \
+            --query "[0].id" -o tsv)
+          if [ -n "$GROUP_ID" ]; then
+            az ad group member remove \
+              --group "$GROUP_ID" \
+              --member-id "{{MEMBER_ID}}" \
+              --yes
+          fi
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
