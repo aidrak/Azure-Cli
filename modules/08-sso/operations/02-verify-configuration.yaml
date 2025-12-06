@@ -21,238 +21,262 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          if [[ -f "artifacts/outputs/sso-verification-complete.txt" ]]; then
-            echo "[VALIDATE] SSO verification completed"
+          if (Test-Path "artifacts/outputs/sso-verification-complete.txt") {
+            Write-Host "[VALIDATE] SSO verification completed"
             exit 0
-          else
-            echo "[ERROR] SSO verification file not found"
+          } else {
+            Write-Host "[ERROR] SSO verification file not found"
             exit 1
-          fi
+          }
         description: "Verify SSO verification completed"
 
-  # Template command (executed via bash)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
-
-      echo "[START] SSO Configuration Verification: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      cat > /tmp/sso-02-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] SSO Configuration Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
-      SSO_ENABLED="{{SSO_ENABLED}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $ssoEnabled = "{{SSO_ENABLED}}"
 
       # Counters
-      TOTAL_CHECKS=0
-      PASSED_CHECKS=0
-      FAILED_CHECKS=0
-      WARNING_CHECKS=0
+      $totalChecks = 0
+      $passedChecks = 0
+      $failedChecks = 0
+      $warningChecks = 0
 
       # Step 1: Validate Azure authentication
-      echo "[PROGRESS] Step 1/4: Validating Azure authentication..."
-      if ! az account show &>/dev/null; then
-        echo "[ERROR] Not authenticated to Azure"
+      Write-Host "[PROGRESS] Step 1/4: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
         exit 1
-      fi
+      }
 
       # Step 2: Check if SSO is enabled in config
-      echo "[PROGRESS] Step 2/4: Checking SSO configuration..."
-      if [[ "$SSO_ENABLED" != "true" ]]; then
-        echo "[WARNING] SSO is disabled in configuration"
-        echo "[WARNING] Skipping verification"
+      Write-Host "[PROGRESS] Step 2/4: Checking SSO configuration..."
+      if ($ssoEnabled -ne "true") {
+        Write-Host "[WARNING] SSO is disabled in configuration"
+        Write-Host "[WARNING] Skipping verification"
 
-        {
-          echo "SSO Verification Skipped"
-          echo "========================"
-          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo ""
-          echo "SSO is disabled in configuration."
-          echo ""
-        } > "artifacts/outputs/sso-verification-complete.txt"
+        $reportContent = @"
+SSO Verification Skipped
+========================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
+SSO is disabled in configuration.
+
+"@
+        $reportContent | Out-File -FilePath "artifacts/outputs/sso-verification-complete.txt" -Encoding UTF8
         exit 0
-      fi
+      }
 
       # Step 3: Verify host pool configuration
-      echo "[PROGRESS] Step 3/4: Verifying host pool SSO configuration..."
+      Write-Host "[PROGRESS] Step 3/4: Verifying host pool SSO configuration..."
 
       # Check if host pool exists
-      ((TOTAL_CHECKS++))
-      if az desktopvirtualization hostpool show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$HOST_POOL_NAME" &>/dev/null; then
-        echo "[SUCCESS] ✓ Host pool exists: $HOST_POOL_NAME"
-        ((PASSED_CHECKS++))
-      else
-        echo "[ERROR] ✗ Host pool not found: $HOST_POOL_NAME"
-        ((FAILED_CHECKS++))
-      fi
+      $totalChecks++
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] ✓ Host pool exists: $hostPoolName"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ Host pool not found: $hostPoolName"
+        $failedChecks++
+      }
 
       # Check RDP properties for SSO
-      ((TOTAL_CHECKS++))
-      RDP_PROPS=$(az desktopvirtualization hostpool show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$HOST_POOL_NAME" \
-        --query "customRdpProperty" -o tsv 2>/dev/null || echo "")
+      $totalChecks++
+      $rdpProps = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --query "customRdpProperty" -o tsv 2>$null
 
-      if echo "$RDP_PROPS" | grep -q "enablerdsaadauth:i:1"; then
-        echo "[SUCCESS] ✓ SSO enabled in RDP properties (enablerdsaadauth:i:1)"
-        ((PASSED_CHECKS++))
-      else
-        echo "[ERROR] ✗ SSO not enabled in RDP properties"
-        echo "[ERROR]   Current RDP properties: ${RDP_PROPS:-<empty>}"
-        ((FAILED_CHECKS++))
-      fi
+      if ($LASTEXITCODE -ne 0) {
+        $rdpProps = ""
+      }
+
+      if ($rdpProps -match "enablerdsaadauth:i:1") {
+        Write-Host "[SUCCESS] ✓ SSO enabled in RDP properties (enablerdsaadauth:i:1)"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ SSO not enabled in RDP properties"
+        Write-Host "[ERROR]   Current RDP properties: $(if ($rdpProps) { $rdpProps } else { '<empty>' })"
+        $failedChecks++
+      }
 
       # Check session hosts exist
-      ((TOTAL_CHECKS++))
-      SESSION_HOST_COUNT=$(az desktopvirtualization sessionhost list \
-        --resource-group "$RESOURCE_GROUP" \
-        --host-pool-name "$HOST_POOL_NAME" \
-        --query "length(@)" -o tsv 2>/dev/null || echo "0")
+      $totalChecks++
+      $sessionHostCount = az desktopvirtualization sessionhost list `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostPoolName `
+        --query "length(@)" -o tsv 2>$null
 
-      if [[ $SESSION_HOST_COUNT -gt 0 ]]; then
-        echo "[SUCCESS] ✓ Session hosts exist: $SESSION_HOST_COUNT host(s)"
-        ((PASSED_CHECKS++))
-      else
-        echo "[WARNING] ⚠ No session hosts found (they may not be registered yet)"
-        ((WARNING_CHECKS++))
-      fi
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($sessionHostCount)) {
+        $sessionHostCount = "0"
+      }
+
+      if ([int]$sessionHostCount -gt 0) {
+        Write-Host "[SUCCESS] ✓ Session hosts exist: $sessionHostCount host(s)"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] ⚠ No session hosts found (they may not be registered yet)"
+        $warningChecks++
+      }
 
       # Check RBAC role assignment (Virtual Machine User Login)
-      ((TOTAL_CHECKS++))
-      echo "[PROGRESS] Checking RBAC assignments..."
+      $totalChecks++
+      Write-Host "[PROGRESS] Checking RBAC assignments..."
 
       # Get resource group ID
-      RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
+      $rgId = az group show --name $resourceGroup --query id -o tsv
 
       # Check if any VM login role is assigned
-      VM_LOGIN_ASSIGNMENTS=$(az role assignment list \
-        --scope "$RG_ID" \
-        --query "[?contains(roleDefinitionName, 'Virtual Machine') && contains(roleDefinitionName, 'Login')]" \
-        --output tsv 2>/dev/null | wc -l)
+      $vmLoginAssignments = az role assignment list `
+        --scope $rgId `
+        --query "[?contains(roleDefinitionName, 'Virtual Machine') && contains(roleDefinitionName, 'Login')]" `
+        --output tsv 2>$null
 
-      if [[ $VM_LOGIN_ASSIGNMENTS -gt 0 ]]; then
-        echo "[SUCCESS] ✓ VM Login RBAC roles assigned ($VM_LOGIN_ASSIGNMENTS assignment(s))"
-        ((PASSED_CHECKS++))
-      else
-        echo "[WARNING] ⚠ No VM Login RBAC roles found (may need Module 08)"
-        ((WARNING_CHECKS++))
-      fi
+      if ($LASTEXITCODE -ne 0) {
+        $vmLoginCount = 0
+      } else {
+        $vmLoginCount = ($vmLoginAssignments | Measure-Object -Line).Lines
+      }
+
+      if ($vmLoginCount -gt 0) {
+        Write-Host "[SUCCESS] ✓ VM Login RBAC roles assigned ($vmLoginCount assignment(s))"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] ⚠ No VM Login RBAC roles found (may need Module 08)"
+        $warningChecks++
+      }
 
       # Step 4: Summary
-      echo "[PROGRESS] Step 4/4: Generating verification summary..."
-      echo ""
-      echo "=========================================="
-      echo "SSO VERIFICATION SUMMARY"
-      echo "=========================================="
-      echo "Total Checks: $TOTAL_CHECKS"
-      echo "Passed: $PASSED_CHECKS"
-      echo "Failed: $FAILED_CHECKS"
-      echo "Warnings: $WARNING_CHECKS"
-      echo "=========================================="
+      Write-Host "[PROGRESS] Step 4/4: Generating verification summary..."
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "SSO VERIFICATION SUMMARY"
+      Write-Host "=========================================="
+      Write-Host "Total Checks: $totalChecks"
+      Write-Host "Passed: $passedChecks"
+      Write-Host "Failed: $failedChecks"
+      Write-Host "Warnings: $warningChecks"
+      Write-Host "=========================================="
 
       # Determine overall status
-      if [[ $FAILED_CHECKS -eq 0 ]]; then
-        echo "[SUCCESS] SSO configuration verification passed!"
-        VERIFICATION_STATUS="PASSED"
-        EXIT_CODE=0
-      else
-        echo "[ERROR] Some SSO configuration checks failed"
-        echo "[ERROR] Please review the failed checks above"
-        VERIFICATION_STATUS="FAILED"
-        EXIT_CODE=1
-      fi
+      if ($failedChecks -eq 0) {
+        Write-Host "[SUCCESS] SSO configuration verification passed!"
+        $verificationStatus = "PASSED"
+        $exitCode = 0
+      } else {
+        Write-Host "[ERROR] Some SSO configuration checks failed"
+        Write-Host "[ERROR] Please review the failed checks above"
+        $verificationStatus = "FAILED"
+        $exitCode = 1
+      }
 
       # Save detailed verification report
-      {
-        echo "SSO Configuration Verification Report"
-        echo "======================================"
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Overall Status: $VERIFICATION_STATUS"
-        echo ""
-        echo "Summary:"
-        echo "  Total Checks: $TOTAL_CHECKS"
-        echo "  Passed: $PASSED_CHECKS"
-        echo "  Failed: $FAILED_CHECKS"
-        echo "  Warnings: $WARNING_CHECKS"
-        echo ""
-        echo "Host Pool: $HOST_POOL_NAME"
-        echo "Resource Group: $RESOURCE_GROUP"
-        echo ""
-        echo "Automated Checks:"
-        echo "  1. Host pool exists"
-        echo "  2. SSO enabled in RDP properties (enablerdsaadauth:i:1)"
-        echo "  3. Session hosts registered"
-        echo "  4. VM Login RBAC roles assigned"
-        echo ""
-        echo "Manual Verification Required:"
-        echo ""
-        echo "The following must be configured manually via Azure Portal:"
-        echo ""
-        echo "1. Windows Cloud Login Service Principal"
-        echo "   - Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45"
-        echo "   - IsRemoteDesktopProtocolEnabled: True"
-        echo "   - Configure via Microsoft Graph API or Portal"
-        echo ""
-        echo "2. Trusted Device Groups (Optional)"
-        echo "   - Add device group (e.g., AVD-Devices-Pooled-SSO)"
-        echo "   - Eliminates consent prompts for managed devices"
-        echo "   - Max 10 device groups allowed"
-        echo ""
-        echo "3. Conditional Access Policies"
-        echo "   - Required Cloud Apps:"
-        echo "     * Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)"
-        echo "     * Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)"
-        echo "     * Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)"
-        echo ""
-        echo "   - IMPORTANT: Do NOT apply sign-in frequency to Windows Cloud Login"
-        echo ""
-        echo "4. Session Host Requirements"
-        echo "   - Session hosts must be Entra-joined (not hybrid)"
-        echo "   - Run 'dsregcmd /status' on session host to verify:"
-        echo "     * AzureAdJoined: YES"
-        echo "     * AzureAdPrt: YES"
-        echo ""
-        echo "Testing SSO:"
-        echo "  1. User launches Windows App or Remote Desktop client"
-        echo "  2. Signs in with Entra ID credentials"
-        echo "  3. Desktop should launch WITHOUT additional credential prompt"
-        echo "  4. If prompted for credentials, SSO is not working correctly"
-        echo ""
-        echo "Troubleshooting:"
-        echo "  - Wait 10-15 minutes for Azure AD changes to propagate"
-        echo "  - Verify all manual configuration steps completed"
-        echo "  - Check session hosts are properly Entra-joined"
-        echo "  - Review Conditional Access policy configuration"
-        echo "  - Verify RBAC roles assigned (Module 08)"
-        echo "  - Check for conflicting per-user MFA settings"
-        echo ""
-        if [[ $FAILED_CHECKS -gt 0 ]]; then
-          echo "Action Required:"
-          echo "  Review failed checks above and re-run SSO configuration operations"
-          echo ""
-        fi
-      } > "artifacts/outputs/sso-verification-complete.txt"
+      $reportContent = @"
+SSO Configuration Verification Report
+======================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
-      if [[ $EXIT_CODE -eq 0 ]]; then
-        echo "[SUCCESS] SSO verification completed successfully"
-        echo ""
-        echo "Next Steps:"
-        echo "  1. Complete manual configuration steps (see report)"
-        echo "  2. Test user SSO experience"
-        echo "  3. Configure Conditional Access policies"
-        echo ""
-      else
-        echo "[ERROR] SSO verification failed - see report for details"
-      fi
+Overall Status: $verificationStatus
 
-      exit $EXIT_CODE
+Summary:
+  Total Checks: $totalChecks
+  Passed: $passedChecks
+  Failed: $failedChecks
+  Warnings: $warningChecks
+
+Host Pool: $hostPoolName
+Resource Group: $resourceGroup
+
+Automated Checks:
+  1. Host pool exists
+  2. SSO enabled in RDP properties (enablerdsaadauth:i:1)
+  3. Session hosts registered
+  4. VM Login RBAC roles assigned
+
+Manual Verification Required:
+
+The following must be configured manually via Azure Portal:
+
+1. Windows Cloud Login Service Principal
+   - Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45
+   - IsRemoteDesktopProtocolEnabled: True
+   - Configure via Microsoft Graph API or Portal
+
+2. Trusted Device Groups (Optional)
+   - Add device group (e.g., AVD-Devices-Pooled-SSO)
+   - Eliminates consent prompts for managed devices
+   - Max 10 device groups allowed
+
+3. Conditional Access Policies
+   - Required Cloud Apps:
+     * Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)
+     * Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)
+     * Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)
+
+   - IMPORTANT: Do NOT apply sign-in frequency to Windows Cloud Login
+
+4. Session Host Requirements
+   - Session hosts must be Entra-joined (not hybrid)
+   - Run 'dsregcmd /status' on session host to verify:
+     * AzureAdJoined: YES
+     * AzureAdPrt: YES
+
+Testing SSO:
+  1. User launches Windows App or Remote Desktop client
+  2. Signs in with Entra ID credentials
+  3. Desktop should launch WITHOUT additional credential prompt
+  4. If prompted for credentials, SSO is not working correctly
+
+Troubleshooting:
+  - Wait 10-15 minutes for Azure AD changes to propagate
+  - Verify all manual configuration steps completed
+  - Check session hosts are properly Entra-joined
+  - Review Conditional Access policy configuration
+  - Verify RBAC roles assigned (Module 08)
+  - Check for conflicting per-user MFA settings
+
+"@
+
+      if ($failedChecks -gt 0) {
+        $reportContent += @"
+Action Required:
+  Review failed checks above and re-run SSO configuration operations
+
+"@
+      }
+
+      $reportContent | Out-File -FilePath "artifacts/outputs/sso-verification-complete.txt" -Encoding UTF8
+
+      if ($exitCode -eq 0) {
+        Write-Host "[SUCCESS] SSO verification completed successfully"
+        Write-Host ""
+        Write-Host "Next Steps:"
+        Write-Host "  1. Complete manual configuration steps (see report)"
+        Write-Host "  2. Test user SSO experience"
+        Write-Host "  3. Configure Conditional Access policies"
+        Write-Host ""
+      } else {
+        Write-Host "[ERROR] SSO verification failed - see report for details"
+      }
+
+      exit $exitCode
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/sso-02-wrapper.ps1
+      rm -f /tmp/sso-02-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
