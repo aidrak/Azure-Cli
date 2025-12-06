@@ -22,198 +22,204 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          for ((i=1; i<={{SESSION_HOST_VM_COUNT}}; i++)); do
-            vm_name="{{SESSION_HOST_NAME_PREFIX}}-$(printf '%02d' $i)"
-            if ! az vm show --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "$vm_name" &>/dev/null; then
-              echo "VM not found: $vm_name"
+          for ($i = 1; $i -le {{SESSION_HOST_VM_COUNT}}; $i++) {
+            $vmName = "{{SESSION_HOST_NAME_PREFIX}}-{0:D2}" -f $i
+            az vm show --resource-group "{{AZURE_RESOURCE_GROUP}}" --name $vmName --output none 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "VM not found: $vmName"
               exit 1
-            fi
-          done
-          echo "All {{SESSION_HOST_VM_COUNT}} VMs verified"
+            }
+          }
+          Write-Host "All {{SESSION_HOST_VM_COUNT}} VMs verified"
+          exit 0
         description: "Verify all session host VMs exist"
 
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
-          running_count=0
-          for ((i=1; i<={{SESSION_HOST_VM_COUNT}}; i++)); do
-            vm_name="{{SESSION_HOST_NAME_PREFIX}}-$(printf '%02d' $i)"
-            vm_state=$(az vm get-instance-view \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --name "$vm_name" \
-              --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" \
-              -o tsv)
-            if [[ "$vm_state" == "VM running" ]]; then
-              ((running_count++))
-            fi
-          done
-          echo "Running VMs: $running_count/{{SESSION_HOST_VM_COUNT}}"
-          if [[ $running_count -eq {{SESSION_HOST_VM_COUNT}} ]]; then
+          $runningCount = 0
+          for ($i = 1; $i -le {{SESSION_HOST_VM_COUNT}}; $i++) {
+            $vmName = "{{SESSION_HOST_NAME_PREFIX}}-{0:D2}" -f $i
+            $vmState = az vm get-instance-view `
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+              --name $vmName `
+              --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" `
+              -o tsv 2>$null
+            if ($vmState -eq "VM running") {
+              $runningCount++
+            }
+          }
+          Write-Host "Running VMs: $runningCount/{{SESSION_HOST_VM_COUNT}}"
+          if ($runningCount -eq {{SESSION_HOST_VM_COUNT}}) {
             exit 0
-          else
+          } else {
             exit 1
-          fi
+          }
         description: "Verify all session host VMs are running"
 
-  # Template command (executed via bash)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
-
-      echo "[START] Session Host Deployment: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      cat > /tmp/session-host-01-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Session Host Deployment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      LOCATION="{{AZURE_LOCATION}}"
-      VM_PREFIX="{{SESSION_HOST_NAME_PREFIX}}"
-      VM_COUNT={{SESSION_HOST_VM_COUNT}}
-      VM_SIZE="{{SESSION_HOST_VM_SIZE}}"
-      GALLERY_NAME="{{GOLDEN_IMAGE_GALLERY_NAME}}"
-      IMAGE_DEFINITION="{{GOLDEN_IMAGE_DEFINITION_NAME}}"
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      SUBNET_NAME="{{NETWORKING_SESSION_HOST_SUBNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $vmPrefix = "{{SESSION_HOST_NAME_PREFIX}}"
+      $vmCount = {{SESSION_HOST_VM_COUNT}}
+      $vmSize = "{{SESSION_HOST_VM_SIZE}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      $imageDefinition = "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $subnetName = "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}"
 
       # Step 1: Validate Azure authentication
-      echo "[PROGRESS] Step 1/6: Validating Azure authentication..."
-      if ! az account show &>/dev/null; then
-        echo "[ERROR] Not authenticated to Azure"
+      Write-Host "[PROGRESS] Step 1/6: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
         exit 1
-      fi
+      }
 
       # Step 2: Validate resource group exists
-      echo "[PROGRESS] Step 2/6: Validating resource group..."
-      if ! az group exists --name "$RESOURCE_GROUP" | grep -q "true"; then
-        echo "[ERROR] Resource group not found: $RESOURCE_GROUP"
+      Write-Host "[PROGRESS] Step 2/6: Validating resource group..."
+      $rgExists = az group exists --name $resourceGroup 2>$null
+      if ($rgExists -ne "true") {
+        Write-Host "[ERROR] Resource group not found: $resourceGroup"
         exit 1
-      fi
+      }
 
       # Step 3: Get golden image ID from gallery
-      echo "[PROGRESS] Step 3/6: Getting golden image from gallery..."
-      IMAGE_ID=$(az sig image-definition show \
-        --resource-group "$RESOURCE_GROUP" \
-        --gallery-name "$GALLERY_NAME" \
-        --gallery-image-definition "$IMAGE_DEFINITION" \
-        --query id -o tsv 2>/dev/null)
+      Write-Host "[PROGRESS] Step 3/6: Getting golden image from gallery..."
+      $imageId = az sig image-definition show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $imageDefinition `
+        --query id -o tsv 2>$null
 
-      if [[ -z "$IMAGE_ID" ]]; then
-        echo "[ERROR] Image definition not found: $IMAGE_DEFINITION in gallery $GALLERY_NAME"
-        echo "[ERROR] Please ensure golden image was captured successfully (Module 05)"
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($imageId)) {
+        Write-Host "[ERROR] Image definition not found: $imageDefinition in gallery $galleryName"
+        Write-Host "[ERROR] Please ensure golden image was captured successfully (Module 05)"
         exit 1
-      fi
+      }
 
-      echo "[VALIDATE] Found image: $IMAGE_ID"
+      Write-Host "[VALIDATE] Found image: $imageId"
 
       # Step 4: Get subnet ID
-      echo "[PROGRESS] Step 4/6: Getting subnet ID..."
-      SUBNET_ID=$(az network vnet subnet show \
-        --resource-group "$RESOURCE_GROUP" \
-        --vnet-name "$VNET_NAME" \
-        --name "$SUBNET_NAME" \
-        --query id -o tsv)
+      Write-Host "[PROGRESS] Step 4/6: Getting subnet ID..."
+      $subnetId = az network vnet subnet show `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $subnetName `
+        --query id -o tsv 2>$null
 
-      if [[ -z "$SUBNET_ID" ]]; then
-        echo "[ERROR] Subnet not found: $SUBNET_NAME in VNet $VNET_NAME"
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($subnetId)) {
+        Write-Host "[ERROR] Subnet not found: $subnetName in VNet $vnetName"
         exit 1
-      fi
+      }
 
-      echo "[VALIDATE] Found subnet: $SUBNET_ID"
+      Write-Host "[VALIDATE] Found subnet: $subnetId"
 
       # Step 5: Deploy session host VMs
-      echo "[PROGRESS] Step 5/6: Deploying $VM_COUNT session host VMs..."
-      echo "[PROGRESS] VM prefix: $VM_PREFIX"
-      echo "[PROGRESS] VM size: $VM_SIZE"
-      echo "[PROGRESS] Location: $LOCATION"
+      Write-Host "[PROGRESS] Step 5/6: Deploying $vmCount session host VMs..."
+      Write-Host "[PROGRESS] VM prefix: $vmPrefix"
+      Write-Host "[PROGRESS] VM size: $vmSize"
+      Write-Host "[PROGRESS] Location: $location"
 
-      deployed_vms=()
-      failed_vms=()
+      $deployedVms = @()
+      $failedVms = @()
 
-      for ((i=1; i<=VM_COUNT; i++)); do
-        vm_name="${VM_PREFIX}-$(printf '%02d' $i)"
+      for ($i = 1; $i -le $vmCount; $i++) {
+        $vmName = "$vmPrefix-{0:D2}" -f $i
 
         # Check if VM already exists
-        if az vm show --resource-group "$RESOURCE_GROUP" --name "$vm_name" &>/dev/null; then
-          echo "[PROGRESS] VM already exists: $vm_name ($i/$VM_COUNT)"
-          deployed_vms+=("$vm_name")
+        az vm show --resource-group $resourceGroup --name $vmName --output none 2>$null
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[PROGRESS] VM already exists: $vmName ($i/$vmCount)"
+          $deployedVms += $vmName
           continue
-        fi
+        }
 
-        echo "[PROGRESS] Creating VM: $vm_name ($i/$VM_COUNT)..."
+        Write-Host "[PROGRESS] Creating VM: $vmName ($i/$vmCount)..."
 
         # Deploy VM from golden image
-        if az vm create \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$vm_name" \
-          --location "$LOCATION" \
-          --image "$IMAGE_ID" \
-          --size "$VM_SIZE" \
-          --subnet "$SUBNET_ID" \
-          --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" \
-          --generate-ssh-keys \
-          --nsg "" \
-          --public-ip-address "" \
-          --os-disk-delete-option Delete \
-          --data-disk-delete-option Delete \
-          --nic-delete-option Delete \
-          --output json > "artifacts/outputs/session-host-deploy-${vm_name}.json" 2>&1; then
+        az vm create `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --location $location `
+          --image $imageId `
+          --size $vmSize `
+          --subnet $subnetId `
+          --admin-username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" `
+          --generate-ssh-keys `
+          --nsg "" `
+          --public-ip-address "" `
+          --os-disk-delete-option Delete `
+          --data-disk-delete-option Delete `
+          --nic-delete-option Delete `
+          --output json > "artifacts/outputs/session-host-deploy-${vmName}.json" 2>&1
 
-          echo "[SUCCESS] VM created: $vm_name"
-          deployed_vms+=("$vm_name")
-        else
-          echo "[ERROR] Failed to create VM: $vm_name"
-          failed_vms+=("$vm_name")
-        fi
-      done
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[SUCCESS] VM created: $vmName"
+          $deployedVms += $vmName
+        } else {
+          Write-Host "[ERROR] Failed to create VM: $vmName"
+          $failedVms += $vmName
+        }
+      }
 
       # Step 6: Summary
-      echo "[PROGRESS] Step 6/6: Deployment summary..."
-      echo "[VALIDATE] Successfully deployed: ${#deployed_vms[@]}/$VM_COUNT"
-      echo "[VALIDATE] Failed: ${#failed_vms[@]}/$VM_COUNT"
+      Write-Host "[PROGRESS] Step 6/6: Deployment summary..."
+      Write-Host "[VALIDATE] Successfully deployed: $($deployedVms.Count)/$vmCount"
+      Write-Host "[VALIDATE] Failed: $($failedVms.Count)/$vmCount"
 
-      if [[ ${#failed_vms[@]} -gt 0 ]]; then
-        echo "[ERROR] Failed VMs: ${failed_vms[*]}"
-        echo "[ERROR] Check artifacts/outputs/ for detailed error logs"
+      if ($failedVms.Count -gt 0) {
+        Write-Host "[ERROR] Failed VMs: $($failedVms -join ', ')"
+        Write-Host "[ERROR] Check artifacts/outputs/ for detailed error logs"
         exit 1
-      fi
+      }
 
       # Save deployment details
-      {
-        echo "Session Host Deployment Summary"
-        echo "================================"
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Configuration:"
-        echo "  Resource Group: $RESOURCE_GROUP"
-        echo "  Location: $LOCATION"
-        echo "  VM Count: $VM_COUNT"
-        echo "  VM Size: $VM_SIZE"
-        echo "  VM Prefix: $VM_PREFIX"
-        echo ""
-        echo "Image Source:"
-        echo "  Gallery: $GALLERY_NAME"
-        echo "  Definition: $IMAGE_DEFINITION"
-        echo "  Image ID: $IMAGE_ID"
-        echo ""
-        echo "Network:"
-        echo "  VNet: $VNET_NAME"
-        echo "  Subnet: $SUBNET_NAME"
-        echo ""
-        echo "Deployed VMs:"
-        for vm in "${deployed_vms[@]}"; do
-          echo "  - $vm"
-        done
-        echo ""
-        echo "Next Steps:"
-        echo "  1. Wait for VMs to fully initialize"
-        echo "  2. Register VMs with host pool (next operation)"
-        echo "  3. Verify connectivity and join status"
-        echo ""
-      } > "artifacts/outputs/session-host-deploy-summary.txt"
+      $reportContent = @"
+Session Host Deployment Summary
+================================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
-      echo "[SUCCESS] Session host deployment completed successfully"
+Configuration:
+  Resource Group: $resourceGroup
+  Location: $location
+  VM Count: $vmCount
+  VM Size: $vmSize
+  VM Prefix: $vmPrefix
+
+Image Source:
+  Gallery: $galleryName
+  Definition: $imageDefinition
+  Image ID: $imageId
+
+Network:
+  VNet: $vnetName
+  Subnet: $subnetName
+
+Deployed VMs:
+$($deployedVms | ForEach-Object { "  - $_" })
+
+Next Steps:
+  1. Wait for VMs to fully initialize
+  2. Register VMs with host pool (next operation)
+  3. Verify connectivity and join status
+
+"@
+      $reportContent | Out-File -FilePath "artifacts/outputs/session-host-deploy-summary.txt" -Encoding UTF8
+
+      Write-Host "[SUCCESS] Session host deployment completed successfully"
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/session-host-01-wrapper.ps1
+      rm -f /tmp/session-host-01-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
