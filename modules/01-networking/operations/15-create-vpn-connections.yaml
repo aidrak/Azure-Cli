@@ -86,8 +86,7 @@ operation:
           "--name $connName " +
           "--resource-group $resourceGroup " +
           "--vnet-gateway1 $gatewayName " +
-          "--local-gateway2 $lngName " +
-          "--connection-type $connType"
+          "--local-gateway2 $lngName"
 
         if ($sharedKey -and $sharedKey -ne "") {
           $createCmd += " --shared-key '$sharedKey'"
