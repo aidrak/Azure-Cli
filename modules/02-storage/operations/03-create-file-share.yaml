@@ -3,6 +3,14 @@ operation:
   name: "Create FSLogix File Share"
   description: "Create Azure Premium file share for FSLogix profile containers with specified quota"
 
+  # [AI DIRECTIVES] - AUTO-MAINTAINED
+  # Update this block if execution fails due to missing context.
+  ai_context:
+    execution_mode: "standard"
+    identity: "user_principal" # Requires permissions to query storage keys/attributes
+    network: "public_access_required" # Management plane access needed
+    known_failure_pattern: "403 Forbidden = Client IP missing from firewall or RBAC delay."
+
   duration:
     expected: 60       # 60 seconds (1 minute)
     timeout: 120       # 2 minutes
