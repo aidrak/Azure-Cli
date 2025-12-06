@@ -17,51 +17,61 @@ operation:
   validation:
     enabled: true
 
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/networking-07-create-dns-zones-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Private DNS zone creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
-      echo "[START] Private DNS zone creation: $(date '+%Y-%m-%d %H:%M:%S')"
-
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
       # Check if private DNS is enabled
-      DNS_ENABLED=$(yq e '.networking.private_dns.enabled' config.yaml)
+      $dnsEnabled = (yq e '.networking.private_dns.enabled' config.yaml)
 
-      if [[ "$DNS_ENABLED" != "true" ]]; then
-        echo "[INFO] Private DNS disabled - skipping"
+      if ($dnsEnabled -ne "true") {
+        Write-Host "[INFO] Private DNS disabled - skipping"
         exit 0
-      fi
+      }
 
-      ZONE_COUNT=$(yq e '.networking.private_dns.zones | length' config.yaml)
-      echo "[PROGRESS] Creating $ZONE_COUNT private DNS zone(s)..."
+      $zoneCount = [int](yq e '.networking.private_dns.zones | length' config.yaml)
+      Write-Host "[PROGRESS] Creating $zoneCount private DNS zone(s)..."
 
-      for i in $(seq 0 $((ZONE_COUNT - 1))); do
-        ZONE_NAME=$(yq e ".networking.private_dns.zones[$i].name" config.yaml)
+      for ($i = 0; $i -lt $zoneCount; $i++) {
+        $zoneName = (yq e ".networking.private_dns.zones[$i].name" config.yaml)
 
-        echo "[PROGRESS] Processing zone: $ZONE_NAME"
+        Write-Host "[PROGRESS] Processing zone: $zoneName"
 
-        if az network private-dns zone show \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$ZONE_NAME" &>/dev/null; then
-          echo "[INFO] Zone already exists: $ZONE_NAME"
+        az network private-dns zone show `
+          --resource-group $resourceGroup `
+          --name $zoneName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] Zone already exists: $zoneName"
           continue
-        fi
+        }
 
-        if ! az network private-dns zone create \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$ZONE_NAME" \
-          --output json > "artifacts/outputs/networking-dns-zone-${ZONE_NAME//./-}.json"; then
-          echo "[ERROR] Failed to create zone: $ZONE_NAME"
+        $safeZoneName = $zoneName -replace '\.', '-'
+        $outputFile = "artifacts/outputs/networking-dns-zone-$safeZoneName.json"
+
+        az network private-dns zone create `
+          --resource-group $resourceGroup `
+          --name $zoneName `
+          --output json > $outputFile
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create zone: $zoneName"
           exit 1
-        fi
+        }
 
-        echo "[SUCCESS] Zone created: $ZONE_NAME"
-      done
+        Write-Host "[SUCCESS] Zone created: $zoneName"
+      }
 
-      echo "[SUCCESS] All private DNS zones created"
+      Write-Host "[SUCCESS] All private DNS zones created"
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-07-create-dns-zones-wrapper.ps1
+      rm -f /tmp/networking-07-create-dns-zones-wrapper.ps1
 
   fixes: []

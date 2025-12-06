@@ -17,63 +17,70 @@ operation:
   validation:
     enabled: true
 
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/networking-08-link-dns-zones-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] DNS zone linking: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
-      echo "[START] DNS zone linking: $(date '+%Y-%m-%d %H:%M:%S')"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $dnsEnabled = (yq e '.networking.private_dns.enabled' config.yaml)
 
-      DNS_ENABLED=$(yq e '.networking.private_dns.enabled' config.yaml)
-
-      if [[ "$DNS_ENABLED" != "true" ]]; then
-        echo "[INFO] Private DNS disabled - skipping"
+      if ($dnsEnabled -ne "true") {
+        Write-Host "[INFO] Private DNS disabled - skipping"
         exit 0
-      fi
+      }
 
-      ZONE_COUNT=$(yq e '.networking.private_dns.zones | length' config.yaml)
-      echo "[PROGRESS] Linking $ZONE_COUNT DNS zone(s) to VNet..."
+      $zoneCount = [int](yq e '.networking.private_dns.zones | length' config.yaml)
+      Write-Host "[PROGRESS] Linking $zoneCount DNS zone(s) to VNet..."
 
-      for i in $(seq 0 $((ZONE_COUNT - 1))); do
-        ZONE_NAME=$(yq e ".networking.private_dns.zones[$i].name" config.yaml)
-        LINK_TO_VNET=$(yq e ".networking.private_dns.zones[$i].link_to_vnet" config.yaml)
+      for ($i = 0; $i -lt $zoneCount; $i++) {
+        $zoneName = (yq e ".networking.private_dns.zones[$i].name" config.yaml)
+        $linkToVnet = (yq e ".networking.private_dns.zones[$i].link_to_vnet" config.yaml)
 
-        if [[ "$LINK_TO_VNET" != "true" ]]; then
-          echo "[INFO] Skipping VNet link for zone: $ZONE_NAME"
+        if ($linkToVnet -ne "true") {
+          Write-Host "[INFO] Skipping VNet link for zone: $zoneName"
           continue
-        fi
+        }
 
-        LINK_NAME="${ZONE_NAME}-vnet-link"
+        $linkName = "$zoneName-vnet-link"
 
-        echo "[PROGRESS] Linking zone to VNet: $ZONE_NAME"
+        Write-Host "[PROGRESS] Linking zone to VNet: $zoneName"
 
-        if az network private-dns link vnet show \
-          --resource-group "$RESOURCE_GROUP" \
-          --zone-name "$ZONE_NAME" \
-          --name "$LINK_NAME" &>/dev/null; then
-          echo "[INFO] VNet link already exists: $LINK_NAME"
+        az network private-dns link vnet show `
+          --resource-group $resourceGroup `
+          --zone-name $zoneName `
+          --name $linkName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] VNet link already exists: $linkName"
           continue
-        fi
+        }
 
-        if ! az network private-dns link vnet create \
-          --resource-group "$RESOURCE_GROUP" \
-          --zone-name "$ZONE_NAME" \
-          --name "$LINK_NAME" \
-          --virtual-network "$VNET_NAME" \
-          --registration-enabled false \
-          --output none; then
-          echo "[ERROR] Failed to link zone: $ZONE_NAME"
+        az network private-dns link vnet create `
+          --resource-group $resourceGroup `
+          --zone-name $zoneName `
+          --name $linkName `
+          --virtual-network $vnetName `
+          --registration-enabled false `
+          --output none
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to link zone: $zoneName"
           exit 1
-        fi
+        }
 
-        echo "[SUCCESS] Zone linked: $ZONE_NAME"
-      done
+        Write-Host "[SUCCESS] Zone linked: $zoneName"
+      }
 
-      echo "[SUCCESS] All DNS zones linked to VNet"
+      Write-Host "[SUCCESS] All DNS zones linked to VNet"
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-08-link-dns-zones-wrapper.ps1
+      rm -f /tmp/networking-08-link-dns-zones-wrapper.ps1
 
   fixes: []
