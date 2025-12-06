@@ -69,6 +69,9 @@ operation:
       # Step 2: Get application group
       echo "[PROGRESS] Step 2/5: Finding application group..."
 
+      # Initialize APP_GROUP_ID
+      APP_GROUP_ID=""
+
       # Try to find by configured name first
       if [[ -n "$APP_GROUP_NAME" && "$APP_GROUP_NAME" != "{{APP_GROUP_NAME}}" ]]; then
         APP_GROUP_ID=$(az desktopvirtualization applicationgroup show \
