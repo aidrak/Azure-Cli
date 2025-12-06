@@ -33,19 +33,12 @@ module:
       duration: 60  # 1 minute
       type: "FAST"
 
-    # Optimized: Install Chrome and Adobe with parallel downloads
-    - id: "golden-image-install-apps-parallel"
-      name: "Install Chrome and Adobe (Optimized)"
-      description: "Download installers in parallel, then install sequentially"
-      duration: 360  # 6 minutes (parallel downloads save time)
-      type: "FAST"
-
-    # Office runs alone (largest install)
-    - id: "golden-image-install-office"
-      name: "Install Office 365"
-      description: "Download and install Office 365 with ODT"
-      duration: 1800  # 30 minutes
-      type: "WAIT"
+    # Install all applications selected in config.yaml using the app manifest
+    - id: "golden-image-install-apps"
+      name: "Install Applications"
+      description: "Install all selected applications in parallel with heartbeat monitoring"
+      duration: 2400 # 40 minutes (accounts for Office, Adobe, Chrome, etc.)
+      type: "HEARTBEAT"
 
     # Sequential configuration steps
     - id: "golden-image-configure-defaults"
