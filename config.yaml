@@ -213,6 +213,12 @@ golden_image:
   image_sku_name: "Win11-Pooled-FSLogix"
   image_publisher_name: "YourCompany"
   image_offer_name: "AVD"
+  # Application manifest for parallel installation
+  applications:
+    - chrome
+    - adobereader
+    # - vscode
+    # - teams
   # Timezone
   timezone: "Central Standard Time"
   timezone_redirection_enabled: true
