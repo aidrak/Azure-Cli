@@ -81,7 +81,7 @@ log_debug() {
     local operation_id="${2:-}"
 
     if [[ $CURRENT_LOG_LEVEL -le $LOG_LEVEL_DEBUG ]]; then
-        echo "[DEBUG] $message"
+        echo "[DEBUG] $message" >&2
         log_structured "DEBUG" "$message" "$operation_id"
     fi
 }
@@ -91,7 +91,7 @@ log_info() {
     local operation_id="${2:-}"
 
     if [[ $CURRENT_LOG_LEVEL -le $LOG_LEVEL_INFO ]]; then
-        echo "[*] $message"
+        echo "[*] $message" >&2
         log_structured "INFO" "$message" "$operation_id"
     fi
 }
@@ -101,7 +101,7 @@ log_warn() {
     local operation_id="${2:-}"
 
     if [[ $CURRENT_LOG_LEVEL -le $LOG_LEVEL_WARN ]]; then
-        echo "[!] WARNING: $message"
+        echo "[!] WARNING: $message" >&2
         log_structured "WARN" "$message" "$operation_id"
     fi
 }
@@ -119,7 +119,7 @@ log_success() {
     local message="$1"
     local operation_id="${2:-}"
 
-    echo "[v] $message"
+    echo "[v] $message" >&2
     log_structured "SUCCESS" "$message" "$operation_id"
 }
 
@@ -142,13 +142,13 @@ log_operation_start() {
         }')
 
     log_structured "OPERATION_START" "Starting operation: $operation_name" "$operation_id" "$metadata"
-    echo ""
-    echo "========================================================================"
-    echo "  Operation: $operation_name"
-    echo "  ID: $operation_id"
-    echo "  Expected Duration: ${expected_duration}s"
-    echo "========================================================================"
-    echo ""
+    echo "" >&2
+    echo "========================================================================" >&2
+    echo "  Operation: $operation_name" >&2
+    echo "  ID: $operation_id" >&2
+    echo "  Expected Duration: ${expected_duration}s" >&2
+    echo "========================================================================" >&2
+    echo "" >&2
 }
 
 log_operation_progress() {
@@ -197,14 +197,14 @@ log_operation_complete() {
 
     log_structured "OPERATION_COMPLETE" "Operation $status: $operation_id" "$operation_id" "$metadata"
 
-    echo ""
-    echo "========================================================================"
-    echo "  Operation Complete: $operation_id"
-    echo "  Status: $status"
-    echo "  Duration: ${duration}s (expected: ${expected_duration}s)"
-    echo "  Exit Code: $exit_code"
-    echo "========================================================================"
-    echo ""
+    echo "" >&2
+    echo "========================================================================" >&2
+    echo "  Operation Complete: $operation_id" >&2
+    echo "  Status: $status" >&2
+    echo "  Duration: ${duration}s (expected: ${expected_duration}s)" >&2
+    echo "  Exit Code: $exit_code" >&2
+    echo "========================================================================" >&2
+    echo "" >&2
 }
 
 log_operation_error() {
