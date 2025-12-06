@@ -119,20 +119,28 @@ state.db
 # Discovery outputs (instance-specific runtime data)
 discovered/
 
+# Keep artifacts directory structure (must come BEFORE ignores)
+!artifacts/
+!artifacts/.gitkeep
+!artifacts/logs/
+!artifacts/logs/.gitkeep
+!artifacts/temp/
+!artifacts/temp/.gitkeep
+!artifacts/workflow-logs/
+!artifacts/workflow-logs/.gitkeep
+!artifacts/workflow-state/
+!artifacts/workflow-state/.gitkeep
+
 # Runtime artifacts (logs, temporary files, workflow tracking)
-artifacts/logs/
-artifacts/temp/
-artifacts/workflow-logs/
-artifacts/workflow-state/
+artifacts/logs/*
+artifacts/temp/*
+artifacts/workflow-logs/*
+artifacts/workflow-state/*
 artifacts/*.jsonl
 artifacts/*.json
 
-# Keep artifacts directory structure
-!artifacts/.gitkeep
-!artifacts/logs/.gitkeep
-!artifacts/temp/.gitkeep
-!artifacts/workflow-logs/.gitkeep
-!artifacts/workflow-state/.gitkeep
+# Re-allow .gitkeep files
+!artifacts/**/.gitkeep
 
 # ============================================================================
 # Archived/Legacy Code (Not Part of Current System)
