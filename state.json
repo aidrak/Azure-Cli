@@ -282,8 +282,8 @@
     },
     "golden-image-03-install-apps": {
       "status": "failed",
-      "duration": 93,
-      "timestamp": "2025-12-06T01:45:04Z"
+      "duration": 32,
+      "timestamp": "2025-12-06T01:47:38Z"
     }
   },
   "current_operation": "golden-image-03-install-apps"
