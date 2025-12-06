@@ -621,3 +621,7 @@
 {"timestamp":"2025-12-06T17:35:33.052Z","level":"INFO","message":"Invalidated cache: Microsoft.Compute% (reason: test)","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:43:42.034Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:43:42.049Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:47:27.304Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:47:27.318Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:47:34.487Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:47:34.502Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
