@@ -84,8 +84,7 @@ operation:
         Write-Host "[INFO]   Group ID: $groupId"
         Write-Host "[SUCCESS] Users group creation complete (already exists)"
 
-        # Save group details to artifacts
-        az ad group show --group $groupId --output json | Out-File -FilePath "artifacts/outputs/identity-group-create.json"
+        # Save group details to artifacts (redirect removed)
         exit 0
       }
 
@@ -125,8 +124,7 @@ operation:
       # Get full group details
       $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
 
-      # Save to artifacts
-      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/identity-group-create.json"
+      # Save to artifacts (redirect removed)
 
       # Extract security enabled flag
       $securityEnabled = $groupDetails.securityEnabled

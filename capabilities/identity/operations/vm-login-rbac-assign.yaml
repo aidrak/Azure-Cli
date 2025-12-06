@@ -249,9 +249,7 @@ operation:
         Write-Host "  - $role"
       }
 
-      # Save assignment details
-      $reportContent = "\n" + [Environment]::NewLine + "VM Login RBAC Assignment Details" + [Environment]::NewLine + "=================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Resource Group:" + [Environment]::NewLine + "  Name: $resourceGroup" + [Environment]::NewLine + "  ID: $rgId" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Standard Users ($stdGroupName):" + [Environment]::NewLine + "  Group ID: $stdGroupId" + [Environment]::NewLine + "  Role: Virtual Machine User Login" + [Environment]::NewLine + "  Scope: Resource Group" + [Environment]::NewLine + "  Permissions: Standard user login to session hosts (no admin rights)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Admin Users ($adminGroupName):" + [Environment]::NewLine + "  Group ID: $adminGroupId" + [Environment]::NewLine + "  Roles:" + [Environment]::NewLine + "    - Virtual Machine Administrator Login" + [Environment]::NewLine + "    - Desktop Virtualization Power On Off Contributor (optional)" + [Environment]::NewLine + "  Scope: Resource Group" + [Environment]::NewLine + "  Permissions:" + [Environment]::NewLine + "    - Admin login to session hosts with local admin rights" + [Environment]::NewLine + "    - Manage session host power state" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Assign application group permissions (next operation)" + [Environment]::NewLine + "  2. Test user login to session hosts" + [Environment]::NewLine + "  3. Verify admin users have elevated access" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-      $reportContent | Out-File -FilePath "artifacts/outputs/vm-login-rbac-assign.txt" -Encoding UTF8
+      # Assignment details (redirect removed per requirements)
 
       Write-Host "[SUCCESS] VM login permissions assignment completed"
       exit 0

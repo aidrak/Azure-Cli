@@ -46,7 +46,7 @@ config.yaml → config-manager.sh → Export ENV vars
                 ↓
        error-handler.sh → Self-heal on failure
                 ↓
-    state.json + artifacts/ → Track execution
+    state.db + artifacts/logs/ → Track execution
 ```
 
 ### Core Components
@@ -70,7 +70,7 @@ config.yaml → config-manager.sh → Export ENV vars
 ```
 azure-cli/
 ├── config.yaml                  # Single source of truth
-├── state.json                   # Execution state
+├── state.db                     # SQLite state database
 │
 ├── core/                        # Engine components (7 files)
 │   ├── config-manager.sh
@@ -97,12 +97,11 @@ azure-cli/
 │   └── test-capability/
 │       └── operations/          # 1 test operation
 │
-├── artifacts/                   # Centralized output
+├── artifacts/                   # Runtime artifacts
 │   ├── logs/                    # JSONL structured logs
-│   ├── outputs/                 # Azure CLI JSON outputs
-│   ├── scripts/                 # Generated PowerShell scripts
-│   ├── state/                   # Retry counters
-│   └── checkpoint_*.json        # Resume files
+│   ├── temp/                    # Temporary files
+│   ├── workflow-logs/           # Workflow execution logs
+│   └── workflow-state/          # Workflow state tracking
 │
 ├── tools/
 │   └── capability-cli.sh        # Capability/operation generator

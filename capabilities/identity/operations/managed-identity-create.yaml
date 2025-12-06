@@ -90,7 +90,6 @@ operation:
         Write-Host "[INFO]   Client ID: $($existingIdentity.clientId)"
         Write-Host "[SUCCESS] Managed identity creation complete (already exists)"
 
-        $existingIdentity | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/managed-identity-create.json"
         exit 0
       }
 
@@ -177,8 +176,7 @@ operation:
         createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
       }
 
-      # Save to artifacts
-      $output | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/managed-identity-create.json"
+      # Save to artifacts (redirect removed per requirements)
 
       Write-Host "[SUCCESS] User-assigned managed identity created successfully"
       Write-Host "[SUCCESS]   Name: $identityName"

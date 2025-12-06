@@ -90,7 +90,6 @@ operation:
         Write-Host "[INFO]   App ID: $($existingApp.appId)"
         Write-Host "[SUCCESS] Service principal creation complete (already exists)"
 
-        $existingApp | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/service-principal-create.json"
         exit 0
       }
 
@@ -215,8 +214,7 @@ operation:
         createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
       }
 
-      # Save to artifacts
-      $output | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/service-principal-create.json"
+      # Save to artifacts (commented out per requirements)
 
       Write-Host "[SUCCESS] Service principal created successfully"
       Write-Host "[SUCCESS]   App ID: $appId"

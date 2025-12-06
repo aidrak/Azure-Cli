@@ -162,18 +162,15 @@ else
 fi
 
 # ============================================================================
-# Step 5: Verify Directory Structure
+# Step 5: Directory Structure
 # ============================================================================
 
-print_header "Step 5: Verifying Directory Structure"
+print_header "Step 5: Setting Up Directory Structure"
 
+# Directories that must exist (from git)
 REQUIRED_DIRS=(
     "core"
     "capabilities"
-    "artifacts"
-    "artifacts/logs"
-    "artifacts/outputs"
-    "artifacts/temp"
     "docs"
     "queries"
 )
@@ -182,8 +179,26 @@ for dir in "${REQUIRED_DIRS[@]}"; do
     if [[ -d "$dir" ]]; then
         print_success "Directory exists: $dir"
     else
-        print_error "Missing directory: $dir"
+        print_error "Missing directory: $dir (git repository may be incomplete)"
         exit 1
+    fi
+done
+
+# Create runtime directories (gitignored)
+RUNTIME_DIRS=(
+    "artifacts"
+    "artifacts/logs"
+    "artifacts/temp"
+    "artifacts/workflow-logs"
+    "artifacts/workflow-state"
+)
+
+for dir in "${RUNTIME_DIRS[@]}"; do
+    if [[ ! -d "$dir" ]]; then
+        mkdir -p "$dir"
+        print_success "Created runtime directory: $dir"
+    else
+        print_info "Runtime directory exists: $dir"
     fi
 done
 

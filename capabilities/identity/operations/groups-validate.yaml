@@ -140,7 +140,7 @@ operation:
           "groups" = $groupDetails
         }
 
-        $validationResult | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/groups-validate.json"
+        # Validation result (redirect removed per requirements)
 
         exit 0
       } else {

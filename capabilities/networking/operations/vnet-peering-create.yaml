@@ -115,7 +115,7 @@ operation:
         --allow-forwarded-traffic $allowForwarded `
         --allow-gateway-transit $allowGatewayTransit `
         --use-remote-gateways $useRemoteGateways `
-        --output json > artifacts/outputs/networking-peering.json
+        --output json
 
       if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to create peering"

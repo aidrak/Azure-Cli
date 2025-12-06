@@ -214,9 +214,7 @@ operation:
         Write-Host "[VALIDATE] Standard users roles: $($stdAssignments -join ', ')"
         Write-Host "[VALIDATE] Admin users roles: $($adminAssignments -join ', ')"
 
-        # Save assignment details
-        $reportContent = "\n" + [Environment]::NewLine + "Storage RBAC Assignment Details" + [Environment]::NewLine + "================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Storage Account:" + [Environment]::NewLine + "  Name: $($storageAccount.StorageAccountName)" + [Environment]::NewLine + "  Resource Group: $resourceGroup" + [Environment]::NewLine + "  File Share: $fileShareName" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Standard Users ($stdGroupName):" + [Environment]::NewLine + "  Group ID: $($stdGroup.Id)" + [Environment]::NewLine + "  Role: Storage File Data SMB Share Contributor" + [Environment]::NewLine + "  Scope: File Share ($fileShareName)" + [Environment]::NewLine + "  Permissions: Read/Write own FSLogix profile" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Admin Users ($adminGroupName):" + [Environment]::NewLine + "  Group ID: $($adminGroup.Id)" + [Environment]::NewLine + "  Role: Storage File Data SMB Share Elevated Contributor" + [Environment]::NewLine + "  Scope: File Share ($fileShareName)" + [Environment]::NewLine + "  Permissions: Manage all FSLogix profiles (elevated)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Assign VM login permissions (next operation)" + [Environment]::NewLine + "  2. Assign application group permissions" + [Environment]::NewLine + "  3. Test user access to FSLogix profiles" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-        $reportContent | Out-File -FilePath "artifacts/outputs/storage-rbac-assign.txt" -Encoding UTF8
+        # Assignment details (redirect removed per requirements)
 
         Write-Host "[SUCCESS] Storage permissions assignment completed"
         exit 0

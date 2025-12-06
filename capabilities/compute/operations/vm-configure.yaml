@@ -77,7 +77,7 @@ operation:
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
         --command-id RunPowerShellScript `
         --scripts "@$tempScript" `
-        --output json > artifacts/outputs/compute-vm-configure.json
+        --output json
       if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
       PSWRAPPER
       pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-configure-wrapper.ps1

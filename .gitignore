@@ -116,21 +116,31 @@ package-lock.json
 state.json
 state.db
 
-# Runtime artifacts (logs, outputs, temporary files)
+# Discovery outputs (instance-specific runtime data)
+discovered/
+
+# Runtime artifacts (logs, temporary files, workflow tracking)
 artifacts/logs/
-artifacts/outputs/
 artifacts/temp/
+artifacts/workflow-logs/
+artifacts/workflow-state/
 artifacts/*.jsonl
 artifacts/*.json
 
 # Keep artifacts directory structure
 !artifacts/.gitkeep
 !artifacts/logs/.gitkeep
-!artifacts/outputs/.gitkeep
 !artifacts/temp/.gitkeep
+!artifacts/workflow-logs/.gitkeep
+!artifacts/workflow-state/.gitkeep
 
 # ============================================================================
 # Archived/Legacy Code (Not Part of Current System)
 # ============================================================================
 # Legacy modules have been superseded by the YAML-based capability system
 legacy/
+tests/legacy/
+scripts/archive-legacy-modules.sh
+
+# Test artifacts (runtime-generated)
+tests/logs/

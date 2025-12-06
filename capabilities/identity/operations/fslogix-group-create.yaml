@@ -102,7 +102,6 @@ operation:
 
       Write-Host "[VALIDATE] Verifying group creation..."
       $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
-      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/fslogix-group-create.json"
 
       Write-Host "[SUCCESS] FSLogix device group created: $groupName (ID: $groupId)"
       Write-Host "[INFO] Use this group for FSLogix profile management policies"

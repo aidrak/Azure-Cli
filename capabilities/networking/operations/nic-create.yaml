@@ -141,7 +141,7 @@ operation:
         --subnet $subnetName `
         --location $location `
         --tags $tags `
-        --output json > artifacts/outputs/networking-nic-create-${nicName}.json
+        --output json
 
       if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to create NIC '$nicName'"

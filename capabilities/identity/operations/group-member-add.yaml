@@ -212,7 +212,7 @@ operation:
         "status" = "success"
       }
 
-      $operationDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/identity-group-member-add.json"
+      # Output details (redirect removed per requirements)
 
       Write-Host ""
       Write-Host "[INFO] Member has been successfully added to the group"

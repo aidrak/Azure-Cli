@@ -53,10 +53,10 @@ source core/config-manager.sh && load_config
 ```
 azure-cli/
 ├── config.yaml              # Single source of truth
-├── state.json               # Execution state
+├── state.db                 # SQLite state database
 ├── core/                    # 7 engine scripts
 ├── capabilities/            # 79 operations
-├── artifacts/               # Logs, outputs (gitignored)
+├── artifacts/               # Logs only (gitignored)
 ├── docs/                    # 74 docs (all <300 lines)
 └── legacy/                  # Archived modules (DO NOT USE)
 ```
@@ -78,7 +78,7 @@ azure-cli/
 2. **YAML operations only** - All logic in `capabilities/*/operations/*.yaml`
 3. **Use @filename syntax** - `--scripts "@path/to/script.ps1"`
 4. **ASCII markers in PowerShell** - `[*] [v] [x] [!] [i]` (NO emoji)
-5. **Save to artifacts/** - `> artifacts/outputs/name.json || true`
+5. **No file redirects** - Let output go to stdout (captured by state.db)
 
 ### Naming Conventions
 
@@ -108,8 +108,8 @@ azure-cli/
 # Check logs
 tail -f artifacts/logs/deployment_$(date +%Y%m%d).jsonl
 
-# View output
-cat artifacts/outputs/<op-id>.json | jq -r '.value[0].message'
+# Query state database
+sqlite3 state.db "SELECT * FROM operations WHERE operation_id = '<op-id>'"
 ```
 
 ### Creating Operations

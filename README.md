@@ -84,15 +84,6 @@ This project uses a **capability-based operation system** for Azure Virtual Desk
 For complete architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 For capability system documentation, see [ARCHITECTURE.md#capability-system](ARCHITECTURE.md#capability-system).
 
-## Migration Status
-
-✅ **COMPLETE** - All legacy modules migrated to capability-based format (2025-12-06)
-
-- **79 operations** migrated across **7 capabilities**
-- **100% PowerShell** logic preserved
-- **Legacy system** archived in `legacy/modules/` (reference only)
-
-See [docs/migration/](docs/migration/) for migration history.
 
 ## Documentation
 
@@ -105,8 +96,6 @@ See [docs/migration/](docs/migration/) for migration history.
 | [config.yaml](config.yaml) | Configuration reference |
 | [docs/](docs/) | Comprehensive documentation |
 
-### Legacy Reference
-- [legacy/](legacy/) - Archived module system (reference only, do not execute)
 
 ---
 

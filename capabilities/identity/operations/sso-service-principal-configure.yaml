@@ -214,9 +214,7 @@ operation:
         # Disconnect
         Disconnect-MgGraph | Out-Null
 
-        # Save details
-        $reportContent = "\n" + [Environment]::NewLine + "Windows Cloud Login Service Principal Configuration" + [Environment]::NewLine + "===================================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Configuration Completed:" + [Environment]::NewLine + "  - RDP protocol enabled on Windows Cloud Login SP" + [Environment]::NewLine + "  - Trusted device group configured (if available)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Service Principal:" + [Environment]::NewLine + "  App ID: 270efc09-cd0d-444b-a71f-39af4910ec45" + [Environment]::NewLine + "  Name: Windows Cloud Login" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "What This Enables:" + [Environment]::NewLine + "  - Passwordless SSO for AVD connections" + [Environment]::NewLine + "  - No consent prompts for trusted device groups" + [Environment]::NewLine + "  - Seamless authentication experience" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Configure Conditional Access policies" + [Environment]::NewLine + "  2. Test SSO with end users" + [Environment]::NewLine + "  3. Monitor authentication logs" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-        $reportContent | Out-File -FilePath "artifacts/outputs/sso-configure-service-principal.txt" -Encoding UTF8
+        # Configuration details (redirect removed per requirements)
 
         Write-Host "[SUCCESS] Windows Cloud Login service principal configured"
         exit 0

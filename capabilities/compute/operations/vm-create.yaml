@@ -138,7 +138,7 @@ operation:
         --enable-secure-boot true `
         --enable-vtpm true `
         --location "{{AZURE_LOCATION}}" `
-        --output json > artifacts/outputs/compute-vm-create.json
+        --output json
 
       # Get VM details
       $vmPublicIp = az vm show `
