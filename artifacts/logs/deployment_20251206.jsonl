@@ -627,3 +627,126 @@
 {"timestamp":"2025-12-06T17:47:34.502Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
 {"timestamp":"2025-12-06T17:48:57.149Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T17:48:57.164Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:54:19.742Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:54:19.770Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:54:19.787Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:54:31.305Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:54:31.336Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:54:31.354Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:21.252Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:55:21.277Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:55:21.292Z","level":"INFO","message":"Discovery engine loaded successfully","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.200Z","level":"INFO","message":"Starting discovery: scope=resource-group, target=NetworkWatcherRG","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.205Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.211Z","level":"INFO","message":"Initializing state database...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.216Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.222Z","level":"INFO","message":"=== Phase 1: Resource Discovery ===","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.227Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.232Z","level":"INFO","message":"Discovering all resources (batch query)...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:25.237Z","level":"INFO","message":"  - Executing batch resource query...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.092Z","level":"INFO","message":"    Found 1 total resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.200Z","level":"INFO","message":"Stored resource: NetworkWatcher_centralus (Microsoft.Network/networkWatchers)","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.206Z","level":"SUCCESS","message":"Discovered and stored 1 resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.213Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.218Z","level":"INFO","message":"Running detailed type-specific discovery...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.224Z","level":"INFO","message":"Discovering compute resources...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:26.229Z","level":"INFO","message":"  - Querying virtual machines...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:27.212Z","level":"INFO","message":"    Found 0 VMs","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:27.217Z","level":"INFO","message":"  - Querying managed disks...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.034Z","level":"INFO","message":"    Found 0 disks","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.039Z","level":"INFO","message":"  - Querying availability sets...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.837Z","level":"INFO","message":"    Found 0 availability sets","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.843Z","level":"SUCCESS","message":"Discovered 0 compute resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.851Z","level":"INFO","message":"Discovering networking resources...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:28.856Z","level":"INFO","message":"  - Querying virtual networks...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:29.867Z","level":"INFO","message":"    Found 0 VNets","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:29.872Z","level":"INFO","message":"  - Querying network security groups...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:30.840Z","level":"INFO","message":"    Found 0 NSGs","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:30.845Z","level":"INFO","message":"  - Querying network interfaces...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:31.772Z","level":"INFO","message":"    Found 0 NICs","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:31.778Z","level":"INFO","message":"  - Querying public IP addresses...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:32.859Z","level":"INFO","message":"    Found 0 public IPs","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:32.864Z","level":"SUCCESS","message":"Discovered 0 networking resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:32.870Z","level":"INFO","message":"Discovering storage resources...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:32.875Z","level":"INFO","message":"  - Querying storage accounts...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:33.989Z","level":"INFO","message":"    Found 0 storage accounts","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:33.994Z","level":"SUCCESS","message":"Discovered 0 storage resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.000Z","level":"INFO","message":"Discovering identity resources (Entra groups)...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.004Z","level":"INFO","message":"  - Querying Entra ID groups...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.476Z","level":"INFO","message":"    Found 8 Entra groups","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.482Z","level":"INFO","message":"    Filtering groups for resource group: NetworkWatcherRG","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.493Z","level":"INFO","message":"    Filtered to  groups","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.498Z","level":"SUCCESS","message":"Discovered  identity resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.504Z","level":"INFO","message":"Discovering AVD resources...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:34.510Z","level":"INFO","message":"  - Querying AVD host pools...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:35.093Z","level":"INFO","message":"    Found 0 host pools","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:35.098Z","level":"INFO","message":"  - Querying AVD application groups...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:35.648Z","level":"INFO","message":"    Found 0 application groups","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:35.655Z","level":"INFO","message":"  - Querying AVD workspaces...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.236Z","level":"INFO","message":"    Found 0 workspaces","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.241Z","level":"SUCCESS","message":"Discovered 0 AVD resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.248Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.253Z","level":"SUCCESS","message":"Phase 1 complete: Discovered [*] Discovering all resources (batch query)...\n[*]   - Executing batch resource query...\n[*]     Found 1 total resources\n\n[*] Stored resource: NetworkWatcher_centralus (Microsoft.Network/networkWatchers)\n[v] Discovered and stored 1 resources\n1 resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.259Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.264Z","level":"INFO","message":"=== Phase 2: Dependency Analysis ===","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.269Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.274Z","level":"INFO","message":"Building dependency graph...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.279Z","level":"INFO","message":"Building dependency graph...","operation_id":"dependency-resolver","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.279Z","level":"INFO","message":"  [*] Building dependency graph...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.319Z","level":"INFO","message":"  [v] Dependency graph built: /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.json (0 dependencies)","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.319Z","level":"SUCCESS","message":"Dependency graph built: /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.json (0 dependencies)","operation_id":"dependency-resolver","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.324Z","level":"INFO","message":"  {","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.329Z","level":"INFO","message":"    \"metadata\": {","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.334Z","level":"INFO","message":"      \"generated_at\": \"2025-12-06T17:55:36+00:00\",","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.338Z","level":"INFO","message":"      \"total_resources\": 1,","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.344Z","level":"INFO","message":"      \"total_dependencies\": 0","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.349Z","level":"INFO","message":"    },","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.357Z","level":"INFO","message":"    \"nodes\": [],","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.363Z","level":"INFO","message":"    \"edges\": []","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.368Z","level":"INFO","message":"  }","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.373Z","level":"INFO","message":"  ERROR: No dependencies found. Run build_dependency_graph first.","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.379Z","level":"SUCCESS","message":"Dependency graph built: /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.json, /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.dot","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.384Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.389Z","level":"SUCCESS","message":"Phase 2 complete: Dependency graph built","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.394Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.399Z","level":"INFO","message":"=== Phase 3: Azure Resource Tagging ===","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.404Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.409Z","level":"INFO","message":"Tagging discovered resources in Azure...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:36.422Z","level":"INFO","message":"  Tagging 1 resources...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.346Z","level":"INFO","message":"    Tagged: NetworkWatcher_centralus","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.354Z","level":"SUCCESS","message":"Tagged 0 resources (0 failed)","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.360Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.365Z","level":"SUCCESS","message":"Phase 3 complete: Resources tagged","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.370Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.377Z","level":"INFO","message":"=== Phase 4: Output Generation ===","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.382Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.390Z","level":"INFO","message":"Generating inventory summary...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.407Z","level":"INFO","message":"Generating full inventory...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.422Z","level":"SUCCESS","message":"Full inventory written to: /mnt/cache_pool/development/azure-cli/discovered/inventory-full.json","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.426Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.431Z","level":"SUCCESS","message":"Phase 4 complete: Outputs generated","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.436Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.441Z","level":"INFO","message":"=====================================================================","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.445Z","level":"INFO","message":"  DISCOVERY COMPLETE","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.450Z","level":"INFO","message":"=====================================================================","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.454Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.459Z","level":"INFO","message":"  Scope:              resource-group","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.464Z","level":"INFO","message":"  Target:             NetworkWatcherRG","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.469Z","level":"INFO","message":"  Duration:           12s","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.473Z","level":"INFO","message":"  Total Resources:    [*] Discovering all resources (batch query)...\n[*]   - Executing batch resource query...\n[*]     Found 1 total resources\n\n[*] Stored resource: NetworkWatcher_centralus (Microsoft.Network/networkWatchers)\n[v] Discovered and stored 1 resources\n1","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.478Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.483Z","level":"INFO","message":"  Resource Breakdown:","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.488Z","level":"INFO","message":"    - Compute:        [*] Discovering compute resources...\n[*]   - Querying virtual machines...\n[*]     Found 0 VMs\n[*]   - Querying managed disks...\n[*]     Found 0 disks\n[*]   - Querying availability sets...\n[*]     Found 0 availability sets\n[v] Discovered 0 compute resources\n0","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.493Z","level":"INFO","message":"    - Networking:     [*] Discovering networking resources...\n[*]   - Querying virtual networks...\n[*]     Found 0 VNets\n[*]   - Querying network security groups...\n[*]     Found 0 NSGs\n[*]   - Querying network interfaces...\n[*]     Found 0 NICs\n[*]   - Querying public IP addresses...\n[*]     Found 0 public IPs\n[v] Discovered 0 networking resources\n0","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.499Z","level":"INFO","message":"    - Storage:        [*] Discovering storage resources...\n[*]   - Querying storage accounts...\n[*]     Found 0 storage accounts\n[v] Discovered 0 storage resources\n0","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.503Z","level":"INFO","message":"    - Identity:       [*] Discovering identity resources (Entra groups)...\n[*]   - Querying Entra ID groups...\n[*]     Found 8 Entra groups\n[*]     Filtering groups for resource group: NetworkWatcherRG\n[*]     Filtered to  groups\n[v] Discovered  identity resources","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.508Z","level":"INFO","message":"    - AVD:            [*] Discovering AVD resources...\n[*]   - Querying AVD host pools...\n[*]     Found 0 host pools\n[*]   - Querying AVD application groups...\n[*]     Found 0 application groups\n[*]   - Querying AVD workspaces...\n[*]     Found 0 workspaces\n[v] Discovered 0 AVD resources\n0","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.513Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.518Z","level":"INFO","message":"  Outputs:","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.522Z","level":"INFO","message":"    - Summary:        [*] Generating inventory summary...","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.527Z","level":"INFO","message":"    - Full:           [*] Generating full inventory...\n[v] Full inventory written to: /mnt/cache_pool/development/azure-cli/discovered/inventory-full.json\n/mnt/cache_pool/development/azure-cli/discovered/inventory-full.json","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.532Z","level":"INFO","message":"    - Graph (JSON):   /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.json","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.537Z","level":"INFO","message":"    - Graph (DOT):    /mnt/cache_pool/development/azure-cli/discovered/dependency-graph.dot","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.542Z","level":"INFO","message":"    - State DB:       /mnt/cache_pool/development/azure-cli/test-discovery-minimal.db","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.546Z","level":"INFO","message":"","operation_id":"discovery","metadata":{}}
+{"timestamp":"2025-12-06T17:55:37.551Z","level":"INFO","message":"=====================================================================","operation_id":"discovery","metadata":{}}
