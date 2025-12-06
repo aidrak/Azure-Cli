@@ -251,11 +251,6 @@ git status
 git add .
 git commit -m "type(scope): Description
 
-Details here.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ```
 
 **Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
@@ -286,6 +281,32 @@ cat state.json | jq               # Check state
 
 ## Important Notes for AI Assistants
 
+### Skill-Based Workflow
+
+This project uses **three specialized skills** that Claude automatically invokes based on context:
+
+1. **azure-state-query** - Query current Azure environment state
+   - **Use when:** User asks "What VMs exist?", "Show current state", "List resources"
+   - **Location:** `.claude/skills/azure-state-query/SKILL.md`
+   - **Tools:** `queries/` directory with JQ filters
+   - **Pattern:** `az {resource} list -o json | jq -f queries/{type}.jq`
+
+2. **azure-operations** - Deploy and modify infrastructure
+   - **Use when:** User asks to deploy, create, or modify Azure resources
+   - **Location:** `.claude/skills/azure-operations/SKILL.md`
+   - **Tools:** `capabilities/` directory with YAML operations
+   - **Pattern:** `./core/engine.sh run {operation-id}`
+
+3. **azure-troubleshooting** - Debug and fix failures
+   - **Use when:** Operations fail or user asks to troubleshoot
+   - **Location:** `.claude/skills/azure-troubleshooting/SKILL.md`
+   - **Tools:** `artifacts/logs/`, `state.json`, validation operations
+   - **Pattern:** `./core/engine.sh resume`
+
+**How it works:** Claude automatically detects which skill to use based on your request. You don't need to manually invoke skills—they're discovered and activated automatically.
+
+### Critical Rules
+
 1. **Read this file first** before making changes
 2. **NEVER create standalone scripts** - use YAML operations
 3. **NEVER hardcode values** - use config.yaml variables
@@ -293,7 +314,6 @@ cat state.json | jq               # Check state
 5. **NEVER use RDP, WinRM, or PowerShell remoting**
 6. **All docs are <300 lines** - navigate via docs/README.md
 7. **Legacy modules (01-12) are archived** - DO NOT use
+8. **Use skills for specialized tasks** - state queries, operations, troubleshooting
 
 ---
-
-**Status:** ✅ Complete - 79 ops, 7 capabilities | Updated: 2025-12-06 | Phase 3 (Self-Healing)
