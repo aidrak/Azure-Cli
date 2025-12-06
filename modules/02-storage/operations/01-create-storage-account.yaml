@@ -9,72 +9,82 @@ operation:
     type: "NORMAL"
 
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
+      cat > /tmp/storage-01-wrapper.ps1 << 'PSWRAPPER'
       # Generate unique storage account name if not provided
-      if [ -z "{{STORAGE_ACCOUNT_NAME}}" ]; then
-        STORAGE_NAME="fslogix$(printf '%05d' $((RANDOM % 99999)))"
-      else
-        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
-      fi
+      if ([string]::IsNullOrEmpty("{{STORAGE_ACCOUNT_NAME}}")) {
+        $storageName = "fslogix$(Get-Random -Minimum 0 -Maximum 99999)"
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
 
-      echo "[START] Creating storage account: $STORAGE_NAME at $(date +%H:%M:%S)"
+      Write-Host "[START] Creating storage account: $storageName at $(Get-Date -Format 'HH:mm:ss')"
 
       # Check if storage account already exists
-      if az storage account show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" &>/dev/null; then
-        echo "[SUCCESS] Storage account already exists: $STORAGE_NAME"
-        exit 0
-      fi
+      $existingAccount = @(az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "[0]" 2>$null | ConvertFrom-Json)
 
-      echo "[PROGRESS] Creating Premium FileStorage account..."
+      if ($existingAccount.Count -gt 0) {
+        Write-Host "[SUCCESS] Storage account already exists: $storageName"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating Premium FileStorage account..."
 
       # Create storage account
-      if az storage account create \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "$STORAGE_NAME" \
-        --location "{{AZURE_LOCATION}}" \
-        --sku Premium_LRS \
-        --kind FileStorage \
-        --enable-large-file-share \
-        --min-tls-version TLS1_2 \
-        --allow-blob-public-access false \
-        --https-only true \
-        --output json > /tmp/storage-account.json; then
+      $createOutput = az storage account create `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --location "{{AZURE_LOCATION}}" `
+        --sku Premium_LRS `
+        --kind FileStorage `
+        --enable-large-file-share `
+        --min-tls-version TLS1_2 `
+        --allow-blob-public-access false `
+        --https-only true `
+        --output json 2>&1
 
-        echo "[VALIDATE] Verifying storage account creation..."
-
-        # Verify storage account exists
-        if az storage account show \
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-          --name "$STORAGE_NAME" &>/dev/null; then
-
-          STORAGE_ID=$(az storage account show \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "$STORAGE_NAME" \
-            --query id -o tsv)
-
-          echo "[SUCCESS] Storage account created: $STORAGE_NAME"
-          echo "  Resource ID: $STORAGE_ID"
-          echo "  SKU: Premium_LRS"
-          echo "  Kind: FileStorage"
-          echo "  TLS: 1.2 minimum"
-          echo "  Public blob access: Disabled"
-          echo "  HTTPS only: Enabled"
-
-          # Export storage account name for subsequent operations
-          echo "$STORAGE_NAME" > /tmp/storage-account-name.txt
-          exit 0
-        else
-          echo "[ERROR] Storage account creation verification failed"
-          exit 1
-        fi
-      else
-        echo "[ERROR] Failed to create storage account"
-        cat /tmp/storage-account.json
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create storage account"
+        Write-Host $createOutput
         exit 1
-      fi
+      }
+
+      Write-Host "[VALIDATE] Verifying storage account creation..."
+
+      # Verify storage account exists
+      $verifyAccount = @(az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($verifyAccount.Count -eq 0) {
+        Write-Host "[ERROR] Storage account creation verification failed"
+        exit 1
+      }
+
+      $storageId = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query id -o tsv
+
+      Write-Host "[SUCCESS] Storage account created: $storageName"
+      Write-Host "  Resource ID: $storageId"
+      Write-Host "  SKU: Premium_LRS"
+      Write-Host "  Kind: FileStorage"
+      Write-Host "  TLS: 1.2 minimum"
+      Write-Host "  Public blob access: Disabled"
+      Write-Host "  HTTPS only: Enabled"
+
+      # Export storage account name for subsequent operations
+      $storageName | Out-File -FilePath /tmp/storage-account-name.txt -NoNewline
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-01-wrapper.ps1
+      rm -f /tmp/storage-01-wrapper.ps1
 
   validation:
     enabled: true

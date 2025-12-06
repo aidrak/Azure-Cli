@@ -9,82 +9,90 @@ operation:
     type: "FAST"
 
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
+      cat > /tmp/storage-03-wrapper.ps1 << 'PSWRAPPER'
       # Get storage account name (from previous operation or config)
-      if [ -f /tmp/storage-account-name.txt ]; then
-        STORAGE_NAME=$(cat /tmp/storage-account-name.txt)
-      else
-        STORAGE_NAME="{{STORAGE_ACCOUNT_NAME}}"
-      fi
+      if (Test-Path /tmp/storage-account-name.txt) {
+        $storageName = Get-Content /tmp/storage-account-name.txt
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
 
-      FILE_SHARE_NAME="{{STORAGE_FILE_SHARE_NAME}}"
-      QUOTA_GB="{{STORAGE_QUOTA_GB}}"
+      $fileShareName = "{{STORAGE_FILE_SHARE_NAME}}"
+      $quotaGb = "{{STORAGE_QUOTA_GB}}"
 
-      echo "[START] Creating file share at $(date +%H:%M:%S)"
-      echo "  Storage account: $STORAGE_NAME"
-      echo "  File share name: $FILE_SHARE_NAME"
-      echo "  Quota: ${QUOTA_GB}GB"
+      Write-Host "[START] Creating file share at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "  Storage account: $storageName"
+      Write-Host "  File share name: $fileShareName"
+      Write-Host "  Quota: ${quotaGb}GB"
 
       # Check if file share already exists
-      echo "[PROGRESS] Checking if file share exists..."
+      Write-Host "[PROGRESS] Checking if file share exists..."
 
-      if az storage share exists \
-        --account-name "$STORAGE_NAME" \
-        --name "$FILE_SHARE_NAME" \
-        --query exists -o tsv 2>/dev/null | grep -q "true"; then
+      $existsOutput = az storage share exists `
+        --account-name $storageName `
+        --name $fileShareName `
+        --query exists -o tsv 2>$null
 
-        echo "[SUCCESS] File share already exists: $FILE_SHARE_NAME"
+      if ($existsOutput -eq "true") {
+        Write-Host "[SUCCESS] File share already exists: $fileShareName"
 
         # Get current quota
-        CURRENT_QUOTA=$(az storage share show \
-          --account-name "$STORAGE_NAME" \
-          --name "$FILE_SHARE_NAME" \
-          --query quota -o tsv 2>/dev/null || echo "0")
+        $currentQuota = az storage share show `
+          --account-name $storageName `
+          --name $fileShareName `
+          --query quota -o tsv 2>$null
 
-        echo "  Current quota: ${CURRENT_QUOTA}GB"
+        Write-Host "  Current quota: ${currentQuota}GB"
         exit 0
-      fi
+      }
 
-      echo "[PROGRESS] Creating file share..."
+      Write-Host "[PROGRESS] Creating file share..."
 
       # Create file share
-      if az storage share create \
-        --account-name "$STORAGE_NAME" \
-        --name "$FILE_SHARE_NAME" \
-        --quota "$QUOTA_GB" \
-        --output json > /tmp/file-share.json; then
+      $createOutput = az storage share create `
+        --account-name $storageName `
+        --name $fileShareName `
+        --quota $quotaGb `
+        --output json 2>&1
 
-        echo "[VALIDATE] Verifying file share creation..."
-
-        # Verify file share exists
-        if az storage share show \
-          --account-name "$STORAGE_NAME" \
-          --name "$FILE_SHARE_NAME" &>/dev/null; then
-
-          SHARE_QUOTA=$(az storage share show \
-            --account-name "$STORAGE_NAME" \
-            --name "$FILE_SHARE_NAME" \
-            --query quota -o tsv)
-
-          echo "[SUCCESS] File share created: $FILE_SHARE_NAME"
-          echo "  Storage account: $STORAGE_NAME"
-          echo "  Provisioned capacity: ${SHARE_QUOTA}GB"
-          echo "  Protocol: SMB 3.1.1"
-          echo "  UNC path: \\\\${STORAGE_NAME}.file.core.windows.net\\${FILE_SHARE_NAME}"
-          echo ""
-          echo "[INFO] FSLogix Configuration Value:"
-          echo "  VHDLocations: \\\\${STORAGE_NAME}.file.core.windows.net\\${FILE_SHARE_NAME}"
-          exit 0
-        else
-          echo "[ERROR] File share creation verification failed"
-          exit 1
-        fi
-      else
-        echo "[ERROR] Failed to create file share"
-        cat /tmp/file-share.json
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create file share"
+        Write-Host $createOutput
         exit 1
-      fi
+      }
+
+      Write-Host "[VALIDATE] Verifying file share creation..."
+
+      # Verify file share exists
+      $verifyShare = @(az storage share show `
+        --account-name $storageName `
+        --name $fileShareName `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($verifyShare.Count -eq 0) {
+        Write-Host "[ERROR] File share creation verification failed"
+        exit 1
+      }
+
+      $shareQuota = az storage share show `
+        --account-name $storageName `
+        --name $fileShareName `
+        --query quota -o tsv
+
+      Write-Host "[SUCCESS] File share created: $fileShareName"
+      Write-Host "  Storage account: $storageName"
+      Write-Host "  Provisioned capacity: ${shareQuota}GB"
+      Write-Host "  Protocol: SMB 3.1.1"
+      Write-Host "  UNC path: \\${storageName}.file.core.windows.net\${fileShareName}"
+      Write-Host ""
+      Write-Host "[INFO] FSLogix Configuration Value:"
+      Write-Host "  VHDLocations: \\${storageName}.file.core.windows.net\${fileShareName}"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-03-wrapper.ps1
+      rm -f /tmp/storage-03-wrapper.ps1
 
   validation:
     enabled: true

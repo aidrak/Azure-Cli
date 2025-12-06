@@ -18,59 +18,67 @@ operation:
 
   # Template
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      echo "[START] Resource group creation: $(date '+%Y-%m-%d %H:%M:%S')"
+      cat > /tmp/rg-01-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Resource group creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      LOCATION="{{AZURE_LOCATION}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
 
-      echo "[PROGRESS] Checking if resource group exists..."
-      if az group show --name "$RESOURCE_GROUP" &>/dev/null; then
-          echo "[INFO] Resource group already exists: $RESOURCE_GROUP"
-          RG_LOCATION=$(az group show --name "$RESOURCE_GROUP" --query location -o tsv)
-          echo "[VALIDATE] Current location: $RG_LOCATION"
+      Write-Host "[PROGRESS] Checking if resource group exists..."
 
-          if [[ "$RG_LOCATION" != "$LOCATION" ]]; then
-              echo "[WARNING] Resource group exists in different location"
-              echo "[WARNING]   Expected: $LOCATION"
-              echo "[WARNING]   Actual: $RG_LOCATION"
-              echo "[WARNING] Using existing resource group location"
-          fi
+      $existingRg = @(az group show --name $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
 
-          echo "[SUCCESS] Resource group verified: $RESOURCE_GROUP"
-          exit 0
-      fi
+      if ($existingRg.Count -gt 0) {
+        Write-Host "[INFO] Resource group already exists: $resourceGroup"
+        $rgLocation = az group show --name $resourceGroup --query location -o tsv
+        Write-Host "[VALIDATE] Current location: $rgLocation"
 
-      echo "[PROGRESS] Creating resource group..."
-      echo "[PROGRESS]   Name: $RESOURCE_GROUP"
-      echo "[PROGRESS]   Location: $LOCATION"
+        if ($rgLocation -ne $location) {
+          Write-Host "[WARNING] Resource group exists in different location"
+          Write-Host "[WARNING]   Expected: $location"
+          Write-Host "[WARNING]   Actual: $rgLocation"
+          Write-Host "[WARNING] Using existing resource group location"
+        }
 
-      if az group create \
-          --name "$RESOURCE_GROUP" \
-          --location "$LOCATION" \
-          --output json > /tmp/rg-create-output.json; then
+        Write-Host "[SUCCESS] Resource group verified: $resourceGroup"
+        exit 0
+      }
 
-          echo "[VALIDATE] Verifying creation..."
-          CREATED_LOCATION=$(jq -r '.location' /tmp/rg-create-output.json)
-          PROVISIONING_STATE=$(jq -r '.properties.provisioningState' /tmp/rg-create-output.json)
+      Write-Host "[PROGRESS] Creating resource group..."
+      Write-Host "[PROGRESS]   Name: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
 
-          echo "[INFO] Location: $CREATED_LOCATION"
-          echo "[INFO] Provisioning State: $PROVISIONING_STATE"
+      $createOutput = az group create `
+        --name $resourceGroup `
+        --location $location `
+        --output json 2>&1
 
-          if [[ "$PROVISIONING_STATE" == "Succeeded" ]]; then
-              echo "[SUCCESS] Resource group created successfully"
-              rm -f /tmp/rg-create-output.json
-              exit 0
-          else
-              echo "[ERROR] Unexpected provisioning state: $PROVISIONING_STATE"
-              rm -f /tmp/rg-create-output.json
-              exit 1
-          fi
-      else
-          echo "[ERROR] Failed to create resource group"
-          exit 1
-      fi
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create resource group"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying creation..."
+      $rgInfo = $createOutput | ConvertFrom-Json
+      $createdLocation = $rgInfo.location
+      $provisioningState = $rgInfo.properties.provisioningState
+
+      Write-Host "[INFO] Location: $createdLocation"
+      Write-Host "[INFO] Provisioning State: $provisioningState"
+
+      if ($provisioningState -eq "Succeeded") {
+        Write-Host "[SUCCESS] Resource group created successfully"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Unexpected provisioning state: $provisioningState"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/rg-01-wrapper.ps1
+      rm -f /tmp/rg-01-wrapper.ps1
 
   # Validation
   validation:

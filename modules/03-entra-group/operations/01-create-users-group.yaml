@@ -29,89 +29,94 @@ operation:
 
   # Template command
   template:
-    type: "az-cli"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      # ==============================================================================
-      # Create AVD Users Security Group
-      # ==============================================================================
+      cat > /tmp/entra-01-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      set -euo pipefail
-
-      echo "[START] Creating AVD Users security group: $(date '+%Y-%m-%d %H:%M:%S')"
+      Write-Host "[START] Creating AVD Users security group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
       # Configuration from config.yaml
-      GROUP_NAME="{{ENTRA_GROUP_USERS_STANDARD}}"
-      GROUP_DESCRIPTION="{{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION}}"
+      $groupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $groupDescription = "{{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION}}"
 
       # Generate mail nickname (lowercase, no spaces)
-      MAIL_NICKNAME=$(echo "$GROUP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+      $mailNickname = $groupName -replace ' ', '-' | % { $_.ToLower() }
 
       # Check if group already exists (idempotent)
-      echo "[PROGRESS] Checking if group exists: $GROUP_NAME"
+      Write-Host "[PROGRESS] Checking if group exists: $groupName"
 
-      GROUP_ID=$(az ad group list \
-        --filter "displayName eq '$GROUP_NAME'" \
-        --query "[0].id" -o tsv 2>/dev/null || echo "")
+      $groupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
 
-      if [[ -n "$GROUP_ID" && "$GROUP_ID" != "None" ]]; then
-        echo "[INFO] Group already exists: $GROUP_NAME"
-        echo "[INFO]   Group ID: $GROUP_ID"
-        echo "[SUCCESS] Users group creation complete (already exists)"
+      if ([string]::IsNullOrEmpty($groupId) -eq $false -and $groupId -ne "None") {
+        Write-Host "[INFO] Group already exists: $groupName"
+        Write-Host "[INFO]   Group ID: $groupId"
+        Write-Host "[SUCCESS] Users group creation complete (already exists)"
 
         # Save group details to artifacts
-        az ad group show --group "$GROUP_ID" \
-          --output json > artifacts/outputs/entra-create-users-group.json
-
+        az ad group show --group $groupId --output json | Out-File -FilePath "artifacts/outputs/entra-create-users-group.json"
         exit 0
-      fi
+      }
 
       # Create security group
-      echo "[PROGRESS] Creating security group..."
-      echo "[PROGRESS]   Name: $GROUP_NAME"
-      echo "[PROGRESS]   Description: $GROUP_DESCRIPTION"
-      echo "[PROGRESS]   Mail nickname: $MAIL_NICKNAME"
+      Write-Host "[PROGRESS] Creating security group..."
+      Write-Host "[PROGRESS]   Name: $groupName"
+      Write-Host "[PROGRESS]   Description: $groupDescription"
+      Write-Host "[PROGRESS]   Mail nickname: $mailNickname"
 
-      if ! GROUP_ID=$(az ad group create \
-        --display-name "$GROUP_NAME" \
-        --mail-nickname "$MAIL_NICKNAME" \
-        --description "$GROUP_DESCRIPTION" \
-        --query id -o tsv 2>&1); then
-
-        echo "[ERROR] Failed to create security group"
-        echo "[ERROR] $GROUP_ID"
+      try {
+        $groupId = az ad group create `
+          --display-name $groupName `
+          --mail-nickname $mailNickname `
+          --description $groupDescription `
+          --query id -o tsv 2>&1
+      } catch {
+        Write-Host "[ERROR] Failed to create security group"
+        Write-Host $groupId
         exit 1
-      fi
+      }
+
+      if ([string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[ERROR] Failed to create security group"
+        exit 1
+      }
 
       # Validate creation
-      echo "[VALIDATE] Verifying group creation..."
+      Write-Host "[VALIDATE] Verifying group creation..."
 
-      if ! az ad group show --group "$GROUP_ID" &>/dev/null; then
-        echo "[ERROR] Group verification failed"
+      $verifyGroup = @(az ad group show --group $groupId --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($verifyGroup.Count -eq 0) {
+        Write-Host "[ERROR] Group verification failed"
         exit 1
-      fi
+      }
 
       # Get full group details
-      GROUP_DETAILS=$(az ad group show --group "$GROUP_ID" --output json)
+      $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
 
       # Save to artifacts
-      echo "$GROUP_DETAILS" > artifacts/outputs/entra-create-users-group.json
+      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/entra-create-users-group.json"
 
       # Extract security enabled flag
-      SECURITY_ENABLED=$(echo "$GROUP_DETAILS" | jq -r '.securityEnabled')
+      $securityEnabled = $groupDetails.securityEnabled
 
-      echo "[SUCCESS] AVD Users group created successfully"
-      echo "[SUCCESS]   Name: $GROUP_NAME"
-      echo "[SUCCESS]   ID: $GROUP_ID"
-      echo "[SUCCESS]   Mail nickname: $MAIL_NICKNAME"
-      echo "[SUCCESS]   Security enabled: $SECURITY_ENABLED"
-      echo ""
-      echo "[INFO] Next steps:"
-      echo "[INFO]   - Add user members: az ad group member add --group '$GROUP_ID' --member-id <user-object-id>"
-      echo "[INFO]   - Use for RBAC assignments in Module 08"
-      echo "[INFO]   - Use for application group assignments in Module 04"
+      Write-Host "[SUCCESS] AVD Users group created successfully"
+      Write-Host "[SUCCESS]   Name: $groupName"
+      Write-Host "[SUCCESS]   ID: $groupId"
+      Write-Host "[SUCCESS]   Mail nickname: $mailNickname"
+      Write-Host "[SUCCESS]   Security enabled: $securityEnabled"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Add user members: az ad group member add --group '$groupId' --member-id <user-object-id>"
+      Write-Host "[INFO]   - Use for RBAC assignments in Module 08"
+      Write-Host "[INFO]   - Use for application group assignments in Module 04"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/entra-01-wrapper.ps1
+      rm -f /tmp/entra-01-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:

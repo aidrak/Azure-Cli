@@ -15,44 +15,50 @@ operation:
     - "hostpool-create-app-group"
 
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/hostpool-04-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
 
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      LOCATION="{{AZURE_LOCATION}}"
-      WORKSPACE_NAME="{{WORKSPACE_NAME}}"
-      WORKSPACE_FRIENDLY_NAME="{{WORKSPACE_FRIENDLY_NAME}}"
-      WORKSPACE_DESCRIPTION="{{WORKSPACE_DESCRIPTION}}"
-      APP_GROUP_NAME="{{APP_GROUP_NAME}}"
-      TAGS="environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $workspaceName = "{{WORKSPACE_NAME}}"
+      $workspaceFriendlyName = "{{WORKSPACE_FRIENDLY_NAME}}"
+      $workspaceDescription = "{{WORKSPACE_DESCRIPTION}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
 
-      echo "[START] Starting 'Create AVD Workspace' operation..."
+      Write-Host "[START] Starting 'Create AVD Workspace' operation..."
 
-      echo "[PROGRESS] Checking if workspace '$WORKSPACE_NAME' already exists..."
-      if az desktopvirtualization workspace show --name "$WORKSPACE_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-        echo "[INFO] Workspace '$WORKSPACE_NAME' already exists."
-      else
-        echo "[PROGRESS] Workspace '$WORKSPACE_NAME' not found. Creating..."
-        az desktopvirtualization workspace create \
-          --name "$WORKSPACE_NAME" \
-          --resource-group "$RESOURCE_GROUP" \
-          --location "$LOCATION" \
-          --description "$WORKSPACE_DESCRIPTION" \
-          --friendly-name "$WORKSPACE_FRIENDLY_NAME" \
-          --tags $TAGS \
+      Write-Host "[PROGRESS] Checking if workspace '$workspaceName' already exists..."
+      $workspaceExists = @(az desktopvirtualization workspace show --name $workspaceName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($workspaceExists.Count -eq 0) {
+        Write-Host "[PROGRESS] Workspace '$workspaceName' not found. Creating..."
+        az desktopvirtualization workspace create `
+          --name $workspaceName `
+          --resource-group $resourceGroup `
+          --location $location `
+          --description $workspaceDescription `
+          --friendly-name $workspaceFriendlyName `
+          --tags $tags `
           --output none
-        echo "[SUCCESS] Successfully created workspace '$WORKSPACE_NAME'."
-      fi
+        Write-Host "[SUCCESS] Successfully created workspace '$workspaceName'."
+      } else {
+        Write-Host "[INFO] Workspace '$workspaceName' already exists."
+      }
 
-      echo "[PROGRESS] Ensuring application group '$APP_GROUP_NAME' is registered to the workspace..."
-      APP_GROUP_ID=$(az desktopvirtualization applicationgroup show --name "$APP_GROUP_NAME" --resource-group "$RESOURCE_GROUP" --query "id" -o tsv)
-      
-      az desktopvirtualization workspace update \
-        --name "$WORKSPACE_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --application-group-references "$APP_GROUP_ID" \
+      Write-Host "[PROGRESS] Ensuring application group '$appGroupName' is registered to the workspace..."
+      $appGroupId = az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "id" -o tsv
+
+      az desktopvirtualization workspace update `
+        --name $workspaceName `
+        --resource-group $resourceGroup `
+        --application-group-references $appGroupId `
         --output none
 
-      echo "[SUCCESS] Application group '$APP_GROUP_NAME' is registered to workspace '$WORKSPACE_NAME'."
+      Write-Host "[SUCCESS] Application group '$appGroupName' is registered to workspace '$workspaceName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/hostpool-04-wrapper.ps1
+      rm -f /tmp/hostpool-04-wrapper.ps1
