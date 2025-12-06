@@ -209,65 +209,92 @@ validate_prerequisites() {
     log_info "Validating prerequisites..." "$operation_exec_id"
 
     local prerequisites=$(get_prerequisites "$yaml_file")
-    local prereq_count=$(echo "$prerequisites" | jq 'length')
 
-    if [[ "$prereq_count" == "0" ]]; then
+    # Check for operation prerequisites
+    local operation_prereqs=$(echo "$prerequisites" | jq -r '.operations // []')
+    local op_prereq_count=$(echo "$operation_prereqs" | jq 'length')
+
+    # Check for resource prerequisites
+    local resource_prereqs=$(echo "$prerequisites" | jq -r '.resources // []')
+    local res_prereq_count=$(echo "$resource_prereqs" | jq 'length')
+
+    if [[ "$op_prereq_count" == "0" ]] && [[ "$res_prereq_count" == "0" ]]; then
         log_info "No prerequisites to validate" "$operation_exec_id"
         return 0
     fi
 
-    log_info "Found $prereq_count prerequisites to validate" "$operation_exec_id"
-
     local failed_count=0
-    local i=0
 
-    while [[ $i -lt $prereq_count ]]; do
-        local prereq=$(echo "$prerequisites" | jq -r ".[$i]")
-        local resource_type=$(echo "$prereq" | jq -r '.resource_type')
-        local name_from_config=$(echo "$prereq" | jq -r '.name_from_config // empty')
-        local resource_name=$(echo "$prereq" | jq -r '.name // empty')
-        local resource_group=$(echo "$prereq" | jq -r '.resource_group // empty')
+    # Validate operation prerequisites
+    if [[ "$op_prereq_count" != "0" ]] && [[ "$op_prereq_count" != "null" ]]; then
+        log_info "Validating $op_prereq_count operation prerequisite(s)..." "$operation_exec_id"
+        local i=0
+        while [[ $i -lt $op_prereq_count ]]; do
+            local required_op=$(echo "$operation_prereqs" | jq -r ".[$i]")
 
-        # If name_from_config is specified, resolve it from environment
-        if [[ -n "$name_from_config" ]]; then
-            resource_name="${!name_from_config:-}"
+            # Check if operation completed in state.json
+            local op_status=$(jq -r ".operations[\"$required_op\"].status // \"not_found\"" "$STATE_FILE")
+
+            if [[ "$op_status" == "completed" ]]; then
+                log_success "Operation prerequisite met: $required_op" "$operation_exec_id"
+            else
+                log_error "Operation prerequisite not met: $required_op (status: $op_status)" "$operation_exec_id"
+                ((failed_count++))
+            fi
+            ((i++))
+        done
+    fi
+
+    # Validate resource prerequisites
+    if [[ "$res_prereq_count" != "0" ]] && [[ "$res_prereq_count" != "null" ]]; then
+        log_info "Validating $res_prereq_count resource prerequisite(s)..." "$operation_exec_id"
+        local i=0
+        while [[ $i -lt $res_prereq_count ]]; do
+            local prereq=$(echo "$resource_prereqs" | jq -r ".[$i]")
+            local resource_type=$(echo "$prereq" | jq -r '.type // .resource_type')
+            local name_from_config=$(echo "$prereq" | jq -r '.name_from_config // empty')
+            local resource_name=$(echo "$prereq" | jq -r '.name // empty')
+            local resource_group=$(echo "$prereq" | jq -r '.resource_group // empty')
+
+            # If name_from_config is specified, resolve it from environment
+            if [[ -n "$name_from_config" ]]; then
+                resource_name="${!name_from_config:-}"
+                if [[ -z "$resource_name" ]]; then
+                    log_error "Config variable not found: $name_from_config" "$operation_exec_id"
+                    ((failed_count++))
+                    ((i++))
+                    continue
+                fi
+            fi
+
+            # Default to AZURE_RESOURCE_GROUP if not specified
+            if [[ -z "$resource_group" ]]; then
+                resource_group="${AZURE_RESOURCE_GROUP:-}"
+            fi
+
             if [[ -z "$resource_name" ]]; then
-                log_error "Config variable not found: $name_from_config" "$operation_exec_id"
+                log_error "Resource prerequisite $((i+1)): Missing resource name" "$operation_exec_id"
                 ((failed_count++))
                 ((i++))
                 continue
             fi
-        fi
 
-        # Default to AZURE_RESOURCE_GROUP if not specified
-        if [[ -z "$resource_group" ]]; then
-            resource_group="${AZURE_RESOURCE_GROUP:-}"
-        fi
+            log_info "Validating resource prerequisite $((i+1))/$res_prereq_count: $resource_name ($resource_type)" "$operation_exec_id"
 
-        if [[ -z "$resource_name" ]]; then
-            log_error "Prerequisite $((i+1)): Missing resource name" "$operation_exec_id"
-            ((failed_count++))
+            # Check if resource exists using query engine
+            if check_resource_exists "$resource_type" "$resource_name" "$resource_group"; then
+                log_success "Resource prerequisite validated: $resource_name" "$operation_exec_id"
+            else
+                log_error "Resource prerequisite not found: $resource_name" "$operation_exec_id"
+                ((failed_count++))
+            fi
+
             ((i++))
-            continue
-        fi
-
-        log_info "Validating prerequisite $((i+1))/$prereq_count: $resource_name ($resource_type)" "$operation_exec_id"
-
-        # Check if resource exists using query engine
-        local resource_exists=0
-        if check_resource_exists "$resource_type" "$resource_name" "$resource_group"; then
-            log_success "Prerequisite validated: $resource_name" "$operation_exec_id"
-            resource_exists=1
-        else
-            log_error "Prerequisite not found: $resource_name" "$operation_exec_id"
-            ((failed_count++))
-        fi
-
-        ((i++))
-    done
+        done
+    fi
 
     if [[ $failed_count -gt 0 ]]; then
-        log_error "Prerequisite validation failed: $failed_count of $prereq_count prerequisites not found" "$operation_exec_id"
+        log_error "Prerequisite validation failed: $failed_count prerequisite(s) not met" "$operation_exec_id"
         return 1
     fi
 

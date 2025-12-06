@@ -578,22 +578,26 @@ show_status() {
 # List Modules and Capabilities
 # ==============================================================================
 list_modules() {
-    echo "Legacy Modules:"
-    for d in "${MODULES_DIR}"/*; do
-        [[ -d "$d" ]] && basename "$d"
-    done
-
+    echo "Available Capabilities:"
     echo ""
-    echo "Capabilities (New):"
     if [[ -d "$CAPABILITIES_DIR" ]]; then
         for d in "${CAPABILITIES_DIR}"/*; do
             if [[ -d "$d" ]]; then
-                echo "$(basename "$d"):"
+                local capability_name=$(basename "$d")
+                echo "[$capability_name]"
                 for op in "$d"/operations/*.yaml; do
-                    [[ -f "$op" ]] && echo "  - $(basename "$op" .yaml)"
+                    if [[ -f "$op" ]]; then
+                        local op_id=$(yq e '.operation.id' "$op" 2>/dev/null || echo "unknown")
+                        local op_name=$(yq e '.operation.name' "$op" 2>/dev/null || echo "Unknown Operation")
+                        echo "  - $op_id: $op_name"
+                    fi
                 done
+                echo ""
             fi
         done
+    else
+        echo "Error: Capabilities directory not found at $CAPABILITIES_DIR"
+        return 1
     fi
 }
 

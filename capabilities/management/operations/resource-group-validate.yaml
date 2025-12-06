@@ -20,9 +20,8 @@ operation:
 
   # Prerequisites
   prerequisites:
-    required:
-      - operation: "resource-group-create"
-        status: "completed"
+    operations:
+      - "resource-group-create"
 
   # Parameters extracted from old operation
   parameters:
