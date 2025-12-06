@@ -103,12 +103,15 @@ load_config() {
     # Golden Image Applications - convert array to CSV
     GOLDEN_IMAGE_APPLICATIONS_CSV=$(yq e '.golden_image.applications | join(",")' "$config_file"); export GOLDEN_IMAGE_APPLICATIONS_CSV
 
-    # Load app manifest content
+    # Load app manifest content and convert to base64-encoded JSON for VM parameter passing
     local app_manifest_file="modules/05-golden-image/app_manifest.yaml"
     if [[ -f "$app_manifest_file" ]]; then
         APP_MANIFEST_CONTENT=$(cat "$app_manifest_file"); export APP_MANIFEST_CONTENT
+        # Convert YAML to JSON and base64 encode (avoids shell escaping issues)
+        APP_MANIFEST_B64=$(yq -o=json "$app_manifest_file" | base64 -w0); export APP_MANIFEST_B64
     else
         APP_MANIFEST_CONTENT=""; export APP_MANIFEST_CONTENT
+        APP_MANIFEST_B64=""; export APP_MANIFEST_B64
     fi
 
     # Session Host section
