@@ -1,0 +1,135 @@
+# ==============================================================================
+# Capability Operation: Associate Application Group to Workspace
+# Migrated from: modules/04-host-pool-workspace/operations/04-create-workspace.yaml
+# ==============================================================================
+
+operation:
+  id: "workspace-associate"
+  name: "Associate Application Group to Workspace"
+  description: "Associate an application group to an existing workspace"
+
+  capability: "avd"
+  operation_mode: "update"
+  resource_type: "Microsoft.DesktopVirtualization/workspaces"
+
+  # Duration expectations
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "workspace_name"
+        type: "string"
+        description: "Name of the workspace"
+        default: "{{WORKSPACE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "appgroup_name"
+        type: "string"
+        description: "Name of the application group to associate"
+        default: "{{APP_GROUP_NAME}}"
+    optional:
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/workspaces"
+        resource_name: "{{WORKSPACE_NAME}}"
+        description: "Workspace exists"
+
+      - type: "property_contains"
+        property: "applicationGroupReferences"
+        expected: "{{APP_GROUP_NAME}}"
+        description: "Application group is associated with workspace"
+
+  # Idempotency: Check for association
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization workspace show \
+        --name "{{WORKSPACE_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "applicationGroupReferences" \
+        --output json 2>/dev/null | grep -q "{{APP_GROUP_NAME}}"
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-workspace-associate-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $workspaceName = "{{WORKSPACE_NAME}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+
+      Write-Host "[START] Starting 'Associate Application Group to Workspace' operation..."
+
+      Write-Host "[PROGRESS] Verifying workspace '$workspaceName' exists..."
+      $workspaceExists = @(az desktopvirtualization workspace show --name $workspaceName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($workspaceExists.Count -eq 0) {
+        Write-Host "[ERROR] Workspace '$workspaceName' not found"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Verifying application group '$appGroupName' exists..."
+      $appGroupExists = @(az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($appGroupExists.Count -eq 0) {
+        Write-Host "[ERROR] Application group '$appGroupName' not found"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Getting application group resource ID..."
+      $appGroupId = az desktopvirtualization applicationgroup show --name $appGroupName --resource-group $resourceGroup --query "id" -o tsv
+
+      Write-Host "[PROGRESS] Checking if application group is already associated..."
+      $currentReferences = @(az desktopvirtualization workspace show --name $workspaceName --resource-group $resourceGroup --query "applicationGroupReferences[]" -o tsv 2>/dev/null)
+
+      if ($currentReferences -contains $appGroupId) {
+        Write-Host "[SUCCESS] Application group '$appGroupName' is already associated with workspace '$workspaceName'"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Associating application group '$appGroupName' to workspace '$workspaceName'..."
+      az desktopvirtualization workspace update `
+        --name $workspaceName `
+        --resource-group $resourceGroup `
+        --application-group-references $appGroupId `
+        --output none
+
+      Write-Host "[SUCCESS] Application group '$appGroupName' is now associated with workspace '$workspaceName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-workspace-associate-wrapper.ps1
+      rm -f /tmp/avd-workspace-associate-wrapper.ps1
+
+  # Rollback: Reverse association by removing app group reference
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disassociate Application Group from Workspace"
+        description: "Remove the application group reference from workspace"
+        command: |
+          az desktopvirtualization workspace update \
+            --name "{{WORKSPACE_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --application-group-references "" \
+            --output none
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

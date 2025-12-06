@@ -1,0 +1,170 @@
+# ==============================================================================
+# Capability Operation: Create Managed Disk
+# Migrated from: Standard Azure managed disk creation patterns
+# ==============================================================================
+
+operation:
+  id: "disk-create"
+  name: "Create Managed Disk"
+  description: "Create an Azure managed disk for VM data storage"
+
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/disks"
+
+  # Duration expectations
+  duration:
+    expected: 60
+    timeout: 120
+    type: "NORMAL"
+
+  # Parameters extracted from standard disk creation
+  parameters:
+    required:
+      - name: "disk_name"
+        type: "string"
+        description: "Name of the managed disk"
+        default: "{{DISK_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+      - name: "disk_size_gb"
+        type: "integer"
+        description: "Size of the disk in GB"
+        default: "{{DISK_SIZE_GB}}"
+    optional:
+      - name: "disk_sku"
+        type: "string"
+        description: "Disk SKU (Premium_LRS, StandardSSD_LRS, Standard_LRS, Premium_ZRS, StandardSSD_ZRS)"
+        default: "StandardSSD_LRS"
+      - name: "disk_tier"
+        type: "string"
+        description: "Disk tier for performance (P1-P80 for Premium, E1-E50 for Standard)"
+        default: "E10"
+      - name: "disk_iops"
+        type: "integer"
+        description: "IOPS for the disk"
+        default: "{{DISK_IOPS}}"
+      - name: "disk_mbps"
+        type: "integer"
+        description: "Throughput (MB/s) for the disk"
+        default: "{{DISK_MBPS}}"
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/disks"
+        resource_name: "{{DISK_NAME}}"
+        description: "Disk created successfully"
+
+      - type: "property_equals"
+        property: "diskSizeGB"
+        expected: "{{DISK_SIZE_GB}}"
+        description: "Disk size matches configuration"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Disk provisioning completed successfully"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az disk show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{DISK_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-disk-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $diskName = "{{DISK_NAME}}"
+      $diskSizeGb = {{DISK_SIZE_GB}}
+      $diskSku = "StandardSSD_LRS"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      Write-Host "[START] Starting 'Create Managed Disk' operation..."
+
+      Write-Host "[PROGRESS] Checking if disk '$diskName' already exists..."
+      $diskExists = @(az disk show --resource-group $resourceGroup --name $diskName --output none 2>$null)
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] Disk '$diskName' already exists."
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating managed disk '$diskName' ($diskSizeGb GB, $diskSku)..."
+
+      # Create the managed disk
+      az disk create `
+        --resource-group $resourceGroup `
+        --name $diskName `
+        --size-gb $diskSizeGb `
+        --sku $diskSku `
+        --location $location `
+        --tags $tags `
+        --output json > artifacts/outputs/compute-disk-create-${diskName}.json
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create disk '$diskName'"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying disk creation..."
+
+      # Verify disk was created
+      $diskInfo = az disk show `
+        --resource-group $resourceGroup `
+        --name $diskName `
+        --query "{id:id, provisioningState:provisioningState, diskSizeGb:diskSizeGb, sku:sku.name}" `
+        --output json | ConvertFrom-Json
+
+      if (-not $diskInfo) {
+        Write-Host "[ERROR] Failed to verify disk creation"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] Successfully created disk '$diskName'"
+      Write-Host "  Resource ID: $($diskInfo.id)"
+      Write-Host "  Size: $($diskInfo.diskSizeGb) GB"
+      Write-Host "  SKU: $($diskInfo.sku)"
+      Write-Host "  State: $($diskInfo.provisioningState)"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-disk-create-wrapper.ps1
+      rm -f /tmp/compute-disk-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Managed Disk"
+        description: "Remove the managed disk"
+        command: |
+          az disk delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{DISK_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
