@@ -2,8 +2,8 @@
 # Operation: Configure Default User Profile for FSLogix
 # ==============================================================================
 operation:
-  id: "golden-image-configure-default-profile"
-  name: "Configure Default User Profile"
+  id: "golden-image-08-configure-default-profile"
+  name: "08: Configure Default User Profile"
   description: "Configure default user profile settings for FSLogix and AVD"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "golden-image-registry-avd"
+    - operation: "golden-image-07-registry-avd"
       status: "completed"
 
   # Validation checks (run after operation completes)
@@ -33,12 +33,12 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/09-configure-default-profile.ps1" \
+        --scripts "@modules/05-golden-image/operations/08-configure-default-profile.ps1" \
         --output json > artifacts/outputs/golden-image-configure-default-profile.json
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "09-configure-default-profile.ps1"
+    file: "08-configure-default-profile.ps1"
     content: |
       # ==============================================================================
       # Configure Default User Profile for FSLogix and AVD
