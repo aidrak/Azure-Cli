@@ -119,7 +119,7 @@ operation:
           --address-prefixes @addressPrefixArray `
           --location $location `
           --dns-servers @dnsServerArray `
-          --output json > artifacts/outputs/networking-vnet-create.json
+          --output json
       } else {
         $addressPrefixArray = $addressSpace -split ' '
 
@@ -128,7 +128,7 @@ operation:
           --name $vnetName `
           --address-prefixes @addressPrefixArray `
           --location $location `
-          --output json > artifacts/outputs/networking-vnet-create.json
+          --output json
       }
 
       if ($LASTEXITCODE -ne 0) {

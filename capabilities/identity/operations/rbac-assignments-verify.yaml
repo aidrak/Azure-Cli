@@ -342,7 +342,7 @@ operation:
 
       $reportContent += "Troubleshooting:" + [Environment]::NewLine + "  - RBAC changes can take 5-10 minutes to propagate" + [Environment]::NewLine + "  - Users may need to sign out and back in" + [Environment]::NewLine + "  - Check Azure Portal IAM for role assignments" + [Environment]::NewLine + [Environment]::NewLine
 
-      $reportContent | Out-File -FilePath "artifacts/outputs/rbac-verification-complete.txt" -Encoding UTF8
+      # Report content generated (redirect removed per requirements)
 
       if ($exitCode -eq 0) {
         Write-Host "[SUCCESS] RBAC verification completed successfully"

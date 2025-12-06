@@ -100,7 +100,6 @@ operation:
         Write-Host "[WARNING] Skipping RBAC assignment"
 
         $reportContent = "\n" + [Environment]::NewLine + "Autoscaling RBAC Assignment Skipped" + [Environment]::NewLine + "====================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Autoscaling is disabled in configuration." + [Environment]::NewLine + "To enable autoscaling, set autoscaling.enabled: true in config.yaml" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-        $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-assign-rbac.txt" -Encoding UTF8
         exit 0
       }
 
@@ -127,9 +126,6 @@ operation:
         Write-Host "[WARNING] Azure Virtual Desktop service principal not found"
         Write-Host "[WARNING] This service principal may not exist in your tenant"
         Write-Host "[WARNING] You may need to manually assign the role via Azure Portal"
-
-        $reportContent = "\n" + [Environment]::NewLine + "Autoscaling RBAC Assignment - Manual Required" + [Environment]::NewLine + "==============================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "The Azure Virtual Desktop service principal was not found." + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Manual Assignment Required:" + [Environment]::NewLine + "  1. Navigate to Azure Portal → Subscriptions" + [Environment]::NewLine + "  2. Select your subscription: $subscriptionId" + [Environment]::NewLine + "  3. Go to Access Control (IAM)" + [Environment]::NewLine + "  4. Click '+ Add' → 'Add role assignment'" + [Environment]::NewLine + "  5. Role: 'Desktop Virtualization Power On Off Contributor'" + [Environment]::NewLine + "  6. Assign to: 'Managed identity'" + [Environment]::NewLine + "  7. Select: 'Azure Virtual Desktop' service principal" + [Environment]::NewLine + "  8. Review + assign" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Alternative: Use PowerShell" + [Environment]::NewLine + "  Connect-AzAccount" + [Environment]::NewLine + "  `$avdSp = Get-AzADServicePrincipal -DisplayName 'Azure Virtual Desktop'" + [Environment]::NewLine + "  New-AzRoleAssignment -ObjectId `$avdSp.Id -RoleDefinitionName 'Desktop Virtualization Power On Off Contributor' -Scope '/subscriptions/$subscriptionId'" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-        $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-assign-rbac.txt" -Encoding UTF8
         exit 0
       }
 
@@ -174,9 +170,6 @@ operation:
 
       Write-Host "[VALIDATE] Role assignment: $roleAssignment"
 
-      # Save assignment details
-      $reportContent = "\n" + [Environment]::NewLine + "Autoscaling RBAC Assignment" + [Environment]::NewLine + "===========================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Service Principal:" + [Environment]::NewLine + "  Name: Azure Virtual Desktop" + [Environment]::NewLine + "  ID: $avdSpId" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Role Assignment:" + [Environment]::NewLine + "  Role: Desktop Virtualization Power On Off Contributor" + [Environment]::NewLine + "  Scope: Subscription ($subscriptionId)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "What This Enables:" + [Environment]::NewLine + "  - AVD service can power on/off session host VMs" + [Environment]::NewLine + "  - Required for autoscaling functionality" + [Environment]::NewLine + "  - Scaling plan can manage VM power states" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Create scaling plan (next operation)" + [Environment]::NewLine + "  2. Configure scaling schedules" + [Environment]::NewLine + "  3. Assign scaling plan to host pool" + [Environment]::NewLine + "  4. Monitor autoscaling activity" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
-      $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-assign-rbac.txt" -Encoding UTF8
 
       Write-Host "[SUCCESS] Autoscaling RBAC assignment completed"
       exit 0

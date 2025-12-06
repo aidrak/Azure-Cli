@@ -94,7 +94,7 @@ operation:
             --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
             --command-id RunPowerShellScript `
             --scripts "Write-Host 'VM is ready'" `
-            --output json > artifacts/outputs/golden-image-validate-vm-ready-test.json 2>&1) {
+            --output json 2>&1) {
             Write-Host "[SUCCESS] VM is fully ready and accepting run-commands"
             exit 0
           } else {

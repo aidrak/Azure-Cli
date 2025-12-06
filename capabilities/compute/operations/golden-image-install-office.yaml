@@ -77,7 +77,7 @@ operation:
       '@
       $tempScript = "/tmp/golden-image-install-office-$([guid]::NewGuid()).ps1"
       $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
-      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json > artifacts/outputs/golden-image-install-office.json
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json
       if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
       PSWRAPPER
       pwsh -NoProfile -NonInteractive -File /tmp/golden-image-install-office-wrapper.ps1

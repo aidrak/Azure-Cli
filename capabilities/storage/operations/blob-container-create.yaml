@@ -117,7 +117,7 @@ operation:
         --account-key $storageKey `
         --name $containerName `
         --public-access $publicAccess `
-        --output json > artifacts/outputs/storage-blob-container-create.json
+        --output json
 
       if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to create blob container"

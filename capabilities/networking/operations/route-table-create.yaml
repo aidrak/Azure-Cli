@@ -104,14 +104,14 @@ operation:
           --location $location `
           --disable-bgp-route-propagation `
           --tags $tags `
-          --output json > artifacts/outputs/networking-route-table-create.json
+          --output json
       } else {
         az network route-table create `
           --resource-group $resourceGroup `
           --name $routeTableName `
           --location $location `
           --tags $tags `
-          --output json > artifacts/outputs/networking-route-table-create.json
+          --output json
       }
 
       if ($LASTEXITCODE -ne 0) {

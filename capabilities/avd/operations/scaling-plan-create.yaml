@@ -131,12 +131,6 @@ operation:
         Write-Host "[WARNING] Autoscaling is disabled in configuration"
         Write-Host "[INFO] Skipping scaling plan creation"
 
-        @{
-          "status" = "skipped"
-          "reason" = "autoscaling_disabled"
-          "timestamp" = (Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ")
-        } | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
-
         exit 0
       }
 
@@ -175,7 +169,6 @@ operation:
           --name $scalingPlanName `
           --output json | ConvertFrom-Json
 
-        $planDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
         exit 0
       }
 
@@ -209,9 +202,6 @@ operation:
       Write-Host "[SUCCESS] Scaling Plan: $($planDetails.name)"
       Write-Host "[SUCCESS] ID: $($planDetails.id)"
       Write-Host "[SUCCESS] Location: $($planDetails.location)"
-
-      # Save plan details
-      $planDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
 
       Write-Host ""
       Write-Host "[INFO] Next steps:"

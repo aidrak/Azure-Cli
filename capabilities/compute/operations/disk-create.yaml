@@ -121,7 +121,7 @@ operation:
         --sku $diskSku `
         --location $location `
         --tags $tags `
-        --output json > artifacts/outputs/compute-disk-create-${diskName}.json
+        --output json
 
       if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to create disk '$diskName'"

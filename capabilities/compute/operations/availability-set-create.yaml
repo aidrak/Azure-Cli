@@ -117,7 +117,7 @@ operation:
           --platform-fault-domain-count $faultDomainCount `
           --platform-update-domain-count $updateDomainCount `
           --tags $tags `
-          --output json > artifacts/outputs/compute-availability-set-create.json
+          --output json
       } else {
         az vm availability-set create `
           --resource-group $resourceGroup `
@@ -127,7 +127,7 @@ operation:
           --platform-update-domain-count $updateDomainCount `
           --unmanaged `
           --tags $tags `
-          --output json > artifacts/outputs/compute-availability-set-create.json
+          --output json
       }
 
       if ($LASTEXITCODE -ne 0) {
