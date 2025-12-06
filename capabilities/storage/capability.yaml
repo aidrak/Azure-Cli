@@ -1,0 +1,63 @@
+capability:
+  id: "storage"
+  name: "Storage Resources"
+  description: "Azure storage resources including storage accounts, file shares, blob containers, and queues"
+  version: "1.0.0"
+
+  resource_types:
+    - "Microsoft.Storage/storageAccounts"
+    - "Microsoft.Storage/storageAccounts/fileServices/shares"
+    - "Microsoft.Storage/storageAccounts/blobServices/containers"
+    - "Microsoft.Storage/storageAccounts/queueServices/queues"
+    - "Microsoft.Storage/storageAccounts/tableServices/tables"
+
+  operations: []  # Will be populated as operations are created
+
+  common_dependencies:
+    - capability: "networking"
+      reason: "Storage accounts can use service endpoints and private endpoints"
+      required: false
+    - capability: "identity"
+      reason: "Storage may require RBAC assignments for data access"
+      required: false
+
+  required_providers:
+    - "Microsoft.Storage"
+
+  common_tags:
+    - "environment"
+    - "data_classification"
+    - "retention_policy"
+    - "backup_enabled"
+
+  validation_rules:
+    - name: "storage_account_name_unique"
+      description: "Verify storage account name is globally unique (3-24 lowercase alphanumeric)"
+    - name: "sku_availability"
+      description: "Ensure storage SKU is available in target region"
+    - name: "file_share_quota"
+      description: "Validate file share quota is within limits for SKU"
+    - name: "network_rules_compatibility"
+      description: "Ensure network rules are compatible with storage account tier"
+
+  cost_considerations:
+    - "Premium storage significantly more expensive than Standard"
+    - "LRS is cheapest redundancy option, GRS/GZRS most expensive"
+    - "Hot tier has higher storage costs but lower access costs"
+    - "Archive tier has lowest storage cost but high rehydration costs"
+    - "Large file shares require premium tier"
+
+  security_considerations:
+    - "Enable secure transfer (HTTPS) required"
+    - "Disable public blob access when possible"
+    - "Use managed identities for authentication"
+    - "Enable soft delete for blobs and containers"
+    - "Configure network rules and firewall"
+    - "Enable storage account encryption (enabled by default)"
+
+  data_redundancy_options:
+    - "LRS (Locally Redundant Storage) - 3 copies in one datacenter"
+    - "ZRS (Zone Redundant Storage) - 3 copies across availability zones"
+    - "GRS (Geo-Redundant Storage) - LRS + async replication to paired region"
+    - "GZRS (Geo-Zone Redundant Storage) - ZRS + async replication to paired region"
+    - "RA-GRS/RA-GZRS - GRS/GZRS with read access to secondary region"

@@ -1,0 +1,145 @@
+# ==============================================================================
+# Capability Operation: Create AVD Host Pool
+# Migrated from: modules/04-host-pool-workspace/operations/01-create-host-pool.yaml
+# ==============================================================================
+
+operation:
+  id: "hostpool-create"
+  name: "Create AVD Host Pool"
+  description: "Create the AVD host pool with configured type, load balancer, and session limit"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools"
+
+  # Duration expectations
+  duration:
+    expected: 120
+    timeout: 240
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        default: "{{HOST_POOL_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "host_pool_type"
+        type: "string"
+        description: "Host pool type (Pooled or Personal)"
+        default: "{{HOST_POOL_TYPE}}"
+      - name: "max_sessions"
+        type: "integer"
+        description: "Maximum number of sessions per host"
+        default: "{{HOST_POOL_MAX_SESSIONS}}"
+      - name: "load_balancer"
+        type: "string"
+        description: "Load balancer type (BreadthFirst, DepthFirst, Persistent)"
+        default: "{{HOST_POOL_LOAD_BALANCER}}"
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+      - name: "friendly_name"
+        type: "string"
+        description: "Friendly display name for the host pool"
+        default: "{{HOST_POOL_NAME}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/hostPools"
+        resource_name: "{{HOST_POOL_NAME}}"
+        description: "Host pool exists"
+
+      - type: "property_equals"
+        property: "hostPoolType"
+        expected: "{{HOST_POOL_TYPE}}"
+        description: "Host pool type matches configuration"
+
+      - type: "property_equals"
+        property: "maxSessionLimit"
+        expected: "{{HOST_POOL_MAX_SESSIONS}}"
+        description: "Max session limit matches configuration"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization hostpool show \
+        --name "{{HOST_POOL_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-hostpool-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $hostPoolType = "{{HOST_POOL_TYPE}}"
+      $maxSessions = "{{HOST_POOL_MAX_SESSIONS}}"
+      $loadBalancer = "{{HOST_POOL_LOAD_BALANCER}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      Write-Host "[START] Starting 'Create AVD Host Pool' operation..."
+
+      Write-Host "[PROGRESS] Checking if host pool '$hostPoolName' already exists..."
+      $poolExists = @(az desktopvirtualization hostpool show --name $hostPoolName --resource-group $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($poolExists.Count -gt 0) {
+        Write-Host "[SUCCESS] Host pool '$hostPoolName' already exists."
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Host pool '$hostPoolName' not found. Creating..."
+      az desktopvirtualization hostpool create `
+        --name $hostPoolName `
+        --resource-group $resourceGroup `
+        --location $location `
+        --host-pool-type $hostPoolType `
+        --load-balancer-type $loadBalancer `
+        --max-session-limit $maxSessions `
+        --preferred-app-group-type "Desktop" `
+        --friendly-name $hostPoolName `
+        --tags $tags `
+        --output none
+
+      Write-Host "[SUCCESS] Successfully created host pool '$hostPoolName'."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-hostpool-create-wrapper.ps1
+      rm -f /tmp/avd-hostpool-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete AVD Host Pool"
+        description: "Remove the host pool and associated resources"
+        command: |
+          az desktopvirtualization hostpool delete \
+            --name "{{HOST_POOL_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

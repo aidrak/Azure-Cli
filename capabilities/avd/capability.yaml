@@ -1,0 +1,98 @@
+capability:
+  id: "avd"
+  name: "Azure Virtual Desktop"
+  description: "Azure Virtual Desktop resources including host pools, application groups, workspaces, and session hosts"
+  version: "1.0.0"
+
+  resource_types:
+    - "Microsoft.DesktopVirtualization/hostpools"
+    - "Microsoft.DesktopVirtualization/applicationgroups"
+    - "Microsoft.DesktopVirtualization/workspaces"
+    - "Microsoft.DesktopVirtualization/scalingplans"
+    - "Microsoft.DesktopVirtualization/hostpools/sessionhosts"
+
+  operations: []  # Will be populated as operations are created
+
+  common_dependencies:
+    - capability: "compute"
+      reason: "Session hosts are Azure VMs"
+      required: true
+
+    - capability: "networking"
+      reason: "Session hosts require network connectivity"
+      required: true
+
+    - capability: "storage"
+      reason: "FSLogix profiles stored in Azure Files"
+      required: true
+
+    - capability: "identity"
+      reason: "User access and RBAC assignments"
+      required: true
+
+  required_providers:
+    - "Microsoft.DesktopVirtualization"
+    - "Microsoft.Compute"
+    - "Microsoft.Network"
+    - "Microsoft.Storage"
+
+  common_tags:
+    - "environment"
+    - "workload"
+    - "cost_center"
+    - "avd_pool_type"
+    - "backup_enabled"
+
+  validation_rules:
+    - name: "host_pool_type_validation"
+      description: "Validate host pool type (Pooled vs Personal)"
+
+    - name: "load_balancing_validation"
+      description: "Ensure load balancing type matches pool type"
+
+    - name: "max_session_limit"
+      description: "Verify max session limit is appropriate for VM size"
+
+    - name: "registration_token_expiry"
+      description: "Check registration token has not expired"
+
+    - name: "vm_domain_join"
+      description: "Verify session host VMs are domain-joined"
+
+  cost_considerations:
+    - "VM compute costs are primary expense"
+    - "Use autoscale to shut down VMs during off-hours"
+    - "Right-size VMs based on user workload profiles"
+    - "Consider Azure Hybrid Benefit for Windows licenses"
+    - "Premium storage required for FSLogix adds cost"
+    - "Monitor and remove unused session hosts"
+
+  architecture_patterns:
+    - pattern: "Pooled Desktop"
+      description: "Multi-session Windows 10/11, shared resources"
+      use_case: "Task workers, call centers, general office"
+      cost_profile: "Most cost-effective"
+
+    - pattern: "Personal Desktop"
+      description: "Dedicated desktop per user, persistent"
+      use_case: "Developers, power users, regulatory requirements"
+      cost_profile: "Higher cost per user"
+
+    - pattern: "RemoteApp"
+      description: "Published applications only, no full desktop"
+      use_case: "Specific application access"
+      cost_profile: "Efficient resource usage"
+
+  session_host_requirements:
+    - "Windows 10/11 Multi-session or Windows Server 2019/2022"
+    - "Domain-joined (AD DS or Entra DS)"
+    - "AVD agent installed and registered"
+    - "Network connectivity to AVD control plane"
+    - "Access to FSLogix profile storage"
+
+  performance_considerations:
+    - "4 vCPU minimum for Windows 10/11 multi-session"
+    - "8-16 GB RAM for light/medium workloads"
+    - "Premium SSD for OS disk"
+    - "Low latency networking for optimal user experience"
+    - "Monitor CPU, memory, disk, network metrics"
