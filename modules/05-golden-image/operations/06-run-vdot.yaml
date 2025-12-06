@@ -26,15 +26,27 @@ operation:
         description: "VDOT script downloaded and extracted"
 
   # Template command (variables substituted at runtime)
+  # NOTE: Uses PowerShell (pwsh) instead of bash for simpler script handling
   template:
-    type: "az-vm-run-command"
+    type: "powershell-vm-command"
     command: |
-      az vm run-command invoke \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/06-run-vdot.ps1" \
-        --output json > artifacts/outputs/golden-image-run-vdot.json
+      pwsh -NoProfile -NonInteractive -Command {
+        $scriptContent = @'
+{{POWERSHELL_CONTENT}}
+'@
+        $tempScript = "/tmp/golden-image-06-run-vdot-$([guid]::NewGuid()).ps1"
+        $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+        try {
+          az vm run-command invoke `
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+            --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+            --command-id RunPowerShellScript `
+            --scripts "@$tempScript" `
+            --output json > artifacts/outputs/golden-image-run-vdot.json
+        } finally {
+          if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+        }
+      }
 
   # PowerShell script (can be inline or external file)
   powershell:
