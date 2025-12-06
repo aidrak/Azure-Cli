@@ -23,7 +23,7 @@ operation:
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
         --scripts "@modules/05-golden-image/operations/03-install-apps.ps1" \
-        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestPath='C:\Temp\app_manifest.yaml' \
+        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestB64='{{APP_MANIFEST_B64}}' \
         --output json > artifacts/outputs/golden-image-install-apps.json
 
   powershell:

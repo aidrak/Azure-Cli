@@ -126,6 +126,7 @@ substitute_variables() {
     result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/${GOLDEN_IMAGE_DEFINITION_NAME:-}}"
     result="${result//\{\{GOLDEN_IMAGE_APPLICATIONS_CSV\}\}/${GOLDEN_IMAGE_APPLICATIONS_CSV:-}}"
     result="${result//\{\{APP_MANIFEST_CONTENT\}\}/${APP_MANIFEST_CONTENT:-}}"
+    result="${result//\{\{APP_MANIFEST_B64\}\}/${APP_MANIFEST_B64:-}}"
 
     # Host Pool variables
     result="${result//\{\{HOST_POOL_NAME\}\}/${HOST_POOL_NAME:-}}"
