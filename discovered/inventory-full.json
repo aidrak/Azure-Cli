@@ -1,0 +1,22 @@
+{
+  "discovery": {
+    "timestamp": "2025-12-06T17:57:22Z",
+    "scope": "resource-group",
+    "target": "NetworkWatcherRG",
+    "duration_seconds": 11,
+    "total_resources": 1
+  },
+  "resources": [
+    {
+      "id": "/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/NetworkWatcherRG/providers/Microsoft.Network/networkWatchers/NetworkWatcher_centralus",
+      "name": "NetworkWatcher_centralus",
+      "type": "Microsoft.Network/networkWatchers",
+      "resourceGroup": "NetworkWatcherRG",
+      "location": "centralus",
+      "provisioningState": "",
+      "managedByToolkit": 0,
+      "tags": "{\"discovered-by-toolkit\":\"true\",\"discovery-timestamp\":\"2025-12-06T17:55:36Z\"}",
+      "properties": "{\"changedTime\":\"2025-12-06T17:55:37.104837+00:00\",\"createdTime\":\"2025-12-03T04:38:15.067757+00:00\",\"extendedLocation\":null,\"id\":\"/subscriptions/6c7eb5e0-8e77-40dd-a06c-bdb06c2d5856/resourceGroups/NetworkWatcherRG/providers/Microsoft.Network/networkWatchers/NetworkWatcher_centralus\",\"identity\":null,\"kind\":null,\"location\":\"centralus\",\"managedBy\":null,\"name\":\"NetworkWatcher_centralus\",\"plan\":null,\"properties\":null,\"provisioningState\":\"Succeeded\",\"resourceGroup\":\"NetworkWatcherRG\",\"sku\":null,\"tags\":{\"discovered-by-toolkit\":\"true\",\"discovery-timestamp\":\"2025-12-06T17:55:36Z\"},\"type\":\"Microsoft.Network/networkWatchers\"}"
+    }
+  ]
+}
