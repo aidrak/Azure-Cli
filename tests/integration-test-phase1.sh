@@ -440,7 +440,10 @@ source "${PROJECT_ROOT}/core/state-manager.sh" 2>/dev/null
 # ==============================================================================
 test_start "Build Dependency Graph"
 
-if graph=$(build_dependency_graph 2>/dev/null); then
+if graph_output=$(build_dependency_graph 2>&1); then
+    # Extract JSON portion (skip log lines)
+    graph=$(echo "$graph_output" | sed -n '/^{/,/^}$/p')
+
     if echo "$graph" | jq -e '.nodes' > /dev/null 2>&1; then
         node_count=$(echo "$graph" | jq '.nodes | length')
         edge_count=$(echo "$graph" | jq '.edges | length')

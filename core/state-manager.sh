@@ -31,8 +31,8 @@ set -euo pipefail
 
 # Project paths
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-STATE_DB="${PROJECT_ROOT}/state.db"
-SCHEMA_FILE="${PROJECT_ROOT}/schemas/state.schema.sql"
+STATE_DB="${STATE_DB:-${PROJECT_ROOT}/state.db}"
+SCHEMA_FILE="${SCHEMA_FILE:-${PROJECT_ROOT}/schemas/state.schema.sql}"
 
 # Cache TTL (seconds)
 CACHE_TTL=300  # 5 minutes
