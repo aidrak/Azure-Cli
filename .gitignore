@@ -141,3 +141,8 @@ artifacts/*.json
 # ============================================================================
 # Legacy modules have been superseded by the YAML-based capability system
 legacy/
+tests/legacy/
+scripts/archive-legacy-modules.sh
+
+# Test artifacts (runtime-generated)
+tests/logs/
