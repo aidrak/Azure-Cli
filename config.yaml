@@ -117,6 +117,48 @@ networking:
             next_hop_ip_address: "10.1.0.4" # Firewall IP (if using VirtualAppliance)
         associated_subnets:
           - "subnet-session-hosts" # Subnets to associate this route table with
+  # VPN Gateway Configuration
+  vpn_gateway:
+    enabled: false # Set to true to enable VPN gateway
+    name: "vpn-gw"
+    type: "Vpn" # Vpn or ExpressRoute
+    sku: "VpnGw1" # VpnGw1, VpnGw2, VpnGw3, VpnGw4, VpnGw5
+    generation: "Generation1" # Generation1 or Generation2
+    active_active: false # Enable active-active mode for high availability
+  # Local Network Gateway Configuration
+  local_network_gateways:
+    enabled: false # Set to true to enable local network gateways
+    gateways:
+      - name: "lng-onprem"
+        gateway_address: "203.0.113.50" # Public IP of on-premises VPN device
+        address_spaces:
+          - "192.168.0.0/16" # On-premises network address space
+        bgp_settings:
+          enabled: false # Enable BGP for dynamic routing
+          asn: 65000 # Autonomous System Number
+      # Add more local network gateways as needed
+      # - name: "lng-datacenter"
+      #   gateway_address: "203.0.113.51"
+      #   address_spaces:
+      #     - "172.16.0.0/12"
+      #   bgp_settings:
+      #     enabled: true
+      #     asn: 65001
+  # VPN Connection Configuration
+  vpn_connections:
+    enabled: false # Set to true to enable VPN connections
+    connections:
+      - name: "vpn-conn-onprem"
+        local_network_gateway_name: "lng-onprem"
+        connection_type: "IPsec" # IPsec or Vnet2Vnet
+        shared_key: "" # Pre-shared key (set via environment variable for security)
+        enable_bgp: false # Enable BGP for this connection
+        # Example with BGP:
+        # - name: "vpn-conn-datacenter"
+        #   local_network_gateway_name: "lng-datacenter"
+        #   connection_type: "IPsec"
+        #   shared_key: ""
+        #   enable_bgp: true
 # ==============================================================================
 # Storage Configuration (Module 02)
 # ==============================================================================

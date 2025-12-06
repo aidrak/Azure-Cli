@@ -1,0 +1,99 @@
+# ==============================================================================
+# Operation: Create Local Network Gateways
+# ==============================================================================
+operation:
+  id: "networking-create-local-network-gateways"
+  name: "Create Local Network Gateways"
+  description: "Create local network gateways for on-premises or remote sites (if enabled)"
+
+  duration:
+    expected: 120
+    timeout: 240
+    type: "FAST"
+
+  requires:
+    - "networking-create-gateway-subnet"
+
+  validation:
+    enabled: true
+
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-13-create-local-network-gateways-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Local Network Gateway creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if local network gateways are enabled
+      $lngEnabled = (yq e '.networking.local_network_gateways.enabled' config.yaml)
+
+      if ($lngEnabled -ne "true") {
+        Write-Host "[INFO] Local Network Gateways disabled - skipping"
+        exit 0
+      }
+
+      $gatewayCount = [int](yq e '.networking.local_network_gateways.gateways | length' config.yaml)
+      Write-Host "[PROGRESS] Creating $gatewayCount local network gateway(s)..."
+
+      for ($i = 0; $i -lt $gatewayCount; $i++) {
+        $lngName = (yq e ".networking.local_network_gateways.gateways[$i].name" config.yaml)
+        $gatewayAddress = (yq e ".networking.local_network_gateways.gateways[$i].gateway_address" config.yaml)
+
+        Write-Host "[PROGRESS] Processing local network gateway: $lngName"
+
+        # Check if gateway already exists
+        az network local-gateway show `
+          --resource-group $resourceGroup `
+          --name $lngName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] Local network gateway already exists: $lngName"
+          continue
+        }
+
+        # Build address spaces string
+        $addressSpaceCount = [int](yq e ".networking.local_network_gateways.gateways[$i].address_spaces | length" config.yaml)
+        $addressSpaces = @()
+        for ($j = 0; $j -lt $addressSpaceCount; $j++) {
+          $prefix = (yq e ".networking.local_network_gateways.gateways[$i].address_spaces[$j]" config.yaml)
+          $addressSpaces += $prefix
+        }
+
+        $addressSpacesStr = $addressSpaces -join " "
+
+        # Check if BGP is enabled for this gateway
+        $bgpEnabled = (yq e ".networking.local_network_gateways.gateways[$i].bgp_settings.enabled" config.yaml)
+
+        $createCmd = "az network local-gateway create " +
+          "--resource-group $resourceGroup " +
+          "--name $lngName " +
+          "--gateway-ip-address $gatewayAddress " +
+          "--local-address-prefixes $addressSpacesStr"
+
+        if ($bgpEnabled -eq "true") {
+          $bgpAsn = (yq e ".networking.local_network_gateways.gateways[$i].bgp_settings.asn" config.yaml)
+          $createCmd += " --asn $bgpAsn --bgp-peering-address 192.168.1.1"
+        }
+
+        $createCmd += " --output none"
+
+        Write-Host "[PROGRESS] Creating gateway with command: $createCmd"
+        Invoke-Expression $createCmd
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create local network gateway: $lngName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Local network gateway created: $lngName"
+      }
+
+      Write-Host "[SUCCESS] All local network gateways created"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-13-create-local-network-gateways-wrapper.ps1
+      rm -f /tmp/networking-13-create-local-network-gateways-wrapper.ps1
+
+  fixes: []
