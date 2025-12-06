@@ -2,8 +2,8 @@
 # Operation: Create Temporary VM
 # ==============================================================================
 operation:
-  id: "golden-image-create-vm"
-  name: "Create Temporary VM"
+  id: "golden-image-00-create-vm"
+  name: "00: Create Temporary VM"
   description: "Create temporary Windows 11 VM for golden image preparation"
 
   # Duration expectations

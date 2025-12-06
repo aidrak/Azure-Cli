@@ -2,8 +2,8 @@
 # Operation: Configure Windows Registry for AVD
 # ==============================================================================
 operation:
-  id: "golden-image-registry-avd"
-  name: "Configure AVD Registry"
+  id: "golden-image-07-registry-avd"
+  name: "07: Configure AVD Registry"
   description: "Configure Windows registry settings for Azure Virtual Desktop optimization"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "golden-image-run-vdot"
+    - operation: "golden-image-06-run-vdot"
       status: "completed"
 
   # Validation checks (run after operation completes)
@@ -37,12 +37,12 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/08-registry-avd.ps1" \
+        --scripts "@modules/05-golden-image/operations/07-registry-avd.ps1" \
         --output json > artifacts/outputs/golden-image-registry-avd.json
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "08-registry-avd.ps1"
+    file: "07-registry-avd.ps1"
     content: |
       # ==============================================================================
       # Configure Windows Registry for Azure Virtual Desktop

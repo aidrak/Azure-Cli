@@ -1,0 +1,230 @@
+# ==============================================================================
+# Operation: Install Applications Dynamically
+# ==============================================================================
+operation:
+  id: "golden-image-03-install-apps"
+  name: "03: Install Applications"
+  description: "Install all selected applications in parallel with heartbeat monitoring"
+
+  duration:
+    expected: 1200 # 20 minutes
+    timeout: 2400 # 40 minutes
+    type: "HEARTBEAT"
+
+  requires:
+    - operation: "golden-image-02-system-prep"
+      status: "completed"
+
+  template:
+    type: "az-vm-run-command"
+    command: |
+      az vm run-command create \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@modules/05-golden-image/operations/03-install-apps.ps1" \
+        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' AppManifest='''{{APP_MANIFEST_CONTENT}}''' \
+        --output json > artifacts/outputs/golden-image-install-apps.json
+
+  powershell:
+    file: "03-install-apps.ps1"
+    content: |
+      [CmdletBinding()]
+      param(
+          [string]$AppNames,
+          [string]$AppManifest
+      )
+
+      # ==============================================================================
+      # Helper Functions
+      # ==============================================================================
+      function Start-Heartbeat {
+          param([string]$AppName, [int]$ParentProcessId)
+          $scriptBlock = {
+              param($AppName, $ParentProcessId)
+              $logDir = "C:\DeployLogs"
+              if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+              $heartbeatFile = "$logDir\$($AppName).heartbeat"
+              $parentProcess = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+              while ($parentProcess) {
+                  [datetime]::UtcNow.ToString("o") | Set-Content -Path $heartbeatFile
+                  Start-Sleep -Seconds 30
+                  $parentProcess = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+              }
+          }
+          return Start-Job -ScriptBlock $scriptBlock -ArgumentList $AppName, $ParentProcessId
+      }
+
+      function Install-YamlModule {
+          if (-not (Get-Module -ListAvailable -Name "powershell-yaml")) {
+              Write-Host "[INFO] PowerShell-YAML module not found. Installing..."
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Confirm:$false -Force
+              Install-Module -Name powershell-yaml -Scope CurrentUser -Confirm:$false -Force
+              Import-Module powershell-yaml
+          }
+      }
+
+      # ==============================================================================
+      # Main Execution
+      # ==============================================================================
+      Write-Host "[START] Dynamic Application Installation Engine"
+      Install-YamlModule
+
+      $LogDir = "C:\DeployLogs"
+      $TempDir = "C:\Temp"
+      if (-not (Test-Path $LogDir)) { New-Item -Path $LogDir -ItemType Directory -Force | Out-Null }
+      if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
+
+      try {
+          # Parse inputs
+          $selectedAppNames = $AppNames -split ',' | ForEach-Object { $_.Trim() }
+          $manifest = $AppManifest | ConvertFrom-Yaml
+
+          $appsToProcess = $selectedAppNames | ForEach-Object {
+              $appNameKey = $_
+              $appConfig = $manifest.PSObject.Properties | Where-Object { $_.Name -eq $appNameKey } | Select-Object -First 1 -ExpandProperty Value
+              if ($appConfig) {
+                  # Add the key name to the object itself for easier reference
+                  $appConfig | Add-Member -MemberType NoteProperty -Name "Key" -Value $appNameKey
+                  return $appConfig
+              } else {
+                  Write-Warning "[SKIP] Application '$appNameKey' not found in manifest."
+              }
+          }
+
+          if ($appsToProcess.Count -eq 0) {
+              Write-Host "[SUCCESS] No applications selected for installation."
+              exit 0
+          }
+
+          Write-Host "[INFO] The following applications will be installed:"
+          $appsToProcess | ForEach-Object { Write-Host "- $($_.name)" }
+
+          # --- STAGE 1: DOWNLOADS ---
+          Write-Host "[PROGRESS] Stage 1/3: Starting Downloads..."
+          $downloadJobs = @()
+          foreach ($app in $appsToProcess) {
+              if ($app.source_type -ne 'Url') { continue }
+              $job = Start-Job -ScriptBlock {
+                  param($app, $parentPid)
+                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Download" -ParentProcessId $parentPid
+                  try {
+                      Write-Host "[$($app.name)] Downloading from $($app.url)..."
+                      Invoke-WebRequest -Uri $app.url -OutFile $app.outfile -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
+                      return @{ Status = 'Success'; AppKey = $app.Key }
+                  } catch {
+                      return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
+                  } finally {
+                      if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                  }
+              } -ArgumentList $app, $PID
+              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
+              $downloadJobs += $job
+          }
+          
+          Write-Host "[MONITOR] Waiting for $($downloadJobs.Count) download(s) to complete..."
+          $downloadJobs | Wait-Job | Out-Null
+          $failedApps = @()
+          $downloadJobs | ForEach-Object {
+              $result = Receive-Job $_
+              if ($result.Status -ne 'Success') {
+                  Write-Error "[$($result.AppKey)] Download failed: $($result.Error)"
+                  $failedApps += $result.AppKey
+              } else {
+                  Write-Host "[SUCCESS] $($result.AppKey) downloaded successfully."
+              }
+              Remove-Job $_
+          }
+
+          # --- STAGE 2: EXTRACTIONS (for ZIP files) ---
+          Write-Host "[PROGRESS] Stage 2/3: Starting Extractions..."
+          $unzipJobs = @()
+          foreach ($app in $appsToProcess) {
+              if ($failedApps.Contains($app.Key) -or $app.source_format -ne 'zip') { continue }
+              $job = Start-Job -ScriptBlock {
+                  param($app, $parentPid)
+                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Unzip" -ParentProcessId $parentPid
+                  try {
+                      Write-Host "[$($app.name)] Extracting $($app.outfile)..."
+                      Expand-Archive -Path $app.outfile -DestinationPath $app.unzip_dir -Force
+                      return @{ Status = 'Success'; AppKey = $app.Key }
+                  } catch {
+                      return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
+                  } finally {
+                      if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                  }
+              } -ArgumentList $app, $PID
+              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
+              $unzipJobs += $job
+          }
+
+          if ($unzipJobs.Count -gt 0) {
+              Write-Host "[MONITOR] Waiting for $($unzipJobs.Count) extraction(s) to complete..."
+              $unzipJobs | Wait-Job | Out-Null
+              $unzipJobs | ForEach-Object {
+                  $result = Receive-Job $_
+                  if ($result.Status -ne 'Success') {
+                      Write-Error "[$($result.AppKey)] Extraction failed: $($result.Error)"
+                      $failedApps += $result.AppKey
+                  } else {
+                      Write-Host "[SUCCESS] $($result.AppKey) extracted successfully."
+                  }
+                  Remove-Job $_
+              }
+          }
+          
+          # --- STAGE 3: INSTALLATIONS ---
+          Write-Host "[PROGRESS] Stage 3/3: Starting Installations..."
+          $installJobs = @()
+          foreach ($app in $appsToProcess) {
+              if ($failedApps.Contains($app.Key)) { continue }
+              $job = Start-Job -ScriptBlock {
+                  param($app, $parentPid)
+                  $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Install" -ParentProcessId $parentPid
+                  try {
+                      $cmd = $app.install_command.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir)
+                      $args = $app.install_args.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir).Replace('{logdir}', "C:\DeployLogs")
+                      
+                      Write-Host "[$($app.name)] Installing with command: $cmd $args"
+                      $process = Start-Process -FilePath $cmd -ArgumentList $args -Wait -PassThru -ErrorAction Stop
+                      
+                      if ($app.success_codes -contains $process.ExitCode) {
+                          return @{ Status = 'Success'; AppKey = $app.Key }
+                      } else {
+                          return @{ Status = 'Failed'; AppKey = $app.Key; Error = "Installer failed with exit code $($process.ExitCode)" }
+                      }
+                  } catch {
+                      return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
+                  } finally {
+                      if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                  }
+              } -ArgumentList $app, $PID
+              $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
+              $installJobs += $job
+          }
+          
+          Write-Host "[MONITOR] Waiting for $($installJobs.Count) installation(s) to complete..."
+          $installJobs | Wait-Job | Out-Null
+          $installJobs | ForEach-Object {
+              $result = Receive-Job $_
+              if ($result.Status -ne 'Success') {
+                  Write-Error "[$($result.AppKey)] Installation failed: $($result.Error)"
+                  $failedApps += $result.AppKey
+              } else {
+                  Write-Host "[SUCCESS] $($result.AppKey) installed successfully."
+              }
+              Remove-Job $_
+          }
+
+          # Final Summary
+          if ($failedApps.Count -gt 0) {
+              throw "One or more applications failed to install: $($failedApps -join ', ')"
+          }
+
+          Write-Host "[SUCCESS] All selected applications installed successfully."
+          exit 0
+
+      } catch {
+          Write-Error "[FATAL] A critical error occurred. $($_.Exception.Message)"
+          exit 1
+      }
