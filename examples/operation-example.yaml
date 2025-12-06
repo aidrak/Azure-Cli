@@ -1,0 +1,127 @@
+# ==============================================================================
+# Example Operation - Create Azure Storage Account
+# ==============================================================================
+#
+# This is a comprehensive example showing all features of the operation executor.
+# Use this as a template for creating your own operations.
+#
+# ==============================================================================
+
+operation:
+  # Required: Unique identifier for this operation type
+  id: "create-storage-account"
+
+  # Required: Human-readable name shown in logs and UI
+  name: "Create Azure Storage Account with File Share"
+
+  # Required: Operation type - one of: create, update, delete, configure
+  type: "create"
+
+  # Optional: Azure resource type for state tracking
+  # This enables automatic resource state capture after execution
+  resource_type: "Microsoft.Storage/storageAccounts"
+
+  # Optional: Resource name to track (supports variable substitution)
+  # After successful execution, the executor will query this resource
+  # and store its state in the database
+  resource_name: "${STORAGE_ACCOUNT_NAME}"
+
+# ==============================================================================
+# Prerequisites - Resources that must exist before execution
+# ==============================================================================
+
+prerequisites:
+  # Example 1: Resolve resource name from environment variable
+  - resource_type: "Microsoft.Network/virtualNetworks"
+    name_from_config: "NETWORKING_VNET_NAME"
+    # Optional: Override resource group (defaults to AZURE_RESOURCE_GROUP)
+    # resource_group: "custom-rg"
+
+  # Example 2: Use hardcoded resource name
+  # (less flexible but useful for fixed dependencies)
+  # - resource_type: "Microsoft.Network/networkSecurityGroups"
+  #   name: "default-nsg"
+  #   resource_group: "${AZURE_RESOURCE_GROUP}"
+
+# ==============================================================================
+# Execution Steps - Run sequentially in order
+# ==============================================================================
+
+steps:
+  # Step 1: Create the storage account
+  - name: "Create storage account"
+    command: |
+      az storage account create \
+        --name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --location ${AZURE_LOCATION} \
+        --sku ${STORAGE_SKU} \
+        --kind ${STORAGE_KIND} \
+        --https-only ${STORAGE_HTTPS_ONLY} \
+        --min-tls-version ${STORAGE_MIN_TLS_VERSION} \
+        --public-network-access ${STORAGE_PUBLIC_NETWORK_ACCESS} \
+        --allow-blob-public-access false \
+        --tags Environment=Production ManagedBy=AzureToolkit
+
+  # Step 2: Enable advanced features
+  - name: "Enable SMB Multichannel"
+    command: |
+      az storage account file-service-properties update \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-smb-multichannel ${STORAGE_ENABLE_SMB_MULTICHANNEL}
+
+  # Step 3: Create file share
+  - name: "Create file share"
+    command: |
+      az storage share create \
+        --name ${STORAGE_FILE_SHARE_NAME} \
+        --account-name ${STORAGE_ACCOUNT_NAME} \
+        --quota ${STORAGE_QUOTA_GB} \
+        --enabled-protocols SMB
+
+  # Step 4: Optional - Enable Entra Kerberos (may fail if not supported)
+  - name: "Enable Entra Kerberos Authentication"
+    command: |
+      az storage account update \
+        --name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --enable-files-aadds ${STORAGE_ENABLE_ENTRA_KERBEROS}
+    # This step may fail in some regions or SKUs - continue anyway
+    continue_on_error: true
+
+  # Step 5: Set RBAC permissions (example - adjust as needed)
+  - name: "Grant Storage File Data SMB Share Contributor to current user"
+    command: |
+      CURRENT_USER_ID=$(az ad signed-in-user show --query id -o tsv)
+      STORAGE_ACCOUNT_ID=$(az storage account show --name ${STORAGE_ACCOUNT_NAME} --resource-group ${AZURE_RESOURCE_GROUP} --query id -o tsv)
+      az role assignment create \
+        --assignee $CURRENT_USER_ID \
+        --role "Storage File Data SMB Share Contributor" \
+        --scope $STORAGE_ACCOUNT_ID
+    continue_on_error: true
+
+# ==============================================================================
+# Rollback Steps - Executed in REVERSE order on failure
+# ==============================================================================
+# These steps are executed if any step fails (unless continue_on_error: true)
+# Rollback is best-effort - failures are logged but don't stop rollback
+
+rollback:
+  # This will be executed SECOND (reverse order)
+  - name: "Remove RBAC assignments"
+    command: |
+      STORAGE_ACCOUNT_ID=$(az storage account show --name ${STORAGE_ACCOUNT_NAME} --resource-group ${AZURE_RESOURCE_GROUP} --query id -o tsv 2>/dev/null || echo "")
+      if [[ -n "$STORAGE_ACCOUNT_ID" ]]; then
+        az role assignment delete \
+          --role "Storage File Data SMB Share Contributor" \
+          --scope $STORAGE_ACCOUNT_ID || true
+      fi
+
+  # This will be executed FIRST (reverse order)
+  - name: "Delete storage account"
+    command: |
+      az storage account delete \
+        --name ${STORAGE_ACCOUNT_NAME} \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --yes

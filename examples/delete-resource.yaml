@@ -1,0 +1,62 @@
+# ==============================================================================
+# Operation: Delete Resource
+# ==============================================================================
+# This example shows a deletion operation with safety checks
+
+operation:
+  id: "delete-test-vm"
+  name: "Delete Test Virtual Machine"
+  type: "delete"
+  resource_type: "Microsoft.Compute/virtualMachines"
+  resource_name: "test-vm-01"
+
+prerequisites:
+  - resource_type: "Microsoft.Compute/virtualMachines"
+    name: "test-vm-01"
+
+steps:
+  # Step 1: Stop VM before deletion (optional - for clean shutdown)
+  - name: "Stop virtual machine"
+    command: |
+      az vm stop \
+        --name test-vm-01 \
+        --resource-group ${AZURE_RESOURCE_GROUP}
+    continue_on_error: true
+
+  # Step 2: Delete VM
+  - name: "Delete virtual machine"
+    command: |
+      az vm delete \
+        --name test-vm-01 \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --yes
+
+  # Step 3: Delete NIC (if not auto-deleted)
+  - name: "Delete network interface"
+    command: |
+      az network nic delete \
+        --name test-vm-01-nic \
+        --resource-group ${AZURE_RESOURCE_GROUP}
+    continue_on_error: true
+
+  # Step 4: Delete OS disk (if not auto-deleted)
+  - name: "Delete OS disk"
+    command: |
+      DISK_NAME=$(az disk list \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --query "[?tags.VMName=='test-vm-01'].name" -o tsv)
+      if [[ -n "$DISK_NAME" ]]; then
+        az disk delete \
+          --name $DISK_NAME \
+          --resource-group ${AZURE_RESOURCE_GROUP} \
+          --yes
+      fi
+    continue_on_error: true
+
+rollback:
+  # Note: Cannot restore deleted VM
+  # Rollback creates audit log entry only
+  - name: "Log deletion for audit trail"
+    command: |
+      mkdir -p ${PROJECT_ROOT}/artifacts/audit
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) - VM test-vm-01 deleted from ${AZURE_RESOURCE_GROUP}" >> ${PROJECT_ROOT}/artifacts/audit/deletions.log
