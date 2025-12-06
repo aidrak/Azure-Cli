@@ -15,78 +15,101 @@ module:
   # Operations in this module (executed in order or parallel groups)
   # parallel_group: Operations with same group number run in parallel
   operations:
-    - id: "golden-image-create-vm"
-      name: "Create Temporary VM"
+    - id: "golden-image-00-create-vm"
+      name: "00: Create Temporary VM"
       description: "Create temporary Windows 11 VM for golden image preparation"
-      duration: 420  # 7 minutes
+      duration: 420
       type: "WAIT"
 
-    - id: "golden-image-validate-vm"
-      name: "Validate VM Ready"
-      description: "Wait for VM agent to be ready"
-      duration: 180  # 3 minutes
-      type: "WAIT"
-
-    - id: "golden-image-system-prep"
-      name: "System Preparation"
-      description: "Disable BitLocker, create temp directory"
-      duration: 60  # 1 minute
-      type: "FAST"
-
-    # Install all simple applications selected in config.yaml using the app manifest
-    - id: "golden-image-install-apps"
-      name: "Install Applications"
-      description: "Install all selected simple applications in parallel with heartbeat monitoring"
-      duration: 1200 # 20 minutes
-      type: "HEARTBEAT"
-
-    # Office runs alone due to its complex ODT process
-    - id: "golden-image-install-office"
-      name: "Install Office 365"
-      description: "Download and install Office 365 using ODT"
-      duration: 1800  # 30 minutes
+    - id: "golden-image-01-validate-vm"
+      name: "01: Validate VM Ready"
+      description: "Wait for VM to be fully ready and VM agent to be running"
+      duration: 180
       type: "WAIT"
       requires:
-        - operation: "golden-image-install-apps"
+        - operation: "golden-image-00-create-vm"
           status: "completed"
 
-    # Sequential configuration steps
-    - id: "golden-image-configure-defaults"
-      name: "Configure Default Applications"
+    - id: "golden-image-02-system-prep"
+      name: "02: System Preparation"
+      description: "Disable BitLocker, create temp directory"
+      duration: 60
+      type: "FAST"
+      requires:
+        - operation: "golden-image-01-validate-vm"
+          status: "completed"
+
+    - id: "golden-image-03-install-apps"
+      name: "03: Install Applications"
+      description: "Install all selected simple applications in parallel with heartbeat monitoring"
+      duration: 1200
+      type: "HEARTBEAT"
+      requires:
+        - operation: "golden-image-02-system-prep"
+          status: "completed"
+
+    - id: "golden-image-04-install-office"
+      name: "04: Install Office 365"
+      description: "Download and install Office 365 using ODT"
+      duration: 1800
+      type: "WAIT"
+      requires:
+        - operation: "golden-image-03-install-apps"
+          status: "completed"
+
+    - id: "golden-image-05-configure-defaults"
+      name: "05: Configure Default Applications"
       description: "Set default apps and create desktop shortcuts"
-      duration: 120  # 2 minutes
+      duration: 120
       type: "FAST"
+      requires:
+        - operation: "golden-image-04-install-office"
+          status: "completed"
 
-    - id: "golden-image-run-vdot"
-      name: "Run VDOT Optimizations"
+    - id: "golden-image-06-run-vdot"
+      name: "06: Run VDOT Optimizations"
       description: "Download and run Virtual Desktop Optimization Tool"
-      duration: 300  # 5 minutes
+      duration: 300
       type: "FAST"
+      requires:
+        - operation: "golden-image-05-configure-defaults"
+          status: "completed"
 
-    # Sequential final configuration steps
-    - id: "golden-image-registry-avd"
-      name: "Configure AVD Registry"
+    - id: "golden-image-07-registry-avd"
+      name: "07: Configure AVD Registry"
       description: "Configure RDP, FSLogix exclusions, OOBE settings"
-      duration: 120  # 2 minutes
+      duration: 120
       type: "FAST"
+      requires:
+        - operation: "golden-image-06-run-vdot"
+          status: "completed"
 
-    - id: "golden-image-configure-default-profile"
-      name: "Configure Default User Profile"
+    - id: "golden-image-08-configure-default-profile"
+      name: "08: Configure Default User Profile"
       description: "Configure default user profile for FSLogix"
-      duration: 60  # 1 minute
+      duration: 60
       type: "FAST"
+      requires:
+        - operation: "golden-image-07-registry-avd"
+          status: "completed"
 
-    - id: "golden-image-cleanup-temp"
-      name: "Cleanup Temporary Files"
+    - id: "golden-image-09-cleanup-temp"
+      name: "09: Cleanup Temporary Files"
       description: "Remove temporary files and caches"
-      duration: 60  # 1 minute
+      duration: 60
       type: "FAST"
+      requires:
+        - operation: "golden-image-08-configure-default-profile"
+          status: "completed"
 
-    - id: "golden-image-validate-all"
-      name: "Validate All Installations"
+    - id: "golden-image-10-validate-all"
+      name: "10: Validate All Installations"
       description: "Validate all software installations and configurations"
-      duration: 120  # 2 minutes
+      duration: 120
       type: "FAST"
+      requires:
+        - operation: "golden-image-09-cleanup-temp"
+          status: "completed"
 
   # Module-level validation (run after all operations complete)
   validation:

@@ -2,8 +2,8 @@
 # Operation: Validate VM Ready
 # ==============================================================================
 operation:
-  id: "golden-image-validate-vm"
-  name: "Validate VM Ready"
+  id: "golden-image-01-validate-vm"
+  name: "01: Validate VM Ready"
   description: "Wait for VM to be fully ready and VM agent to be running"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites
   requires:
-    - "golden-image-create-vm"
+    - "golden-image-00-create-vm"
 
   # Validation checks
   validation:

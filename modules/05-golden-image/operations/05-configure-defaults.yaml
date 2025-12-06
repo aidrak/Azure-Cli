@@ -2,8 +2,8 @@
 # Operation: Configure Default Applications and Create Desktop Shortcuts
 # ==============================================================================
 operation:
-  id: "golden-image-configure-defaults"
-  name: "Configure Default Applications"
+  id: "golden-image-05-configure-defaults"
+  name: "05: Configure Default Applications"
   description: "Set default applications and create desktop shortcuts for users"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - operation: "golden-image-install-office"
+    - operation: "golden-image-04-install-office"
       status: "completed"
 
   # Validation checks (run after operation completes)
@@ -41,12 +41,12 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/06-configure-defaults.ps1" \
+        --scripts "@modules/05-golden-image/operations/05-configure-defaults.ps1" \
         --output json > artifacts/outputs/golden-image-configure-defaults.json
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "06-configure-defaults.ps1"
+    file: "05-configure-defaults.ps1"
     content: |
       # ==============================================================================
       # Configure Default Applications and Create Desktop Shortcuts

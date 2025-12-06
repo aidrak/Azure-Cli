@@ -2,8 +2,8 @@
 # Operation: System Preparation
 # ==============================================================================
 operation:
-  id: "golden-image-system-prep"
-  name: "System Preparation"
+  id: "golden-image-02-system-prep"
+  name: "02: System Preparation"
   description: "Disable BitLocker and create temporary directory"
 
   # Duration expectations
@@ -14,7 +14,7 @@ operation:
 
   # Prerequisites (check state.json)
   requires:
-    - "golden-image-validate-vm"  # VM must be ready and accepting commands
+    - "golden-image-01-validate-vm"  # VM must be ready and accepting commands
 
   # Validation checks (run after operation completes)
   validation:
@@ -32,12 +32,12 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/01-system-prep.ps1" \
+        --scripts "@modules/05-golden-image/operations/02-system-prep.ps1" \
         --output json > artifacts/outputs/golden-image-system-prep.json
 
   # PowerShell script (can be inline or external file)
   powershell:
-    file: "01-system-prep.ps1"
+    file: "02-system-prep.ps1"
     content: |
       # ==============================================================================
       # System Preparation for Golden Image
