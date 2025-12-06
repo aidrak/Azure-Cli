@@ -17,104 +17,111 @@ operation:
   validation:
     enabled: true
 
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/networking-10-configure-route-tables-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Route table configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
-      echo "[START] Route table configuration: $(date '+%Y-%m-%d %H:%M:%S')"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
 
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      LOCATION="{{AZURE_LOCATION}}"
+      $rtEnabled = (yq e '.networking.route_tables.enabled' config.yaml)
 
-      RT_ENABLED=$(yq e '.networking.route_tables.enabled' config.yaml)
-
-      if [[ "$RT_ENABLED" != "true" ]]; then
-        echo "[INFO] Route tables disabled - skipping"
+      if ($rtEnabled -ne "true") {
+        Write-Host "[INFO] Route tables disabled - skipping"
         exit 0
-      fi
+      }
 
-      RT_COUNT=$(yq e '.networking.route_tables.tables | length' config.yaml)
-      echo "[PROGRESS] Processing $RT_COUNT route table(s)..."
+      $rtCount = [int](yq e '.networking.route_tables.tables | length' config.yaml)
+      Write-Host "[PROGRESS] Processing $rtCount route table(s)..."
 
-      for i in $(seq 0 $((RT_COUNT - 1))); do
-        RT_NAME=$(yq e ".networking.route_tables.tables[$i].name" config.yaml)
+      for ($i = 0; $i -lt $rtCount; $i++) {
+        $rtName = (yq e ".networking.route_tables.tables[$i].name" config.yaml)
 
-        echo "[PROGRESS] Processing route table: $RT_NAME"
+        Write-Host "[PROGRESS] Processing route table: $rtName"
 
-        if ! az network route-table show \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$RT_NAME" &>/dev/null; then
+        az network route-table show `
+          --resource-group $resourceGroup `
+          --name $rtName `
+          --output none 2>$null
 
-          az network route-table create \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$RT_NAME" \
-            --location "$LOCATION" \
+        if ($LASTEXITCODE -ne 0) {
+          az network route-table create `
+            --resource-group $resourceGroup `
+            --name $rtName `
+            --location $location `
             --output none
 
-          echo "[SUCCESS] Route table created: $RT_NAME"
-        else
-          echo "[INFO] Route table already exists: $RT_NAME"
-        fi
+          Write-Host "[SUCCESS] Route table created: $rtName"
+        } else {
+          Write-Host "[INFO] Route table already exists: $rtName"
+        }
 
         # Add routes
-        ROUTE_COUNT=$(yq e ".networking.route_tables.tables[$i].routes | length" config.yaml)
+        $routeCount = [int](yq e ".networking.route_tables.tables[$i].routes | length" config.yaml)
 
-        for j in $(seq 0 $((ROUTE_COUNT - 1))); do
-          ROUTE_NAME=$(yq e ".networking.route_tables.tables[$i].routes[$j].name" config.yaml)
-          ADDR_PREFIX=$(yq e ".networking.route_tables.tables[$i].routes[$j].address_prefix" config.yaml)
-          NEXT_HOP_TYPE=$(yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_type" config.yaml)
-          NEXT_HOP_IP=$(yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_ip_address" config.yaml)
+        for ($j = 0; $j -lt $routeCount; $j++) {
+          $routeName = (yq e ".networking.route_tables.tables[$i].routes[$j].name" config.yaml)
+          $addrPrefix = (yq e ".networking.route_tables.tables[$i].routes[$j].address_prefix" config.yaml)
+          $nextHopType = (yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_type" config.yaml)
+          $nextHopIp = (yq e ".networking.route_tables.tables[$i].routes[$j].next_hop_ip_address" config.yaml)
 
-          if az network route-table route show \
-            --resource-group "$RESOURCE_GROUP" \
-            --route-table-name "$RT_NAME" \
-            --name "$ROUTE_NAME" &>/dev/null; then
+          az network route-table route show `
+            --resource-group $resourceGroup `
+            --route-table-name $rtName `
+            --name $routeName `
+            --output none 2>$null
+
+          if ($LASTEXITCODE -eq 0) {
             continue
-          fi
+          }
 
-          if [[ "$NEXT_HOP_TYPE" == "VirtualAppliance" ]]; then
-            az network route-table route create \
-              --resource-group "$RESOURCE_GROUP" \
-              --route-table-name "$RT_NAME" \
-              --name "$ROUTE_NAME" \
-              --address-prefix "$ADDR_PREFIX" \
-              --next-hop-type "$NEXT_HOP_TYPE" \
-              --next-hop-ip-address "$NEXT_HOP_IP" \
+          if ($nextHopType -eq "VirtualAppliance") {
+            az network route-table route create `
+              --resource-group $resourceGroup `
+              --route-table-name $rtName `
+              --name $routeName `
+              --address-prefix $addrPrefix `
+              --next-hop-type $nextHopType `
+              --next-hop-ip-address $nextHopIp `
               --output none
-          else
-            az network route-table route create \
-              --resource-group "$RESOURCE_GROUP" \
-              --route-table-name "$RT_NAME" \
-              --name "$ROUTE_NAME" \
-              --address-prefix "$ADDR_PREFIX" \
-              --next-hop-type "$NEXT_HOP_TYPE" \
+          } else {
+            az network route-table route create `
+              --resource-group $resourceGroup `
+              --route-table-name $rtName `
+              --name $routeName `
+              --address-prefix $addrPrefix `
+              --next-hop-type $nextHopType `
               --output none
-          fi
+          }
 
-          echo "[SUCCESS] Route added: $ROUTE_NAME"
-        done
+          Write-Host "[SUCCESS] Route added: $routeName"
+        }
 
         # Associate with subnets
-        ASSOC_COUNT=$(yq e ".networking.route_tables.tables[$i].associated_subnets | length" config.yaml)
+        $assocCount = [int](yq e ".networking.route_tables.tables[$i].associated_subnets | length" config.yaml)
 
-        for k in $(seq 0 $((ASSOC_COUNT - 1))); do
-          SUBNET_NAME=$(yq e ".networking.route_tables.tables[$i].associated_subnets[$k]" config.yaml)
+        for ($k = 0; $k -lt $assocCount; $k++) {
+          $subnetName = (yq e ".networking.route_tables.tables[$i].associated_subnets[$k]" config.yaml)
 
-          az network vnet subnet update \
-            --resource-group "$RESOURCE_GROUP" \
-            --vnet-name "$VNET_NAME" \
-            --name "$SUBNET_NAME" \
-            --route-table "$RT_NAME" \
+          az network vnet subnet update `
+            --resource-group $resourceGroup `
+            --vnet-name $vnetName `
+            --name $subnetName `
+            --route-table $rtName `
             --output none
 
-          echo "[SUCCESS] Route table associated with subnet: $SUBNET_NAME"
-        done
-      done
+          Write-Host "[SUCCESS] Route table associated with subnet: $subnetName"
+        }
+      }
 
-      echo "[SUCCESS] All route tables configured"
+      Write-Host "[SUCCESS] All route tables configured"
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-10-configure-route-tables-wrapper.ps1
+      rm -f /tmp/networking-10-configure-route-tables-wrapper.ps1
 
   fixes: []

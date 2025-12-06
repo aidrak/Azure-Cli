@@ -17,137 +17,154 @@ operation:
   validation:
     enabled: true
 
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
+      cat > /tmp/networking-11-validate-all-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Network validation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
-      echo "[START] Network validation: $(date '+%Y-%m-%d %H:%M:%S')"
-
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      FAILED=0
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $failed = 0
 
       # Validate VNet
-      echo "[VALIDATE] Checking VNet..."
-      if ! az network vnet show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$VNET_NAME" \
-        --query "provisioningState" -o tsv | grep -q "Succeeded"; then
-        echo "[ERROR] VNet not found or failed"
-        FAILED=1
-      else
-        echo "[SUCCESS] VNet exists and provisioned"
-      fi
+      Write-Host "[VALIDATE] Checking VNet..."
+      $vnetState = az network vnet show `
+        --resource-group $resourceGroup `
+        --name $vnetName `
+        --query "provisioningState" -o tsv 2>$null
+
+      if ($vnetState -ne "Succeeded") {
+        Write-Host "[ERROR] VNet not found or failed"
+        $failed = 1
+      } else {
+        Write-Host "[SUCCESS] VNet exists and provisioned"
+      }
 
       # Validate subnets
-      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
-      echo "[VALIDATE] Checking $SUBNET_COUNT subnet(s)..."
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      Write-Host "[VALIDATE] Checking $subnetCount subnet(s)..."
 
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
-        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
 
-        if ! az network vnet subnet show \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$SUBNET_NAME" \
-          --query "provisioningState" -o tsv | grep -q "Succeeded"; then
-          echo "[ERROR] Subnet not found: $SUBNET_NAME"
-          FAILED=1
-        else
-          echo "[SUCCESS] Subnet exists: $SUBNET_NAME"
-        fi
-      done
+        $subnetState = az network vnet subnet show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --query "provisioningState" -o tsv 2>$null
+
+        if ($subnetState -ne "Succeeded") {
+          Write-Host "[ERROR] Subnet not found: $subnetName"
+          $failed = 1
+        } else {
+          Write-Host "[SUCCESS] Subnet exists: $subnetName"
+        }
+      }
 
       # Validate NSGs
-      echo "[VALIDATE] Checking NSGs..."
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
-        NSG_ENABLED=$(yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+      Write-Host "[VALIDATE] Checking NSGs..."
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        $nsgEnabled = (yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
 
-        if [[ "$NSG_ENABLED" == "true" ]]; then
-          SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
-          NSG_NAME=$(yq e ".networking.subnets[$i].nsg.name" config.yaml)
+        if ($nsgEnabled -eq "true") {
+          $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+          $nsgName = (yq e ".networking.subnets[$i].nsg.name" config.yaml)
 
-          if [[ -z "$NSG_NAME" || "$NSG_NAME" == "null" || "$NSG_NAME" == "" ]]; then
-            NSG_NAME="nsg-${SUBNET_NAME}"
-          fi
+          if ([string]::IsNullOrEmpty($nsgName) -or $nsgName -eq "null") {
+            $nsgName = "nsg-$subnetName"
+          }
 
-          if ! az network nsg show \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$NSG_NAME" \
-            --query "provisioningState" -o tsv | grep -q "Succeeded"; then
-            echo "[ERROR] NSG not found: $NSG_NAME"
-            FAILED=1
-          else
-            echo "[SUCCESS] NSG exists: $NSG_NAME"
-          fi
-        fi
-      done
+          $nsgState = az network nsg show `
+            --resource-group $resourceGroup `
+            --name $nsgName `
+            --query "provisioningState" -o tsv 2>$null
+
+          if ($nsgState -ne "Succeeded") {
+            Write-Host "[ERROR] NSG not found: $nsgName"
+            $failed = 1
+          } else {
+            Write-Host "[SUCCESS] NSG exists: $nsgName"
+          }
+        }
+      }
 
       # Validate DNS zones (if enabled)
-      DNS_ENABLED=$(yq e '.networking.private_dns.enabled' config.yaml)
-      if [[ "$DNS_ENABLED" == "true" ]]; then
-        echo "[VALIDATE] Checking private DNS zones..."
-        ZONE_COUNT=$(yq e '.networking.private_dns.zones | length' config.yaml)
+      $dnsEnabled = (yq e '.networking.private_dns.enabled' config.yaml)
+      if ($dnsEnabled -eq "true") {
+        Write-Host "[VALIDATE] Checking private DNS zones..."
+        $zoneCount = [int](yq e '.networking.private_dns.zones | length' config.yaml)
 
-        for i in $(seq 0 $((ZONE_COUNT - 1))); do
-          ZONE_NAME=$(yq e ".networking.private_dns.zones[$i].name" config.yaml)
+        for ($i = 0; $i -lt $zoneCount; $i++) {
+          $zoneName = (yq e ".networking.private_dns.zones[$i].name" config.yaml)
 
-          if ! az network private-dns zone show \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$ZONE_NAME" \
-            --query "provisioningState" -o tsv | grep -q "Succeeded"; then
-            echo "[ERROR] DNS zone not found: $ZONE_NAME"
-            FAILED=1
-          else
-            echo "[SUCCESS] DNS zone exists: $ZONE_NAME"
-          fi
-        done
-      fi
+          $zoneState = az network private-dns zone show `
+            --resource-group $resourceGroup `
+            --name $zoneName `
+            --query "provisioningState" -o tsv 2>$null
+
+          if ($zoneState -ne "Succeeded") {
+            Write-Host "[ERROR] DNS zone not found: $zoneName"
+            $failed = 1
+          } else {
+            Write-Host "[SUCCESS] DNS zone exists: $zoneName"
+          }
+        }
+      }
 
       # Validate peering (if enabled)
-      PEERING_ENABLED=$(yq e '.networking.peering.enabled' config.yaml)
-      if [[ "$PEERING_ENABLED" == "true" ]]; then
-        echo "[VALIDATE] Checking VNet peering..."
-        HUB_VNET_NAME=$(yq e '.networking.peering.hub_vnet.name' config.yaml)
-        PEERING_NAME="${VNET_NAME}-to-${HUB_VNET_NAME}"
+      $peeringEnabled = (yq e '.networking.peering.enabled' config.yaml)
+      if ($peeringEnabled -eq "true") {
+        Write-Host "[VALIDATE] Checking VNet peering..."
+        $hubVnetName = (yq e '.networking.peering.hub_vnet.name' config.yaml)
+        $peeringName = "$vnetName-to-$hubVnetName"
 
-        if ! az network vnet peering show \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$PEERING_NAME" \
-          --query "peeringState" -o tsv | grep -q "Connected"; then
-          echo "[ERROR] VNet peering not connected"
-          FAILED=1
-        else
-          echo "[SUCCESS] VNet peering connected"
-        fi
-      fi
+        $peeringState = az network vnet peering show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $peeringName `
+          --query "peeringState" -o tsv 2>$null
+
+        if ($peeringState -ne "Connected") {
+          Write-Host "[ERROR] VNet peering not connected"
+          $failed = 1
+        } else {
+          Write-Host "[SUCCESS] VNet peering connected"
+        }
+      }
 
       # Generate validation report
-      REPORT_FILE="artifacts/outputs/networking-validation-report.txt"
-      {
-        echo "====================================="
-        echo "Network Validation Report"
-        echo "====================================="
-        echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
-        echo ""
-        echo "VNet: $VNET_NAME"
-        echo "Resource Group: $RESOURCE_GROUP"
-        echo "Subnet Count: $SUBNET_COUNT"
-        echo ""
-        echo "Status: $(if [ $FAILED -eq 0 ]; then echo 'ALL CHECKS PASSED'; else echo 'VALIDATION FAILED'; fi)"
-        echo "====================================="
-      } > "$REPORT_FILE"
+      $reportFile = "artifacts/outputs/networking-validation-report.txt"
+      $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+      $statusText = if ($failed -eq 0) { "ALL CHECKS PASSED" } else { "VALIDATION FAILED" }
 
-      if [ $FAILED -eq 0 ]; then
-        echo "[SUCCESS] All validation checks passed"
-        echo "[SUCCESS] Report saved to: $REPORT_FILE"
+      $reportContent = @"
+=====================================
+Network Validation Report
+=====================================
+Timestamp: $timestamp
+
+VNet: $vnetName
+Resource Group: $resourceGroup
+Subnet Count: $subnetCount
+
+Status: $statusText
+=====================================
+"@
+
+      $reportContent | Out-File -FilePath $reportFile -Encoding UTF8
+
+      if ($failed -eq 0) {
+        Write-Host "[SUCCESS] All validation checks passed"
+        Write-Host "[SUCCESS] Report saved to: $reportFile"
         exit 0
-      else
-        echo "[ERROR] Validation failed ($FAILED errors)"
+      } else {
+        Write-Host "[ERROR] Validation failed ($failed errors)"
         exit 1
-      fi
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-11-validate-all-wrapper.ps1
+      rm -f /tmp/networking-11-validate-all-wrapper.ps1
 
   fixes: []
