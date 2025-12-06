@@ -13,9 +13,14 @@ config/*-config.ps1
 # Secrets file (NEVER commit - contains passwords and sensitive data)
 secrets.yaml
 
+# User-specific configuration (keep only .example files)
+config.yaml
+
 # Keep only example files (these are safe to commit)
 !config/*.example.sh
 !config/*.example.ps1
+!config.yaml.example
+!secrets.yaml.example
 
 # ============================================================================
 # Azure Credentials & Authentication
@@ -100,3 +105,32 @@ package-lock.json
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+
+# ============================================================================
+# Deployment State & Runtime Files (Instance-Specific, Never Commit)
+# ============================================================================
+# These files contain deployment state and runtime data specific to each
+# Azure instance. They should be regenerated on each clone.
+
+# State files (contain instance-specific deployment state)
+state.json
+state.db
+
+# Runtime artifacts (logs, outputs, temporary files)
+artifacts/logs/
+artifacts/outputs/
+artifacts/temp/
+artifacts/*.jsonl
+artifacts/*.json
+
+# Keep artifacts directory structure
+!artifacts/.gitkeep
+!artifacts/logs/.gitkeep
+!artifacts/outputs/.gitkeep
+!artifacts/temp/.gitkeep
+
+# ============================================================================
+# Archived/Legacy Code (Not Part of Current System)
+# ============================================================================
+# Legacy modules have been superseded by the YAML-based capability system
+legacy/
