@@ -1,0 +1,172 @@
+# ==============================================================================
+# Capability Operation: Create Storage Account
+# Migrated from: modules/02-storage/operations/01-create-storage-account.yaml
+# ==============================================================================
+
+operation:
+  id: "account-create"
+  name: "Create Premium FileStorage Account"
+  description: "Create Azure Premium Files storage account for FSLogix profile containers"
+
+  capability: "storage"
+  operation_mode: "create"
+  resource_type: "Microsoft.Storage/storageAccounts"
+
+  # Duration expectations
+  duration:
+    expected: 90       # 90 seconds (1.5 minutes)
+    timeout: 180       # 3 minutes
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "storage_account_name"
+        type: "string"
+        description: "Storage account name (auto-generated if not provided)"
+        default: "{{STORAGE_ACCOUNT_NAME}}"
+      - name: "sku"
+        type: "string"
+        description: "Storage account SKU"
+        default: "Premium_LRS"
+      - name: "kind"
+        type: "string"
+        description: "Storage account kind"
+        default: "FileStorage"
+      - name: "min_tls_version"
+        type: "string"
+        description: "Minimum TLS version"
+        default: "TLS1_2"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Storage/storageAccounts"
+        resource_name: "{{STORAGE_ACCOUNT_NAME}}"
+        description: "Storage account exists"
+
+      - type: "property_equals"
+        property: "sku.name"
+        expected: "Premium_LRS"
+        description: "Storage account has Premium_LRS SKU"
+
+      - type: "property_equals"
+        property: "kind"
+        expected: "FileStorage"
+        description: "Storage account is FileStorage kind"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az storage account show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{STORAGE_ACCOUNT_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/storage-account-create-wrapper.ps1 << 'PSWRAPPER'
+      # Generate unique storage account name if not provided
+      if ([string]::IsNullOrEmpty("{{STORAGE_ACCOUNT_NAME}}")) {
+        $storageName = "fslogix$(Get-Random -Minimum 0 -Maximum 99999)"
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
+
+      Write-Host "[START] Creating storage account: $storageName at $(Get-Date -Format 'HH:mm:ss')"
+
+      # Check if storage account already exists
+      $existingAccount = @(az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($existingAccount.Count -gt 0) {
+        Write-Host "[SUCCESS] Storage account already exists: $storageName"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating Premium FileStorage account..."
+
+      # Create storage account
+      $createOutput = az storage account create `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --location "{{AZURE_LOCATION}}" `
+        --sku Premium_LRS `
+        --kind FileStorage `
+        --enable-large-file-share `
+        --min-tls-version TLS1_2 `
+        --allow-blob-public-access false `
+        --https-only true `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create storage account"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying storage account creation..."
+
+      # Verify storage account exists
+      $verifyAccount = @(az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($verifyAccount.Count -eq 0) {
+        Write-Host "[ERROR] Storage account creation verification failed"
+        exit 1
+      }
+
+      $storageId = az storage account show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $storageName `
+        --query id -o tsv
+
+      Write-Host "[SUCCESS] Storage account created: $storageName"
+      Write-Host "  Resource ID: $storageId"
+      Write-Host "  SKU: Premium_LRS"
+      Write-Host "  Kind: FileStorage"
+      Write-Host "  TLS: 1.2 minimum"
+      Write-Host "  Public blob access: Disabled"
+      Write-Host "  HTTPS only: Enabled"
+
+      # Export storage account name for subsequent operations
+      $storageName | Out-File -FilePath /tmp/storage-account-name.txt -NoNewline
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-account-create-wrapper.ps1
+      rm -f /tmp/storage-account-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Storage Account"
+        description: "Remove the storage account and all associated data"
+        command: |
+          az storage account delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{STORAGE_ACCOUNT_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
