@@ -100,6 +100,17 @@ load_config() {
     GOLDEN_IMAGE_GALLERY_NAME=$(yq e '.golden_image.gallery_name' "$config_file"); export GOLDEN_IMAGE_GALLERY_NAME
     GOLDEN_IMAGE_DEFINITION_NAME=$(yq e '.golden_image.definition_name' "$config_file"); export GOLDEN_IMAGE_DEFINITION_NAME
 
+    # Golden Image Applications - convert array to CSV
+    GOLDEN_IMAGE_APPLICATIONS_CSV=$(yq e '.golden_image.applications | join(",")' "$config_file"); export GOLDEN_IMAGE_APPLICATIONS_CSV
+
+    # Load app manifest content
+    local app_manifest_file="modules/05-golden-image/app_manifest.yaml"
+    if [[ -f "$app_manifest_file" ]]; then
+        APP_MANIFEST_CONTENT=$(cat "$app_manifest_file"); export APP_MANIFEST_CONTENT
+    else
+        APP_MANIFEST_CONTENT=""; export APP_MANIFEST_CONTENT
+    fi
+
     # Session Host section
     SESSION_HOST_VM_COUNT=$(yq e '.session_host.vm_count' "$config_file"); export SESSION_HOST_VM_COUNT
     SESSION_HOST_VM_SIZE=$(yq e '.session_host.vm_size' "$config_file"); export SESSION_HOST_VM_SIZE

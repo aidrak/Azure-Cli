@@ -18,12 +18,31 @@ operation:
   template:
     type: "az-vm-run-command"
     command: |
+      # Generate upload script with embedded manifest
+      cat > artifacts/scripts/golden-image-upload-manifest.ps1 <<'EOF_UPLOAD'
+      $manifestContent = @'
+      {{APP_MANIFEST_CONTENT}}
+      '@
+      if (-not (Test-Path "C:\Temp")) { New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null }
+      $manifestContent | Out-File -FilePath "C:\Temp\app_manifest.yaml" -Encoding UTF8 -Force
+      Write-Host "[SUCCESS] App manifest uploaded to C:\Temp\app_manifest.yaml"
+      EOF_UPLOAD
+
+      # Step 1: Upload manifest to VM
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts artifacts/scripts/golden-image-upload-manifest.ps1 \
+        --output json > artifacts/outputs/golden-image-upload-manifest.json
+
+      # Step 2: Run installation script
       az vm run-command create \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
         --scripts "@modules/05-golden-image/operations/03-install-apps.ps1" \
-        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' AppManifest='''{{APP_MANIFEST_CONTENT}}''' \
+        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestPath='C:\Temp\app_manifest.yaml' \
         --output json > artifacts/outputs/golden-image-install-apps.json
 
   powershell:
@@ -32,7 +51,7 @@ operation:
       [CmdletBinding()]
       param(
           [string]$AppNames,
-          [string]$AppManifest
+          [string]$ManifestPath = "C:\Temp\app_manifest.yaml"
       )
 
       # ==============================================================================
@@ -76,9 +95,15 @@ operation:
       if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
 
       try {
+          # Validate manifest file exists
+          if (-not (Test-Path $ManifestPath)) {
+              throw "App manifest file not found at: $ManifestPath"
+          }
+
           # Parse inputs
           $selectedAppNames = $AppNames -split ',' | ForEach-Object { $_.Trim() }
-          $manifest = $AppManifest | ConvertFrom-Yaml
+          $manifestContent = Get-Content -Path $ManifestPath -Raw
+          $manifest = $manifestContent | ConvertFrom-Yaml
 
           $appsToProcess = $selectedAppNames | ForEach-Object {
               $appNameKey = $_

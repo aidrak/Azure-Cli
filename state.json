@@ -1,6 +1,6 @@
 {
-  "current_module": "07-rbac",
-  "updated_at": "2025-12-06T01:30:02Z",
+  "current_module": "05-golden-image",
+  "updated_at": "2025-12-06T01:41:34Z",
   "modules": {
     "01-networking": {
       "status": "completed",
@@ -23,19 +23,26 @@
       "timestamp": "2025-12-05T19:49:23Z"
     },
     "05-golden-image": {
-      "status": "failed",
-      "timestamp": "2025-12-05T23:07:53Z"
+      "status": "running",
+      "timestamp": "2025-12-06T01:40:25Z"
     },
     "06-session-host-deployment": {
       "status": "running",
       "timestamp": "2025-12-06T01:29:30Z"
     },
+    "08-sso": {
+      "status": "completed",
+      "timestamp": "2025-12-06T01:34:32Z"
+    },
+    "09-autoscaling": {
+      "status": "completed",
+      "timestamp": "2025-12-06T01:36:30Z"
+    },
     "07-rbac": {
-      "status": "running",
-      "timestamp": "2025-12-06T01:30:02Z"
+      "status": "completed",
+      "timestamp": "2025-12-06T01:39:47Z"
     }
   },
-  "current_operation": "rbac-verify-assignments",
   "status": "running",
   "operations": {
     "networking-create-vnet": {
@@ -196,17 +203,17 @@
     "golden-image-02-system-prep": {
       "status": "completed",
       "duration": 32,
-      "timestamp": "2025-12-05T22:53:37Z"
+      "timestamp": "2025-12-06T01:41:34Z"
     },
     "golden-image-00-create-vm": {
       "status": "completed",
       "duration": 2,
-      "timestamp": "2025-12-05T22:57:48Z"
+      "timestamp": "2025-12-06T01:40:28Z"
     },
     "golden-image-01-validate-vm": {
       "status": "completed",
       "duration": 34,
-      "timestamp": "2025-12-05T22:53:05Z"
+      "timestamp": "2025-12-06T01:41:02Z"
     },
     "session-host-register-pool": {
       "status": "blocked",
@@ -224,9 +231,55 @@
       "timestamp": "2025-12-06T01:29:34Z"
     },
     "rbac-verify-assignments": {
-      "status": "blocked",
-      "duration": 0,
-      "timestamp": "2025-12-06T01:30:02Z"
+      "status": "completed",
+      "duration": 16,
+      "timestamp": "2025-12-06T01:39:46Z"
+    },
+    "rbac-storage-permissions": {
+      "status": "completed",
+      "duration": 12,
+      "timestamp": "2025-12-06T01:39:04Z"
+    },
+    "rbac-vm-login-permissions": {
+      "status": "completed",
+      "duration": 14,
+      "timestamp": "2025-12-06T01:39:18Z"
+    },
+    "rbac-app-group-permissions": {
+      "status": "completed",
+      "duration": 12,
+      "timestamp": "2025-12-06T01:39:30Z"
+    },
+    "sso-configure-host-pool": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-06T01:34:28Z"
+    },
+    "sso-configure-service-principal": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-06T01:34:30Z"
+    },
+    "sso-verify-configuration": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-06T01:34:32Z"
+    },
+    "autoscaling-assign-rbac": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-06T01:36:25Z"
+    },
+    "autoscaling-create-plan": {
+      "status": "completed",
+      "duration": 2,
+      "timestamp": "2025-12-06T01:36:27Z"
+    },
+    "autoscaling-verify-configuration": {
+      "status": "completed",
+      "duration": 3,
+      "timestamp": "2025-12-06T01:36:30Z"
     }
-  }
+  },
+  "current_operation": "golden-image-03-install-apps"
 }

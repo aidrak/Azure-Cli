@@ -1,3 +1,4 @@
+$manifestContent = @'
 # Catalog of all available applications for the golden image.
 # The installation engine will select from this list based on config.yaml.
 chrome:
@@ -5,7 +6,7 @@ chrome:
   source_type: "Url"
   url_type: "permalink" # The standalone enterprise installer is regularly updated at this link.
   url: "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
-  outfile: "C:\\Temp\\Chrome.msi"
+  outfile: "C:\Temp\Chrome.msi"
   install_command: "msiexec.exe"
   install_args: '/i "{outfile}" /quiet /norestart'
   success_codes: [0, 3010]
@@ -15,10 +16,10 @@ adobereader:
   source_type: "Url"
   url_type: "static" # This URL is version-specific and will need to be updated.
   url: "https://trials.adobe.com/AdobeProducts/APRO/Acrobat_HelpX/win32/Acrobat_DC_Web_x64_WWMUI.zip"
-  outfile: "C:\\Temp\\Acrobat_DC_Web.zip"
+  outfile: "C:\Temp\Acrobat_DC_Web.zip"
   source_format: "zip" # Indicates the outfile needs to be extracted
-  unzip_dir: "C:\\Temp\\Acrobat_DC"
-  install_command: '"{unzip_dir}\\Adobe Acrobat\\Setup.exe"' # Path to installer inside the zip
+  unzip_dir: "C:\Temp\Acrobat_DC"
+  install_command: '"{unzip_dir}\Adobe Acrobat\Setup.exe"' # Path to installer inside the zip
   install_args: "/sAll" # Standard silent switch for Adobe Setup.exe
   success_codes: [0]
 
@@ -26,8 +27,8 @@ vscode:
   name: "Visual Studio Code"
   source_type: "Url"
   url_type: "permalink" # Official permalink for the latest stable system installer.
-  url: "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-system"
-  outfile: "C:\\Temp\\VSCodeSetup.exe"
+  url: "https://code.visualstudio.com/sha/download?build=stable{{APP_MANIFEST_CONTENT}}os=win32-x64-system"
+  outfile: "C:\Temp\VSCodeSetup.exe"
   install_command: '"{outfile}"'
   install_args: "/verysilent /mergetasks=!runcode"
   success_codes: [0]
@@ -37,7 +38,11 @@ teams:
   source_type: "Url"
   url_type: "permalink" # Official FWLink for the latest VDI machine-wide installer.
   url: "https://go.microsoft.com/fwlink/?linkid=2196106"
-  outfile: "C:\\Temp\\Teams_windows_x64.msi"
+  outfile: "C:\Temp\Teams_windows_x64.msi"
   install_command: "msiexec.exe"
   install_args: '/i "{outfile}" /quiet /norestart ALLUSERS=1'
   success_codes: [0, 3010]
+'@
+if (-not (Test-Path "C:\Temp")) { New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null }
+$manifestContent | Out-File -FilePath "C:\Temp\app_manifest.yaml" -Encoding UTF8 -Force
+Write-Host "[SUCCESS] App manifest uploaded to C:\Temp\app_manifest.yaml"

@@ -124,6 +124,8 @@ substitute_variables() {
     result="${result//\{\{GOLDEN_IMAGE_ADMIN_PASSWORD\}\}/${GOLDEN_IMAGE_ADMIN_PASSWORD:-}}"
     result="${result//\{\{GOLDEN_IMAGE_GALLERY_NAME\}\}/${GOLDEN_IMAGE_GALLERY_NAME:-}}"
     result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/${GOLDEN_IMAGE_DEFINITION_NAME:-}}"
+    result="${result//\{\{GOLDEN_IMAGE_APPLICATIONS_CSV\}\}/${GOLDEN_IMAGE_APPLICATIONS_CSV:-}}"
+    result="${result//\{\{APP_MANIFEST_CONTENT\}\}/${APP_MANIFEST_CONTENT:-}}"
 
     # Host Pool variables
     result="${result//\{\{HOST_POOL_NAME\}\}/${HOST_POOL_NAME:-}}"

@@ -41,3 +41,251 @@
 {"timestamp":"2025-12-06T01:30:02.370Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:30:02.396Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
 {"timestamp":"2025-12-06T01:30:02.469Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.523Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.819Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.858Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.869Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.941Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:56.999Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:30:59.761Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:11.762Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:12.094Z","level":"INFO","message":"Executing operation: 03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:13.167Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:13.184Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.502Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.807Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.844Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.855Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.933Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:37.991Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:38.135Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:38.463Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:38.489Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:38.558Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:38.594Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:49.534Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:49.861Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:49.889Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:49.965Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:50.001Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:50.151Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:50.168Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:50.248Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:31:50.284Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:08.455Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:08.480Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:08.557Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:08.596Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.310Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.641Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.679Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.692Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.770Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:30.831Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:33.715Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:34.062Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:34.090Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:34.165Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:34.207Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:42.989Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:43.006Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:43.084Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:43.122Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:57.290Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:57.314Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:57.396Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:32:57.430Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:00.841Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:01.179Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:01.212Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:01.298Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:01.337Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:11.583Z","level":"INFO","message":"Retry counter reset for rbac-app-group-permissions","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-06T01:33:11.608Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:11.641Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:11.756Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:11.804Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:33.196Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:33.529Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:33.555Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:33.627Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:33.660Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.477Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.789Z","level":"INFO","message":"Executing module: 08-sso","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.821Z","level":"INFO","message":"Executing operation: sso-configure-host-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.833Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/01-configure-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.907Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:43.943Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:46.083Z","level":"INFO","message":"Executing operation: sso-configure-service-principal","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:46.109Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/03-configure-service-principal.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:46.200Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:46.246Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:48.895Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:49.208Z","level":"INFO","message":"Executing module: 08-sso","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:49.243Z","level":"INFO","message":"Executing operation: sso-configure-host-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:49.255Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/01-configure-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:49.335Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:49.370Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:51.507Z","level":"INFO","message":"Executing operation: sso-configure-service-principal","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:51.529Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/03-configure-service-principal.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:51.609Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:51.645Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:53.797Z","level":"INFO","message":"Executing operation: sso-verify-configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:53.815Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/02-verify-configuration.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:53.895Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:53.929Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:33:56.068Z","level":"SUCCESS","message":"Module completed: 08-sso","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:25.673Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:25.993Z","level":"INFO","message":"Executing module: 08-sso","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:26.027Z","level":"INFO","message":"Executing operation: sso-configure-host-pool","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:26.040Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/01-configure-host-pool.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:26.118Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:26.154Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:28.290Z","level":"INFO","message":"Executing operation: sso-configure-service-principal","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:28.312Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/03-configure-service-principal.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:28.398Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:28.433Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:30.577Z","level":"INFO","message":"Executing operation: sso-verify-configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:30.597Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/08-sso/operations/02-verify-configuration.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:30.674Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:30.717Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:32.854Z","level":"SUCCESS","message":"Module completed: 08-sso","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:40.514Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:40.878Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:40.915Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:40.929Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:41.016Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:41.083Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:55.249Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:55.266Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:55.340Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:34:55.374Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:09.522Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:09.543Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:09.612Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:09.647Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:21.800Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:21.826Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:21.894Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:21.925Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:53.402Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:53.714Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:53.738Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:53.804Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:35:53.836Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:22.907Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:23.206Z","level":"INFO","message":"Executing module: 09-autoscaling","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:23.236Z","level":"INFO","message":"Executing operation: autoscaling-assign-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:23.248Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/09-autoscaling/operations/01-assign-rbac.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:23.320Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:23.353Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:25.482Z","level":"INFO","message":"Executing operation: autoscaling-create-plan","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:25.497Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/09-autoscaling/operations/02-create-plan.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:25.576Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:25.609Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:27.768Z","level":"INFO","message":"Executing operation: autoscaling-verify-configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:27.792Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/09-autoscaling/operations/03-verify-configuration.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:27.870Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:27.905Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:30.047Z","level":"SUCCESS","message":"Module completed: 09-autoscaling","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.319Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.605Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.636Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.647Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.708Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:36:50.761Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:02.902Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:02.920Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:02.992Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:03.022Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:08.042Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:08.326Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:08.350Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:08.421Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:08.452Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:17.169Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:17.190Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:17.257Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:17.290Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:27.443Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:27.469Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:27.539Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:27.570Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:46.918Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:47.200Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:47.232Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:47.244Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:47.310Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:47.361Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:59.501Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:59.516Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:59.589Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:37:59.620Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:13.776Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:13.800Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:13.870Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:13.909Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.062Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.089Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.165Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.202Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.413Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.733Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.762Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.840Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:26.878Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:51.607Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:51.890Z","level":"INFO","message":"Executing module: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:51.921Z","level":"INFO","message":"Executing operation: rbac-storage-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:51.931Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/01-storage-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:51.995Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:38:52.046Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:04.189Z","level":"INFO","message":"Executing operation: rbac-vm-login-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:04.204Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/02-vm-login-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:04.270Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:04.301Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:18.445Z","level":"INFO","message":"Executing operation: rbac-app-group-permissions","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:18.465Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/03-app-group-permissions.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:18.532Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:18.562Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:28.703Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:30.710Z","level":"INFO","message":"Executing operation: rbac-verify-assignments","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:30.737Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/07-rbac/operations/04-verify-assignments.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:30.808Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:30.845Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.418Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.701Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.733Z","level":"INFO","message":"Executing operation: golden-image-00-create-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.744Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/00-create-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.813Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:37.827Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:39.949Z","level":"INFO","message":"Executing operation: golden-image-01-validate-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:39.964Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-validate-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:40.032Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:40.054Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:39:47.000Z","level":"INFO","message":"Retry counter reset for rbac-verify-assignments","operation_id":"error-handler","metadata":{}}
+{"timestamp":"2025-12-06T01:39:47.008Z","level":"SUCCESS","message":"Module completed: 07-rbac","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:14.225Z","level":"INFO","message":"Executing operation: golden-image-02-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:14.246Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:14.317Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:14.343Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:21.667Z","level":"INFO","message":"Resuming from previous state","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:21.678Z","level":"INFO","message":"No module in progress","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.537Z","level":"INFO","message":"Loading configuration","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.822Z","level":"INFO","message":"Executing module: 05-golden-image","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.855Z","level":"INFO","message":"Executing operation: golden-image-00-create-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.866Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/00-create-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.932Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:25.942Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:28.050Z","level":"INFO","message":"Executing operation: golden-image-01-validate-vm","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:28.066Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/01-validate-vm.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:28.133Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:40:28.154Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:02.325Z","level":"INFO","message":"Executing operation: golden-image-02-system-prep","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:02.345Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/02-system-prep.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:02.414Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:02.438Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:34.620Z","level":"INFO","message":"Executing operation: golden-image-03-install-apps","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:34.645Z","level":"INFO","message":"Found operation file: /mnt/cache_pool/development/azure-cli/modules/05-golden-image/operations/03-install-apps.yaml","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:34.719Z","level":"INFO","message":"Validating prerequisites...","operation_id":"engine","metadata":{}}
+{"timestamp":"2025-12-06T01:41:34.754Z","level":"INFO","message":"Rendering command template...","operation_id":"engine","metadata":{}}

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$AppNames,
-    [string]$AppManifest
+    [string]$ManifestPath = "C:\Temp\app_manifest.yaml"
 )
 
 # ==============================================================================
@@ -45,16 +45,22 @@ if (-not (Test-Path $LogDir)) { New-Item -Path $LogDir -ItemType Directory -Forc
 if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
 
 try {
+    # Validate manifest file exists
+    if (-not (Test-Path $ManifestPath)) {
+        throw "App manifest file not found at: $ManifestPath"
+    }
+
     # Parse inputs
     $selectedAppNames = $AppNames -split ',' | ForEach-Object { $_.Trim() }
-    $manifest = $AppManifest | ConvertFrom-Yaml
+    $manifestContent = Get-Content -Path $ManifestPath -Raw
+    $manifest = $manifestContent | ConvertFrom-Yaml
 
     $appsToProcess = $selectedAppNames | ForEach-Object {
         $appNameKey = $_
         $appConfig = $manifest.PSObject.Properties | Where-Object { $_.Name -eq $appNameKey } | Select-Object -First 1 -ExpandProperty Value
         if ($appConfig) {
             # Add the key name to the object itself for easier reference
-            $appConfig | Add-Member -MemberType NoteProperty -Name "Key" -Value $appNameKey
+            $appConfig | Add-Member -MemberType NoteProperty -Name "Key" -Value $appNameKey -Force
             return $appConfig
         } else {
             Write-Warning "[SKIP] Application '$appNameKey' not found in manifest."
@@ -73,10 +79,15 @@ try {
     Write-Host "[PROGRESS] Stage 1/3: Starting Downloads..."
     $downloadJobs = @()
     foreach ($app in $appsToProcess) {
-        if ($app.source_type -ne 'Url') { continue }
-        $job = Start-Job -ScriptBlock {
+        if (-not $app.source_type -or $app.source_type -ne 'Url') {
+            if ($app.source_type -and $app.source_type -ne 'Url') {
+                Write-Host "[SKIP] $($app.Key): source_type is '$($app.source_type)', skipping download"
+            }
+            continue
+        }
+        $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
             param($app, $parentPid)
-            $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Download" -ParentProcessId $parentPid
+            $hbJob = Start-Heartbeat -AppName "$($app.Key)-Download" -ParentProcessId $parentPid
             try {
                 Write-Host "[$($app.name)] Downloading from $($app.url)..."
                 Invoke-WebRequest -Uri $app.url -OutFile $app.outfile -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
@@ -84,10 +95,12 @@ try {
             } catch {
                 return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
             } finally {
-                if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                if ($hbJob) {
+                    Stop-Job -Job $hbJob -ErrorAction SilentlyContinue
+                    Remove-Job -Job $hbJob -ErrorAction SilentlyContinue
+                }
             }
         } -ArgumentList $app, $PID
-        $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
         $downloadJobs += $job
     }
     
@@ -109,10 +122,16 @@ try {
     Write-Host "[PROGRESS] Stage 2/3: Starting Extractions..."
     $unzipJobs = @()
     foreach ($app in $appsToProcess) {
-        if ($failedApps.Contains($app.Key) -or $app.source_format -ne 'zip') { continue }
-        $job = Start-Job -ScriptBlock {
+        if ($failedApps.Contains($app.Key)) { continue }
+        if (-not $app.source_format -or $app.source_format -ne 'zip') {
+            if ($app.source_format -and $app.source_format -ne 'zip') {
+                Write-Host "[SKIP] $($app.Key): source_format is '$($app.source_format)', skipping extraction"
+            }
+            continue
+        }
+        $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
             param($app, $parentPid)
-            $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Unzip" -ParentProcessId $parentPid
+            $hbJob = Start-Heartbeat -AppName "$($app.Key)-Unzip" -ParentProcessId $parentPid
             try {
                 Write-Host "[$($app.name)] Extracting $($app.outfile)..."
                 Expand-Archive -Path $app.outfile -DestinationPath $app.unzip_dir -Force
@@ -120,10 +139,12 @@ try {
             } catch {
                 return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
             } finally {
-                if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                if ($hbJob) {
+                    Stop-Job -Job $hbJob -ErrorAction SilentlyContinue
+                    Remove-Job -Job $hbJob -ErrorAction SilentlyContinue
+                }
             }
         } -ArgumentList $app, $PID
-        $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
         $unzipJobs += $job
     }
 
@@ -147,17 +168,23 @@ try {
     $installJobs = @()
     foreach ($app in $appsToProcess) {
         if ($failedApps.Contains($app.Key)) { continue }
-        $job = Start-Job -ScriptBlock {
+        $job = Start-Job -InitializationScript ${function:Start-Heartbeat} -ScriptBlock {
             param($app, $parentPid)
-            $hbJob = . "Start-Heartbeat" -AppName "$($app.Key)-Install" -ParentProcessId $parentPid
+            $hbJob = Start-Heartbeat -AppName "$($app.Key)-Install" -ParentProcessId $parentPid
             try {
-                $cmd = $app.install_command.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir)
-                $args = $app.install_args.Replace('{outfile}', $app.outfile).Replace('{unzip_dir}', $app.unzip_dir).Replace('{logdir}', "C:\DeployLogs")
-                
+                # Handle null/undefined properties with safe defaults
+                $outfileValue = if ($app.outfile) { $app.outfile } else { "" }
+                $unzipDirValue = if ($app.unzip_dir) { $app.unzip_dir } else { "" }
+
+                $cmd = $app.install_command.Replace('{outfile}', $outfileValue).Replace('{unzip_dir}', $unzipDirValue)
+                $args = $app.install_args.Replace('{outfile}', $outfileValue).Replace('{unzip_dir}', $unzipDirValue).Replace('{logdir}', "C:\DeployLogs")
+
                 Write-Host "[$($app.name)] Installing with command: $cmd $args"
                 $process = Start-Process -FilePath $cmd -ArgumentList $args -Wait -PassThru -ErrorAction Stop
-                
-                if ($app.success_codes -contains $process.ExitCode) {
+
+                # Default to success code 0 if not specified
+                $validCodes = if ($app.success_codes) { $app.success_codes } else { @(0) }
+                if ($validCodes -contains $process.ExitCode) {
                     return @{ Status = 'Success'; AppKey = $app.Key }
                 } else {
                     return @{ Status = 'Failed'; AppKey = $app.Key; Error = "Installer failed with exit code $($process.ExitCode)" }
@@ -165,10 +192,12 @@ try {
             } catch {
                 return @{ Status = 'Failed'; AppKey = $app.Key; Error = $_.Exception.Message }
             } finally {
-                if ($hbJob) { Stop-Job -Job $hbJob; Remove-Job -Job $hbJob }
+                if ($hbJob) {
+                    Stop-Job -Job $hbJob -ErrorAction SilentlyContinue
+                    Remove-Job -Job $hbJob -ErrorAction SilentlyContinue
+                }
             }
         } -ArgumentList $app, $PID
-        $job.PSJobTypeName = 'BackgroundJob'; $job.InitializationScript = ${function:Start-Heartbeat}
         $installJobs += $job
     }
     
