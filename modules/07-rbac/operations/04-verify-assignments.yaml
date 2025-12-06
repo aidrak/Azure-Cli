@@ -21,296 +21,359 @@ operation:
   validation:
     enabled: true
     checks:
-      - type: "bash_command"
+      - type: "powershell_command"
         command: |
           # Final validation that verification file was created
-          if [[ -f "artifacts/outputs/rbac-verification-complete.txt" ]]; then
-            echo "[VALIDATE] RBAC verification completed"
+          if (Test-Path "artifacts/outputs/rbac-verification-complete.txt") {
+            Write-Host "[VALIDATE] RBAC verification completed"
             exit 0
-          else
-            echo "[ERROR] RBAC verification file not found"
+          } else {
+            Write-Host "[ERROR] RBAC verification file not found"
             exit 1
-          fi
+          }
         description: "Verify RBAC verification completed"
 
-  # Template command (executed via bash)
+  # Template command (executed via PowerShell)
   template:
-    type: "bash-script"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      set -euo pipefail
-
-      echo "[START] RBAC Verification: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      cat > /tmp/rbac-04-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] RBAC Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
-      STD_GROUP_NAME="{{ENTRA_GROUP_USERS_STANDARD}}"
-      ADMIN_GROUP_NAME="{{ENTRA_GROUP_USERS_ADMINS}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $stdGroupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $adminGroupName = "{{ENTRA_GROUP_USERS_ADMINS}}"
 
       # Counters
-      TOTAL_CHECKS=0
-      PASSED_CHECKS=0
-      FAILED_CHECKS=0
-      WARNING_CHECKS=0
+      $totalChecks = 0
+      $passedChecks = 0
+      $failedChecks = 0
+      $warningChecks = 0
 
       # Step 1: Validate Azure authentication
-      echo "[PROGRESS] Step 1/7: Validating Azure authentication..."
-      if ! az account show &>/dev/null; then
-        echo "[ERROR] Not authenticated to Azure"
+      Write-Host "[PROGRESS] Step 1/7: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
         exit 1
-      fi
+      }
 
       # Step 2: Get group IDs
-      echo "[PROGRESS] Step 2/7: Getting user group IDs..."
+      Write-Host "[PROGRESS] Step 2/7: Getting user group IDs..."
 
-      STD_GROUP_ID=$(az ad group list \
-        --filter "displayName eq '${STD_GROUP_NAME}'" \
-        --query "[0].id" -o tsv)
+      $stdGroupId = az ad group list `
+        --filter "displayName eq '$stdGroupName'" `
+        --query "[0].id" `
+        --output tsv
 
-      ADMIN_GROUP_ID=$(az ad group list \
-        --filter "displayName eq '${ADMIN_GROUP_NAME}'" \
-        --query "[0].id" -o tsv)
+      $adminGroupId = az ad group list `
+        --filter "displayName eq '$adminGroupName'" `
+        --query "[0].id" `
+        --output tsv
 
-      if [[ -z "$STD_GROUP_ID" || -z "$ADMIN_GROUP_ID" ]]; then
-        echo "[ERROR] Failed to get user group IDs"
+      if ([string]::IsNullOrEmpty($stdGroupId) -or [string]::IsNullOrEmpty($adminGroupId)) {
+        Write-Host "[ERROR] Failed to get user group IDs"
         exit 1
-      fi
+      }
 
-      echo "[VALIDATE] Standard users group ID: $STD_GROUP_ID"
-      echo "[VALIDATE] Admin users group ID: $ADMIN_GROUP_ID"
+      Write-Host "[VALIDATE] Standard users group ID: $stdGroupId"
+      Write-Host "[VALIDATE] Admin users group ID: $adminGroupId"
 
       # Step 3: Get resource IDs
-      echo "[PROGRESS] Step 3/7: Getting resource IDs..."
+      Write-Host "[PROGRESS] Step 3/7: Getting resource IDs..."
 
-      RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
+      $rgId = az group show --name $resourceGroup --query id --output tsv
 
       # Find storage account
-      STORAGE_ACCOUNT=$(az storage account list \
-        --resource-group "$RESOURCE_GROUP" \
-        --query "[?starts_with(name, 'fslogix')] | [0].name" -o tsv)
+      $storageAccount = az storage account list `
+        --resource-group $resourceGroup `
+        --query "[?starts_with(name, 'fslogix')] | [0].name" `
+        --output tsv
 
-      if [[ -n "$STORAGE_ACCOUNT" && "$STORAGE_ACCOUNT" != "null" ]]; then
-        STORAGE_ID=$(az storage account show \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$STORAGE_ACCOUNT" \
-          --query id -o tsv)
-        FILE_SHARE_ID="${STORAGE_ID}/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
-      else
-        echo "[WARNING] Storage account not found - skipping storage checks"
-        FILE_SHARE_ID=""
-      fi
+      if (-not [string]::IsNullOrEmpty($storageAccount) -and $storageAccount -ne "null") {
+        $storageId = az storage account show `
+          --resource-group $resourceGroup `
+          --name $storageAccount `
+          --query id `
+          --output tsv
+        $fileShareId = "$storageId/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
+      } else {
+        Write-Host "[WARNING] Storage account not found - skipping storage checks"
+        $fileShareId = ""
+      }
 
       # Find application group
-      APP_GROUP_ID=$(az desktopvirtualization applicationgroup list \
-        --resource-group "$RESOURCE_GROUP" \
-        --query "[0].id" -o tsv 2>/dev/null || true)
+      $appGroupId = az desktopvirtualization applicationgroup list `
+        --resource-group $resourceGroup `
+        --query "[0].id" `
+        --output tsv 2>$null
 
-      if [[ -z "$APP_GROUP_ID" || "$APP_GROUP_ID" == "null" ]]; then
-        echo "[WARNING] Application group not found - skipping app group checks"
-        APP_GROUP_ID=""
-      fi
+      if ($LASTEXITCODE -ne 0) {
+        $appGroupId = ""
+      }
+
+      if ([string]::IsNullOrEmpty($appGroupId) -or $appGroupId -eq "null") {
+        Write-Host "[WARNING] Application group not found - skipping app group checks"
+        $appGroupId = ""
+      }
 
       # Step 4: Verify storage permissions
-      echo "[PROGRESS] Step 4/7: Verifying storage permissions..."
+      Write-Host "[PROGRESS] Step 4/7: Verifying storage permissions..."
 
-      if [[ -n "$FILE_SHARE_ID" ]]; then
+      if (-not [string]::IsNullOrEmpty($fileShareId)) {
         # Standard users - Storage File Data SMB Share Contributor
-        ((TOTAL_CHECKS++)) || true
-        ASSIGNMENT=$(az role assignment list \
-          --assignee "$STD_GROUP_ID" \
-          --scope "$FILE_SHARE_ID" \
-          --query "[?roleDefinitionName=='Storage File Data SMB Share Contributor']" -o tsv || true)
-        if [[ -n "$ASSIGNMENT" ]]; then
-          echo "[SUCCESS] [OK] Standard users: Storage File Data SMB Share Contributor"
-          ((PASSED_CHECKS++)) || true
-        else
-          echo "[WARNING] [WAIT] Standard users: Storage File Data SMB Share Contributor (assignment in progress)"
-          ((WARNING_CHECKS++)) || true
-        fi
+        $totalChecks++
+        $assignment = az role assignment list `
+          --assignee $stdGroupId `
+          --scope $fileShareId `
+          --query "[?roleDefinitionName=='Storage File Data SMB Share Contributor']" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $assignment = $assignment.Trim()
+        }
+
+        if (-not [string]::IsNullOrEmpty($assignment)) {
+          Write-Host "[SUCCESS] [OK] Standard users: Storage File Data SMB Share Contributor"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] [WAIT] Standard users: Storage File Data SMB Share Contributor (assignment in progress)"
+          $warningChecks++
+        }
 
         # Admin users - Storage File Data SMB Share Elevated Contributor
-        ((TOTAL_CHECKS++)) || true
-        ASSIGNMENT=$(az role assignment list \
-          --assignee "$ADMIN_GROUP_ID" \
-          --scope "$FILE_SHARE_ID" \
-          --query "[?roleDefinitionName=='Storage File Data SMB Share Elevated Contributor']" -o tsv || true)
-        if [[ -n "$ASSIGNMENT" ]]; then
-          echo "[SUCCESS] [OK] Admin users: Storage File Data SMB Share Elevated Contributor"
-          ((PASSED_CHECKS++)) || true
-        else
-          echo "[WARNING] [WAIT] Admin users: Storage File Data SMB Share Elevated Contributor (assignment in progress)"
-          ((WARNING_CHECKS++)) || true
-        fi
-      else
-        echo "[WARNING] [SKIP] Storage checks skipped (no storage account found)"
-      fi
+        $totalChecks++
+        $assignment = az role assignment list `
+          --assignee $adminGroupId `
+          --scope $fileShareId `
+          --query "[?roleDefinitionName=='Storage File Data SMB Share Elevated Contributor']" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $assignment = $assignment.Trim()
+        }
+
+        if (-not [string]::IsNullOrEmpty($assignment)) {
+          Write-Host "[SUCCESS] [OK] Admin users: Storage File Data SMB Share Elevated Contributor"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] [WAIT] Admin users: Storage File Data SMB Share Elevated Contributor (assignment in progress)"
+          $warningChecks++
+        }
+      } else {
+        Write-Host "[WARNING] [SKIP] Storage checks skipped (no storage account found)"
+      }
 
       # Step 5: Verify VM login permissions
-      echo "[PROGRESS] Step 5/7: Verifying VM login permissions..."
+      Write-Host "[PROGRESS] Step 5/7: Verifying VM login permissions..."
 
       # Standard users - Virtual Machine User Login
-      ((TOTAL_CHECKS++)) || true
-      ASSIGNMENT=$(az role assignment list \
-        --assignee "$STD_GROUP_ID" \
-        --scope "$RG_ID" \
-        --query "[?roleDefinitionName=='Virtual Machine User Login']" -o tsv || true)
-      if [[ -n "$ASSIGNMENT" ]]; then
-        echo "[SUCCESS] [OK] Standard users: Virtual Machine User Login"
-        ((PASSED_CHECKS++)) || true
-      else
-        echo "[WARNING] [WAIT] Standard users: Virtual Machine User Login (assignment in progress)"
-        ((WARNING_CHECKS++)) || true
-      fi
+      $totalChecks++
+      $assignment = az role assignment list `
+        --assignee $stdGroupId `
+        --scope $rgId `
+        --query "[?roleDefinitionName=='Virtual Machine User Login']" `
+        --output tsv 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        $assignment = $assignment.Trim()
+      }
+
+      if (-not [string]::IsNullOrEmpty($assignment)) {
+        Write-Host "[SUCCESS] [OK] Standard users: Virtual Machine User Login"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] [WAIT] Standard users: Virtual Machine User Login (assignment in progress)"
+        $warningChecks++
+      }
 
       # Admin users - Virtual Machine Administrator Login
-      ((TOTAL_CHECKS++)) || true
-      ASSIGNMENT=$(az role assignment list \
-        --assignee "$ADMIN_GROUP_ID" \
-        --scope "$RG_ID" \
-        --query "[?roleDefinitionName=='Virtual Machine Administrator Login']" -o tsv || true)
-      if [[ -n "$ASSIGNMENT" ]]; then
-        echo "[SUCCESS] [OK] Admin users: Virtual Machine Administrator Login"
-        ((PASSED_CHECKS++)) || true
-      else
-        echo "[WARNING] [WAIT] Admin users: Virtual Machine Administrator Login (assignment in progress)"
-        ((WARNING_CHECKS++)) || true
-      fi
+      $totalChecks++
+      $assignment = az role assignment list `
+        --assignee $adminGroupId `
+        --scope $rgId `
+        --query "[?roleDefinitionName=='Virtual Machine Administrator Login']" `
+        --output tsv 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        $assignment = $assignment.Trim()
+      }
+
+      if (-not [string]::IsNullOrEmpty($assignment)) {
+        Write-Host "[SUCCESS] [OK] Admin users: Virtual Machine Administrator Login"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] [WAIT] Admin users: Virtual Machine Administrator Login (assignment in progress)"
+        $warningChecks++
+      }
 
       # Admin users - Desktop Virtualization Power On Off Contributor (optional)
-      ((TOTAL_CHECKS++)) || true
-      ASSIGNMENT=$(az role assignment list \
-        --assignee "$ADMIN_GROUP_ID" \
-        --scope "$RG_ID" \
-        --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv || true)
-      if [[ -n "$ASSIGNMENT" ]]; then
-        echo "[SUCCESS] [OK] Admin users: Desktop Virtualization Power On Off Contributor"
-        ((PASSED_CHECKS++)) || true
-      else
-        echo "[WARNING] [WAIT] Admin users: Desktop Virtualization Power On Off Contributor (optional)"
-        ((WARNING_CHECKS++)) || true
-      fi
+      $totalChecks++
+      $assignment = az role assignment list `
+        --assignee $adminGroupId `
+        --scope $rgId `
+        --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" `
+        --output tsv 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        $assignment = $assignment.Trim()
+      }
+
+      if (-not [string]::IsNullOrEmpty($assignment)) {
+        Write-Host "[SUCCESS] [OK] Admin users: Desktop Virtualization Power On Off Contributor"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] [WAIT] Admin users: Desktop Virtualization Power On Off Contributor (optional)"
+        $warningChecks++
+      }
 
       # Step 6: Verify application group permissions
-      echo "[PROGRESS] Step 6/7: Verifying application group permissions..."
+      Write-Host "[PROGRESS] Step 6/7: Verifying application group permissions..."
 
-      if [[ -n "$APP_GROUP_ID" ]]; then
+      if (-not [string]::IsNullOrEmpty($appGroupId)) {
         # Standard users - Desktop Virtualization User
-        ((TOTAL_CHECKS++)) || true
-        ASSIGNMENT=$(az role assignment list \
-          --assignee "$STD_GROUP_ID" \
-          --scope "$APP_GROUP_ID" \
-          --query "[?roleDefinitionName=='Desktop Virtualization User']" -o tsv || true)
-        if [[ -n "$ASSIGNMENT" ]]; then
-          echo "[SUCCESS] [OK] Standard users: Desktop Virtualization User"
-          ((PASSED_CHECKS++)) || true
-        else
-          echo "[WARNING] [WAIT] Standard users: Desktop Virtualization User (assignment in progress)"
-          ((WARNING_CHECKS++)) || true
-        fi
+        $totalChecks++
+        $assignment = az role assignment list `
+          --assignee $stdGroupId `
+          --scope $appGroupId `
+          --query "[?roleDefinitionName=='Desktop Virtualization User']" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $assignment = $assignment.Trim()
+        }
+
+        if (-not [string]::IsNullOrEmpty($assignment)) {
+          Write-Host "[SUCCESS] [OK] Standard users: Desktop Virtualization User"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] [WAIT] Standard users: Desktop Virtualization User (assignment in progress)"
+          $warningChecks++
+        }
 
         # Admin users - Desktop Virtualization User
-        ((TOTAL_CHECKS++)) || true
-        ASSIGNMENT=$(az role assignment list \
-          --assignee "$ADMIN_GROUP_ID" \
-          --scope "$APP_GROUP_ID" \
-          --query "[?roleDefinitionName=='Desktop Virtualization User']" -o tsv || true)
-        if [[ -n "$ASSIGNMENT" ]]; then
-          echo "[SUCCESS] [OK] Admin users: Desktop Virtualization User"
-          ((PASSED_CHECKS++)) || true
-        else
-          echo "[WARNING] [WAIT] Admin users: Desktop Virtualization User (assignment in progress)"
-          ((WARNING_CHECKS++)) || true
-        fi
-      else
-        echo "[WARNING] [SKIP] Application group checks skipped (no app group found)"
-      fi
+        $totalChecks++
+        $assignment = az role assignment list `
+          --assignee $adminGroupId `
+          --scope $appGroupId `
+          --query "[?roleDefinitionName=='Desktop Virtualization User']" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $assignment = $assignment.Trim()
+        }
+
+        if (-not [string]::IsNullOrEmpty($assignment)) {
+          Write-Host "[SUCCESS] [OK] Admin users: Desktop Virtualization User"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] [WAIT] Admin users: Desktop Virtualization User (assignment in progress)"
+          $warningChecks++
+        }
+      } else {
+        Write-Host "[WARNING] [SKIP] Application group checks skipped (no app group found)"
+      }
 
       # Step 7: Summary
-      echo "[PROGRESS] Step 7/7: Generating summary..."
-      echo ""
-      echo "=========================================="
-      echo "RBAC VERIFICATION SUMMARY"
-      echo "=========================================="
-      echo "Total Checks: $TOTAL_CHECKS"
-      echo "Passed: $PASSED_CHECKS"
-      echo "Failed: $FAILED_CHECKS"
-      echo "Warnings: $WARNING_CHECKS"
-      echo "=========================================="
+      Write-Host "[PROGRESS] Step 7/7: Generating summary..."
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "RBAC VERIFICATION SUMMARY"
+      Write-Host "=========================================="
+      Write-Host "Total Checks: $totalChecks"
+      Write-Host "Passed: $passedChecks"
+      Write-Host "Failed: $failedChecks"
+      Write-Host "Warnings: $warningChecks"
+      Write-Host "=========================================="
 
       # Determine overall status
-      if [[ $FAILED_CHECKS -eq 0 ]]; then
-        echo "[SUCCESS] All RBAC assignments verified successfully!"
-        VERIFICATION_STATUS="PASSED"
-        EXIT_CODE=0
-      else
-        echo "[ERROR] Some RBAC assignments are missing or incorrect"
-        echo "[ERROR] Please review the failed checks above"
-        VERIFICATION_STATUS="FAILED"
-        EXIT_CODE=1
-      fi
+      if ($failedChecks -eq 0) {
+        Write-Host "[SUCCESS] All RBAC assignments verified successfully!"
+        $verificationStatus = "PASSED"
+        $exitCode = 0
+      } else {
+        Write-Host "[ERROR] Some RBAC assignments are missing or incorrect"
+        Write-Host "[ERROR] Please review the failed checks above"
+        $verificationStatus = "FAILED"
+        $exitCode = 1
+      }
 
       # Save detailed verification report
-      {
-        echo "RBAC Verification Report"
-        echo "========================"
-        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-        echo ""
-        echo "Overall Status: $VERIFICATION_STATUS"
-        echo ""
-        echo "Summary:"
-        echo "  Total Checks: $TOTAL_CHECKS"
-        echo "  Passed: $PASSED_CHECKS"
-        echo "  Failed: $FAILED_CHECKS"
-        echo "  Warnings: $WARNING_CHECKS"
-        echo ""
-        echo "Resource Group: $RESOURCE_GROUP ($RG_ID)"
-        echo ""
-        echo "Standard Users Group:"
-        echo "  Name: $STD_GROUP_NAME"
-        echo "  ID: $STD_GROUP_ID"
-        echo ""
-        echo "Admin Users Group:"
-        echo "  Name: $ADMIN_GROUP_NAME"
-        echo "  ID: $ADMIN_GROUP_ID"
-        echo ""
-        echo "Required Permissions (Standard Users):"
-        echo "  - Storage File Data SMB Share Contributor (file share scope)"
-        echo "  - Virtual Machine User Login (resource group scope)"
-        echo "  - Desktop Virtualization User (application group scope)"
-        echo ""
-        echo "Required Permissions (Admin Users):"
-        echo "  - Storage File Data SMB Share Elevated Contributor (file share scope)"
-        echo "  - Virtual Machine Administrator Login (resource group scope)"
-        echo "  - Desktop Virtualization User (application group scope)"
-        echo "  - Desktop Virtualization Power On Off Contributor (optional)"
-        echo ""
-        if [[ $FAILED_CHECKS -gt 0 ]]; then
-          echo "Action Required:"
-          echo "  Review failed checks above and re-run RBAC assignment operations"
-          echo ""
-        else
-          echo "Next Steps:"
-          echo "  1. Add users to appropriate security groups in Entra ID"
-          echo "  2. Test user access to AVD desktops"
-          echo "  3. Verify FSLogix profile creation"
-          echo "  4. Confirm admin users have elevated access"
-          echo ""
-        fi
-        echo "Troubleshooting:"
-        echo "  - RBAC changes can take 5-10 minutes to propagate"
-        echo "  - Users may need to sign out and back in"
-        echo "  - Check Azure Portal IAM for role assignments"
-        echo ""
-      } > "artifacts/outputs/rbac-verification-complete.txt"
+      $reportContent = @"
+RBAC Verification Report
+========================
+Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
 
-      if [[ $EXIT_CODE -eq 0 ]]; then
-        echo "[SUCCESS] RBAC verification completed successfully"
-      else
-        echo "[ERROR] RBAC verification failed - see report for details"
-      fi
+Overall Status: $verificationStatus
 
-      exit $EXIT_CODE
+Summary:
+  Total Checks: $totalChecks
+  Passed: $passedChecks
+  Failed: $failedChecks
+  Warnings: $warningChecks
+
+Resource Group: $resourceGroup ($rgId)
+
+Standard Users Group:
+  Name: $stdGroupName
+  ID: $stdGroupId
+
+Admin Users Group:
+  Name: $adminGroupName
+  ID: $adminGroupId
+
+Required Permissions (Standard Users):
+  - Storage File Data SMB Share Contributor (file share scope)
+  - Virtual Machine User Login (resource group scope)
+  - Desktop Virtualization User (application group scope)
+
+Required Permissions (Admin Users):
+  - Storage File Data SMB Share Elevated Contributor (file share scope)
+  - Virtual Machine Administrator Login (resource group scope)
+  - Desktop Virtualization User (application group scope)
+  - Desktop Virtualization Power On Off Contributor (optional)
+
+"@
+
+      if ($failedChecks -gt 0) {
+        $reportContent += @"
+Action Required:
+  Review failed checks above and re-run RBAC assignment operations
+
+"@
+      } else {
+        $reportContent += @"
+Next Steps:
+  1. Add users to appropriate security groups in Entra ID
+  2. Test user access to AVD desktops
+  3. Verify FSLogix profile creation
+  4. Confirm admin users have elevated access
+
+"@
+      }
+
+      $reportContent += @"
+Troubleshooting:
+  - RBAC changes can take 5-10 minutes to propagate
+  - Users may need to sign out and back in
+  - Check Azure Portal IAM for role assignments
+
+"@
+
+      $reportContent | Out-File -FilePath "artifacts/outputs/rbac-verification-complete.txt" -Encoding UTF8
+
+      if ($exitCode -eq 0) {
+        Write-Host "[SUCCESS] RBAC verification completed successfully"
+      } else {
+        Write-Host "[ERROR] RBAC verification failed - see report for details"
+      }
+
+      exit $exitCode
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/rbac-04-wrapper.ps1
+      rm -f /tmp/rbac-04-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
