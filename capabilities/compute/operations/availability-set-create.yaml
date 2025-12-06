@@ -1,0 +1,179 @@
+# ==============================================================================
+# Capability Operation: Create Availability Set
+# Operation ID: 24
+# ==============================================================================
+
+operation:
+  id: "availability-set-create"
+  name: "Create Availability Set"
+  description: "Create Azure availability set for high availability VM deployments"
+
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/availabilitySets"
+
+  # Duration expectations
+  duration:
+    expected: 60
+    timeout: 180
+    type: "NORMAL"
+
+  # Parameters extracted from configuration
+  parameters:
+    required:
+      - name: "availability_set_name"
+        type: "string"
+        description: "Name of the availability set"
+        default: "{{COMPUTE_AVAILABILITY_SET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "fault_domain_count"
+        type: "number"
+        description: "Number of fault domains"
+        default: 3
+      - name: "update_domain_count"
+        type: "number"
+        description: "Number of update domains"
+        default: 5
+      - name: "managed"
+        type: "boolean"
+        description: "Use managed availability set"
+        default: true
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/availabilitySets"
+        resource_name: "{{COMPUTE_AVAILABILITY_SET_NAME}}"
+        description: "Availability set exists"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Availability set provisioned successfully"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm availability-set show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{COMPUTE_AVAILABILITY_SET_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-availability-set-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Availability set creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $availabilitySetName = "{{COMPUTE_AVAILABILITY_SET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $faultDomainCount = [int]"{{COMPUTE_FAULT_DOMAIN_COUNT}}"
+      $updateDomainCount = [int]"{{COMPUTE_UPDATE_DOMAIN_COUNT}}"
+      $managed = [bool]"{{COMPUTE_AVAILABILITY_SET_MANAGED}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      # Check if availability set already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if availability set exists..."
+      az vm availability-set show `
+        --resource-group $resourceGroup `
+        --name $availabilitySetName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Availability set already exists: $availabilitySetName"
+        Write-Host "[SUCCESS] Availability set creation complete (already exists)"
+        exit 0
+      }
+
+      # Create availability set
+      Write-Host "[PROGRESS] Creating availability set: $availabilitySetName"
+      Write-Host "[PROGRESS]   Location: $location"
+      Write-Host "[PROGRESS]   Fault domains: $faultDomainCount"
+      Write-Host "[PROGRESS]   Update domains: $updateDomainCount"
+      Write-Host "[PROGRESS]   Managed: $managed"
+
+      if ($managed) {
+        az vm availability-set create `
+          --resource-group $resourceGroup `
+          --name $availabilitySetName `
+          --location $location `
+          --platform-fault-domain-count $faultDomainCount `
+          --platform-update-domain-count $updateDomainCount `
+          --tags $tags `
+          --output json > artifacts/outputs/compute-availability-set-create.json
+      } else {
+        az vm availability-set create `
+          --resource-group $resourceGroup `
+          --name $availabilitySetName `
+          --location $location `
+          --platform-fault-domain-count $faultDomainCount `
+          --platform-update-domain-count $updateDomainCount `
+          --unmanaged `
+          --tags $tags `
+          --output json > artifacts/outputs/compute-availability-set-create.json
+      }
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create availability set"
+        exit 1
+      }
+
+      # Validate creation
+      Write-Host "[VALIDATE] Checking availability set provisioning state..."
+      $provisioningState = az vm availability-set show `
+        --resource-group $resourceGroup `
+        --name $availabilitySetName `
+        --query "provisioningState" -o tsv
+
+      if ($provisioningState -ne "Succeeded") {
+        Write-Host "[ERROR] Availability set provisioning failed: $provisioningState"
+        exit 1
+      }
+
+      # Get availability set ID and properties
+      $asProps = az vm availability-set show `
+        --resource-group $resourceGroup `
+        --name $availabilitySetName `
+        --query "[id,virtualMachines,platformFaultDomainCount,platformUpdateDomainCount,managed]" -o tsv
+
+      Write-Host "[SUCCESS] Availability set created successfully"
+      Write-Host "[SUCCESS]   Name: $availabilitySetName"
+      Write-Host "[SUCCESS]   Location: $location"
+      Write-Host "[SUCCESS]   State: $provisioningState"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-availability-set-create-wrapper.ps1
+      rm -f /tmp/compute-availability-set-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Availability Set"
+        description: "Remove the availability set"
+        command: |
+          az vm availability-set delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{COMPUTE_AVAILABILITY_SET_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

@@ -104,7 +104,7 @@ load_config() {
     GOLDEN_IMAGE_APPLICATIONS_CSV=$(yq e '.golden_image.applications | join(",")' "$config_file"); export GOLDEN_IMAGE_APPLICATIONS_CSV
 
     # Load app manifest content and convert to base64-encoded JSON for VM parameter passing
-    local app_manifest_file="${PROJECT_ROOT}/modules/05-golden-image/app_manifest.yaml"
+    local app_manifest_file="${PROJECT_ROOT}/capabilities/compute/app_manifest.yaml"
     if [[ -f "$app_manifest_file" ]]; then
         APP_MANIFEST_CONTENT=$(cat "$app_manifest_file"); export APP_MANIFEST_CONTENT
         # Convert YAML to JSON and base64 encode (avoids shell escaping issues)
@@ -132,6 +132,71 @@ load_config() {
     # Application Group section
     APP_GROUP_NAME=$(yq e '.app_group.name' "$config_file"); export APP_GROUP_NAME
     APP_GROUP_TYPE=$(yq e '.app_group.type' "$config_file"); export APP_GROUP_TYPE
+    APP_GROUP_FRIENDLY_NAME=$(yq e '.app_group.friendly_name' "$config_file"); export APP_GROUP_FRIENDLY_NAME
+
+    # Host Pool additional fields
+    HOST_POOL_FRIENDLY_NAME=$(yq e '.host_pool.friendly_name' "$config_file"); export HOST_POOL_FRIENDLY_NAME
+    HOST_POOL_DESCRIPTION=$(yq e '.host_pool.description' "$config_file"); export HOST_POOL_DESCRIPTION
+
+    # Workspace additional fields
+    WORKSPACE_DESCRIPTION=$(yq e '.workspace.description' "$config_file"); export WORKSPACE_DESCRIPTION
+
+    # AVD Application section
+    AVD_APPLICATION_NAME=$(yq e '.avd_application.name' "$config_file"); export AVD_APPLICATION_NAME
+    AVD_APPLICATION_FRIENDLY_NAME=$(yq e '.avd_application.friendly_name' "$config_file"); export AVD_APPLICATION_FRIENDLY_NAME
+    AVD_APPLICATION_DESCRIPTION=$(yq e '.avd_application.description' "$config_file"); export AVD_APPLICATION_DESCRIPTION
+    AVD_APPLICATION_PATH=$(yq e '.avd_application.path' "$config_file"); export AVD_APPLICATION_PATH
+    AVD_APPLICATION_COMMAND_LINE_ARGS=$(yq e '.avd_application.command_line_args' "$config_file"); export AVD_APPLICATION_COMMAND_LINE_ARGS
+    AVD_APPLICATION_ICON_PATH=$(yq e '.avd_application.icon_path' "$config_file"); export AVD_APPLICATION_ICON_PATH
+    AVD_APPLICATION_ICON_INDEX=$(yq e '.avd_application.icon_index' "$config_file"); export AVD_APPLICATION_ICON_INDEX
+    AVD_APPLICATION_SHOW_IN_PORTAL=$(yq e '.avd_application.show_in_portal' "$config_file"); export AVD_APPLICATION_SHOW_IN_PORTAL
+
+    # AVD Scaling Plan section
+    AVD_SCALING_PLAN_NAME=$(yq e '.avd_scaling_plan.name' "$config_file"); export AVD_SCALING_PLAN_NAME
+    AVD_SCALING_PLAN_DESCRIPTION=$(yq e '.avd_scaling_plan.description' "$config_file"); export AVD_SCALING_PLAN_DESCRIPTION
+    AVD_SCALING_PLAN_TIME_ZONE=$(yq e '.avd_scaling_plan.time_zone' "$config_file"); export AVD_SCALING_PLAN_TIME_ZONE
+    AVD_SCALING_PLAN_ENABLED=$(yq e '.avd_scaling_plan.enabled' "$config_file"); export AVD_SCALING_PLAN_ENABLED
+
+    # Networking additional section
+    NETWORKING_LB_NAME=$(yq e '.networking.load_balancer_name' "$config_file"); export NETWORKING_LB_NAME
+    NETWORKING_LB_SKU=$(yq e '.networking.load_balancer_sku' "$config_file"); export NETWORKING_LB_SKU
+    NETWORKING_LB_TYPE=$(yq e '.networking.load_balancer_type' "$config_file"); export NETWORKING_LB_TYPE
+    NETWORKING_PUBLIC_IP_NAME=$(yq e '.networking.public_ip_name' "$config_file"); export NETWORKING_PUBLIC_IP_NAME
+    NETWORKING_PUBLIC_IP_SKU=$(yq e '.networking.public_ip_sku' "$config_file"); export NETWORKING_PUBLIC_IP_SKU
+    NETWORKING_PUBLIC_IP_ALLOCATION_METHOD=$(yq e '.networking.public_ip_allocation_method' "$config_file"); export NETWORKING_PUBLIC_IP_ALLOCATION_METHOD
+    NETWORKING_ROUTE_TABLE_NAME=$(yq e '.networking.route_table_name' "$config_file"); export NETWORKING_ROUTE_TABLE_NAME
+    NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.session_host_subnet_name' "$config_file"); export NETWORKING_SESSION_HOST_SUBNET_NAME
+
+    # Storage additional section
+    STORAGE_BLOB_CONTAINER_NAME=$(yq e '.storage.blob_container_name' "$config_file"); export STORAGE_BLOB_CONTAINER_NAME
+    STORAGE_BLOB_PUBLIC_ACCESS=$(yq e '.storage.blob_public_access' "$config_file"); export STORAGE_BLOB_PUBLIC_ACCESS
+
+    # Golden Image additional fields
+    GOLDEN_IMAGE_NAME=$(yq e '.golden_image.image_name' "$config_file"); export GOLDEN_IMAGE_NAME
+    GOLDEN_IMAGE_VM_NAME=$(yq e '.golden_image.vm_name' "$config_file"); export GOLDEN_IMAGE_VM_NAME
+    DISK_NAME=$(yq e '.golden_image.disk_name' "$config_file"); export DISK_NAME
+    DISK_SIZE_GB=$(yq e '.golden_image.disk_size_gb' "$config_file"); export DISK_SIZE_GB
+
+    # Session Host additional fields
+    SESSION_HOST_VM_NAME=$(yq e '.session_host.vm_name' "$config_file"); export SESSION_HOST_VM_NAME
+
+    # Compute section
+    COMPUTE_AVAILABILITY_SET_NAME=$(yq e '.compute.availability_set_name' "$config_file"); export COMPUTE_AVAILABILITY_SET_NAME
+    COMPUTE_AVAILABILITY_SET_ENABLED=$(yq e '.compute.availability_set_enabled' "$config_file"); export COMPUTE_AVAILABILITY_SET_ENABLED
+    COMPUTE_AVAILABILITY_SET_MANAGED=$(yq e '.compute.availability_set_enabled' "$config_file"); export COMPUTE_AVAILABILITY_SET_MANAGED
+    COMPUTE_FAULT_DOMAIN_COUNT=$(yq e '.compute.fault_domain_count' "$config_file"); export COMPUTE_FAULT_DOMAIN_COUNT
+    COMPUTE_UPDATE_DOMAIN_COUNT=$(yq e '.compute.update_domain_count' "$config_file"); export COMPUTE_UPDATE_DOMAIN_COUNT
+    COMPUTE_EXTENSION_NAME=$(yq e '.compute.extension_name' "$config_file"); export COMPUTE_EXTENSION_NAME
+    COMPUTE_EXTENSION_PUBLISHER=$(yq e '.compute.extension_publisher' "$config_file"); export COMPUTE_EXTENSION_PUBLISHER
+    COMPUTE_EXTENSION_TYPE=$(yq e '.compute.extension_type' "$config_file"); export COMPUTE_EXTENSION_TYPE
+    COMPUTE_EXTENSION_VERSION=$(yq e '.compute.extension_version' "$config_file"); export COMPUTE_EXTENSION_VERSION
+    COMPUTE_VM_NAME=$(yq e '.session_host.vm_name' "$config_file"); export COMPUTE_VM_NAME
+
+    # Autoscaling additional fields
+    AUTOSCALING_MIN_VMS=$(yq e '.autoscaling.min_vms' "$config_file"); export AUTOSCALING_MIN_VMS
+    AUTOSCALING_MAX_VMS=$(yq e '.autoscaling.max_vms' "$config_file"); export AUTOSCALING_MAX_VMS
+    AUTOSCALING_WEEKDAY_START_HOUR=$(yq e '.autoscaling.weekday_start_hour' "$config_file"); export AUTOSCALING_WEEKDAY_START_HOUR
+    AUTOSCALING_WEEKDAY_STOP_HOUR=$(yq e '.autoscaling.weekday_stop_hour' "$config_file"); export AUTOSCALING_WEEKDAY_STOP_HOUR
 
     # ===========================================================================
     # Load Secrets (if secrets.yaml exists, merge with config.yaml)

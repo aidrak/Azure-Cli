@@ -1,0 +1,160 @@
+# ==============================================================================
+# Capability Operation: Drain Session Host for Maintenance
+# Operation ID: 32
+# ==============================================================================
+
+operation:
+  id: "sessionhost-drain"
+  name: "Drain AVD Session Host for Maintenance"
+  description: "Set session host to drain mode, preventing new sessions while allowing existing sessions to complete"
+
+  capability: "avd"
+  operation_mode: "modify"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
+
+  # Duration expectations
+  duration:
+    expected: 30
+    timeout: 120
+    type: "WAIT"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        validation: "^[a-zA-Z0-9][a-zA-Z0-9-]{0,63}$"
+      - name: "session_host_name"
+        type: "string"
+        description: "Name of the session host VM"
+        validation: "^[a-zA-Z0-9][a-zA-Z0-9-]{0,63}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+    optional:
+      - name: "allow_new_sessions"
+        type: "boolean"
+        description: "Allow new user sessions (false = drain mode)"
+        default: "false"
+      - name: "drain_timeout"
+        type: "integer"
+        description: "Maximum time in seconds to wait for sessions to drain"
+        default: "3600"
+
+  # Validation checks
+  validation:
+    pre_checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
+        resource_name: "{{host_pool_name}}/{{session_host_name}}"
+        error_message: "Session host '{{session_host_name}}' not found in host pool '{{host_pool_name}}'"
+
+    post_checks:
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        timeout: 120
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    detection_method: "azure_check"
+    check_command: |
+      az desktopvirtualization hostpool sessionhost show \
+        --host-pool-name "{{host_pool_name}}" \
+        --name "{{session_host_name}}" \
+        --resource-group "{{resource_group}}" \
+        --query "allowNewSession" \
+        --output tsv 2>/dev/null
+
+  # Template command
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-sessionhost-drain-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $hostPoolName = "{{host_pool_name}}"
+      $sessionHostName = "{{session_host_name}}"
+      $resourceGroup = "{{resource_group}}"
+      $allowNewSessions = [System.Convert]::ToBoolean("{{allow_new_sessions}}")
+      $drainTimeout = [int]"{{drain_timeout}}"
+
+      Write-Host "[START] Starting 'Drain Session Host' operation..."
+
+      Write-Host "[PROGRESS] Retrieving session host information..."
+      $sessionHost = az desktopvirtualization hostpool sessionhost show `
+        --host-pool-name $hostPoolName `
+        --name $sessionHostName `
+        --resource-group $resourceGroup `
+        --output json | ConvertFrom-Json
+
+      if (-not $sessionHost) {
+        Write-Host "[ERROR] Session host '$sessionHostName' not found"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Current state - Sessions: $($sessionHost.sessions), AllowNewSession: $($sessionHost.allowNewSession)"
+
+      Write-Host "[PROGRESS] Updating session host to drain mode (allowNewSessions = $allowNewSessions)..."
+      az desktopvirtualization hostpool sessionhost update `
+        --host-pool-name $hostPoolName `
+        --name $sessionHostName `
+        --resource-group $resourceGroup `
+        --allow-new-session $allowNewSessions `
+        --output none
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[PROGRESS] Session host set to drain mode"
+
+        if (-not $allowNewSessions) {
+          Write-Host "[PROGRESS] Drain mode activated. Waiting for existing sessions to complete..."
+          $startTime = Get-Date
+          $sessionCount = $sessionHost.sessions
+
+          while ((Get-Date) -lt $startTime.AddSeconds($drainTimeout)) {
+            $currentState = az desktopvirtualization hostpool sessionhost show `
+              --host-pool-name $hostPoolName `
+              --name $sessionHostName `
+              --resource-group $resourceGroup `
+              --output json | ConvertFrom-Json
+
+            Write-Host "[PROGRESS] Active sessions: $($currentState.sessions)"
+
+            if ($currentState.sessions -eq 0) {
+              Write-Host "[SUCCESS] All sessions have disconnected"
+              break
+            }
+
+            Start-Sleep -Seconds 30
+          }
+        }
+
+        Write-Host "[SUCCESS] Successfully drained session host '$sessionHostName'"
+        Write-Host "[SUCCESS] - Host pool: $hostPoolName"
+        Write-Host "[SUCCESS] - Allow new sessions: $allowNewSessions"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Failed to drain session host"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-sessionhost-drain-wrapper.ps1
+      rm -f /tmp/avd-sessionhost-drain-wrapper.ps1
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Restore Session Host to Accept New Sessions"
+        description: "Re-enable new session connections on session host"
+        command: |
+          az desktopvirtualization hostpool sessionhost update \
+            --host-pool-name "{{host_pool_name}}" \
+            --name "{{session_host_name}}" \
+            --resource-group "{{resource_group}}" \
+            --allow-new-session true
+        continue_on_error: true
+
+  # Self-healing
+  fixes: []

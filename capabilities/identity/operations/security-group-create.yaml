@@ -1,0 +1,128 @@
+# ==============================================================================
+# Capability Operation: Create Security Device Security Group
+# Migrated from: modules/03-entra-group/operations/06-create-security-group.yaml
+# ==============================================================================
+
+operation:
+  id: "security-group-create"
+  name: "Create Security Device Security Group"
+  description: "Create Entra ID security group for security baseline policies"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/groups"
+
+  # Duration expectations
+  duration:
+    expected: 30    # 30 seconds
+    timeout: 60     # 1 minute
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Display name for the security device security group"
+        default: "{{ENTRA_GROUP_DEVICES_SECURITY}}"
+      - name: "group_description"
+        type: "string"
+        description: "Description for the security device security group"
+        default: "{{ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION}}"
+    optional:
+      - name: "mail_nickname"
+        type: "string"
+        description: "Mail nickname for the group (auto-derived from name if not provided)"
+        default: ""
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "group_exists"
+        group_name: "{{ENTRA_GROUP_DEVICES_SECURITY}}"
+        description: "Security device group exists in Entra ID"
+
+      - type: "group_type"
+        expected: "Security"
+        description: "Group is a security group"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az ad group list \
+        --filter "displayName eq '{{ENTRA_GROUP_DEVICES_SECURITY}}'" \
+        --query "[0].id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/security-group-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating Security device group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $groupName = "{{ENTRA_GROUP_DEVICES_SECURITY}}"
+      $groupDescription = "{{ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION}}"
+      $mailNickname = $groupName -replace ' ', '-' | % { $_.ToLower() }
+
+      Write-Host "[PROGRESS] Checking if group exists: $groupName"
+
+      $groupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
+
+      if ([string]::IsNullOrEmpty($groupId) -eq $false -and $groupId -ne "None") {
+        Write-Host "[INFO] Group already exists: $groupName"
+        Write-Host "[SUCCESS] Security device group creation complete (already exists)"
+        az ad group show --group $groupId --output json | Out-File -FilePath "artifacts/outputs/security-group-create.json"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating security group for security policies..."
+
+      try {
+        $groupId = az ad group create `
+          --display-name $groupName `
+          --mail-nickname $mailNickname `
+          --description $groupDescription `
+          --query id -o tsv 2>&1
+      } catch {
+        Write-Host "[ERROR] Failed to create security group: $groupId"
+        exit 1
+      }
+
+      if ([string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[ERROR] Failed to create security group"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying group creation..."
+      $groupDetails = az ad group show --group $groupId --output json | ConvertFrom-Json
+      $groupDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/security-group-create.json"
+
+      Write-Host "[SUCCESS] Security device group created: $groupName (ID: $groupId)"
+      Write-Host "[INFO] Use this group for security baseline policies"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/security-group-create-wrapper.ps1
+      rm -f /tmp/security-group-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Security Device Group"
+        description: "Remove the Entra ID security group for security devices"
+        command: |
+          az ad group delete \
+            --group "{{ENTRA_GROUP_DEVICES_SECURITY}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

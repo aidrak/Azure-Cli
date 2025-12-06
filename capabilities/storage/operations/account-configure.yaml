@@ -1,0 +1,185 @@
+# ==============================================================================
+# Capability Operation: Configure Storage Account Settings
+# Operation ID: 33
+# ==============================================================================
+
+operation:
+  id: "account-configure"
+  name: "Configure Storage Account Settings"
+  description: "Update storage account settings including access tier, HTTPS enforcement, and blob storage properties"
+
+  capability: "storage"
+  operation_mode: "modify"
+  resource_type: "Microsoft.Storage/storageAccounts"
+
+  # Duration expectations
+  duration:
+    expected: 45
+    timeout: 180
+    type: "WAIT"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "storage_account_name"
+        type: "string"
+        description: "Name of the storage account"
+        validation: "^[a-z0-9]{3,24}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+    optional:
+      - name: "access_tier"
+        type: "string"
+        description: "Access tier for storage account (Hot, Cool, Archive)"
+        allowed_values: ["Hot", "Cool", "Archive"]
+        default: "Hot"
+      - name: "https_only"
+        type: "boolean"
+        description: "Enforce HTTPS for all connections"
+        default: "true"
+      - name: "min_tls_version"
+        type: "string"
+        description: "Minimum TLS version (TLS1_0, TLS1_1, TLS1_2)"
+        allowed_values: ["TLS1_0", "TLS1_1", "TLS1_2"]
+        default: "TLS1_2"
+      - name: "enable_blob_versioning"
+        type: "boolean"
+        description: "Enable blob versioning for data protection"
+        default: "true"
+      - name: "enable_soft_delete"
+        type: "boolean"
+        description: "Enable soft delete for blobs"
+        default: "true"
+
+  # Validation checks
+  validation:
+    pre_checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Storage/storageAccounts"
+        resource_name: "{{storage_account_name}}"
+        error_message: "Storage account '{{storage_account_name}}' not found"
+
+    post_checks:
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        timeout: 180
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    detection_method: "azure_check"
+    check_command: |
+      az storage account show \
+        --name "{{storage_account_name}}" \
+        --resource-group "{{resource_group}}" \
+        --query "provisioningState" \
+        --output tsv 2>/dev/null | grep -q "Succeeded"
+
+  # Template command
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/storage-account-configure-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $storageAccountName = "{{storage_account_name}}"
+      $resourceGroup = "{{resource_group}}"
+      $accessTier = "{{access_tier}}"
+      $httpsOnly = [System.Convert]::ToBoolean("{{https_only}}")
+      $minTlsVersion = "{{min_tls_version}}"
+      $enableBlobVersioning = [System.Convert]::ToBoolean("{{enable_blob_versioning}}")
+      $enableSoftDelete = [System.Convert]::ToBoolean("{{enable_soft_delete}}")
+
+      Write-Host "[START] Starting 'Configure Storage Account' operation..."
+
+      Write-Host "[PROGRESS] Retrieving storage account details..."
+      $storageAccount = az storage account show `
+        --name $storageAccountName `
+        --resource-group $resourceGroup `
+        --output json | ConvertFrom-Json
+
+      if (-not $storageAccount) {
+        Write-Host "[ERROR] Storage account '$storageAccountName' not found"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Current configuration: Kind=$($storageAccount.kind), SKU=$($storageAccount.sku.name)"
+
+      Write-Host "[PROGRESS] Updating storage account settings..."
+
+      $updateParams = @(
+        "--name", $storageAccountName,
+        "--resource-group", $resourceGroup,
+        "--https-only", $httpsOnly.ToString().ToLower(),
+        "--min-tls-version", $minTlsVersion
+      )
+
+      if ($storageAccount.kind -in @("BlobStorage", "StorageV2")) {
+        $updateParams += "--access-tier"
+        $updateParams += $accessTier
+      }
+
+      az storage account update @updateParams --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to update storage account settings"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Configuring blob storage properties..."
+
+      if ($enableBlobVersioning) {
+        Write-Host "[PROGRESS] Enabling blob versioning..."
+        $containerEndpoint = $storageAccount.primaryEndpoints.blob
+        az storage blob service-properties update `
+          --account-name $storageAccountName `
+          --enable-change-feed true `
+          --enable-versioning true `
+          --output none 2>&1 | Out-Null
+      }
+
+      if ($enableSoftDelete) {
+        Write-Host "[PROGRESS] Enabling soft delete for blobs..."
+        az storage blob service-properties delete-policy update `
+          --account-name $storageAccountName `
+          --enable true `
+          --days-retained 7 `
+          --output none 2>&1 | Out-Null
+      }
+
+      Write-Host "[PROGRESS] Verifying configuration..."
+      Start-Sleep -Seconds 5
+
+      $updatedAccount = az storage account show `
+        --name $storageAccountName `
+        --resource-group $resourceGroup `
+        --output json | ConvertFrom-Json
+
+      Write-Host "[SUCCESS] Successfully configured storage account '$storageAccountName'"
+      Write-Host "[SUCCESS] - HTTPS Only: $($updatedAccount.supportsHttpsTrafficOnly)"
+      Write-Host "[SUCCESS] - Min TLS Version: $($updatedAccount.minimumTlsVersion)"
+      if ($storageAccount.kind -in @("BlobStorage", "StorageV2")) {
+        Write-Host "[SUCCESS] - Access Tier: $($updatedAccount.accessTier)"
+      }
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-account-configure-wrapper.ps1
+      rm -f /tmp/storage-account-configure-wrapper.ps1
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Revert Storage Account Settings"
+        description: "Restore previous storage account configuration"
+        command: |
+          az storage account update \
+            --name "{{storage_account_name}}" \
+            --resource-group "{{resource_group}}" \
+            --https-only true \
+            --min-tls-version TLS1_2
+        continue_on_error: true
+
+  # Self-healing
+  fixes: []

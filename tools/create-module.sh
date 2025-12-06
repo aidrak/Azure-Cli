@@ -1,5 +1,33 @@
 #!/bin/bash
 # ==============================================================================
+# DEPRECATED: This script was for the legacy module system.
+# ==============================================================================
+#
+# This tool is no longer supported. The project now uses a capability-based
+# operation system instead of numbered modules.
+#
+# For creating new capabilities and operations, please use:
+#   - tools/capability-cli.sh (if available)
+#   - Or manually create operations in capabilities/[domain]/operations/
+#   - See: docs/guides/creating-operations.md
+#
+# ==============================================================================
+
+echo "ERROR: create-module.sh is deprecated."
+echo "The project has migrated from numbered modules to capability-based operations."
+echo ""
+echo "To create new operations:"
+echo "  1. Use tools/capability-cli.sh (recommended)"
+echo "  2. Or manually create in capabilities/[domain]/operations/"
+echo "  3. See docs/guides/creating-operations.md for guidance"
+echo ""
+exit 1
+
+# ==============================================================================
+# Legacy Code (preserved for reference only)
+# ==============================================================================
+#!/bin/bash
+# ==============================================================================
 # Module Template Generator
 # ==============================================================================
 #

@@ -1,0 +1,269 @@
+# ==============================================================================
+# Capability Operation: Create Public IP Address
+# ==============================================================================
+
+operation:
+  id: "public-ip-create"
+  name: "Create Public IP Address"
+  description: "Create Azure public IP address resource for VM network interfaces, load balancers, or application gateways with configurable SKU and allocation method"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/publicIPAddresses"
+
+  # Duration expectations
+  duration:
+    expected: 20    # 20 seconds
+    timeout: 60     # 1 minute
+    type: "FAST"
+
+  # Parameters for public IP creation
+  parameters:
+    required:
+      - name: "public_ip_name"
+        type: "string"
+        description: "Name for the public IP address"
+        default: "{{NETWORKING_PUBLIC_IP_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "allocation_method"
+        type: "string"
+        description: "IP address allocation method"
+        allowed_values: ["Static", "Dynamic"]
+        default: "Static"
+      - name: "sku"
+        type: "string"
+        description: "Public IP SKU (Basic or Standard)"
+        allowed_values: ["Basic", "Standard"]
+        default: "Standard"
+      - name: "ip_version"
+        type: "string"
+        description: "IP version (IPv4 or IPv6)"
+        allowed_values: ["IPv4", "IPv6"]
+        default: "IPv4"
+      - name: "idle_timeout"
+        type: "number"
+        description: "Idle timeout in minutes (4-30)"
+        default: 4
+      - name: "domain_name_label"
+        type: "string"
+        description: "DNS domain name label for FQDN assignment"
+        default: ""
+      - name: "tags"
+        type: "object"
+        description: "Azure resource tags"
+        default: "{}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/publicIPAddresses"
+        resource_name: "{{NETWORKING_PUBLIC_IP_NAME}}"
+        description: "Public IP created successfully"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Public IP provisioned successfully"
+
+  # Idempotency: Check for existing public IP
+  idempotency:
+    enabled: true
+    check_command: |
+      az network public-ip show \
+        --name "{{NETWORKING_PUBLIC_IP_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-publicip-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating public IP address: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $publicIpName = "{{NETWORKING_PUBLIC_IP_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $allocationMethod = "{{NETWORKING_PUBLIC_IP_ALLOCATION_METHOD:-Static}}"
+      $sku = "{{NETWORKING_PUBLIC_IP_SKU:-Standard}}"
+      $ipVersion = "{{NETWORKING_PUBLIC_IP_VERSION:-IPv4}}"
+      $idleTimeout = {{NETWORKING_PUBLIC_IP_IDLE_TIMEOUT:-4}}
+      $domainLabel = "{{NETWORKING_PUBLIC_IP_DOMAIN_LABEL}}"
+
+      # Check if public IP already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if public IP exists: $publicIpName"
+
+      $existingIp = az network public-ip show `
+        --name $publicIpName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -ne $existingIp -and ![string]::IsNullOrEmpty($existingIp.id)) {
+        Write-Host "[INFO] Public IP already exists"
+        Write-Host "[INFO]   Resource ID: $($existingIp.id)"
+        Write-Host "[INFO]   IP Address: $($existingIp.ipAddress)"
+        Write-Host "[INFO]   Allocation: $($existingIp.publicIPAllocationMethod)"
+        Write-Host "[SUCCESS] Public IP creation complete (already exists)"
+
+        $existingIp | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/public-ip-create.json"
+        exit 0
+      }
+
+      # Build creation command with base parameters
+      Write-Host "[PROGRESS] Creating public IP address..."
+      Write-Host "[PROGRESS]   Name: $publicIpName"
+      Write-Host "[PROGRESS]   Resource Group: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
+      Write-Host "[PROGRESS]   Allocation Method: $allocationMethod"
+      Write-Host "[PROGRESS]   SKU: $sku"
+      Write-Host "[PROGRESS]   IP Version: $ipVersion"
+      Write-Host "[PROGRESS]   Idle Timeout: $idleTimeout minutes"
+
+      # Validate idle timeout range
+      if ($idleTimeout -lt 4 -or $idleTimeout -gt 30) {
+        Write-Host "[WARNING] Idle timeout out of range (4-30), using 4"
+        $idleTimeout = 4
+      }
+
+      # Build dynamic command parameters
+      $createParams = @(
+        "--name", $publicIpName,
+        "--resource-group", $resourceGroup,
+        "--location", $location,
+        "--allocation-method", $allocationMethod,
+        "--sku", $sku,
+        "--version", $ipVersion,
+        "--idle-timeout", [string]$idleTimeout,
+        "--output", "json"
+      )
+
+      # Add domain label if provided
+      if (![string]::IsNullOrEmpty($domainLabel)) {
+        Write-Host "[PROGRESS]   Domain Label: $domainLabel"
+        $createParams += @("--dns-name", $domainLabel)
+      }
+
+      # Create public IP
+      $publicIp = az network public-ip create @createParams 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create public IP"
+        Write-Host $publicIp
+        exit 1
+      }
+
+      $publicIp = $publicIp | ConvertFrom-Json
+
+      if ($null -eq $publicIp -or [string]::IsNullOrEmpty($publicIp.publicIp.id)) {
+        Write-Host "[ERROR] Public IP creation returned invalid response"
+        exit 1
+      }
+
+      $publicIpObj = $publicIp.publicIp
+      Write-Host "[PROGRESS] Public IP created: $($publicIpObj.id)"
+
+      # Validate creation
+      Write-Host "[VALIDATE] Verifying public IP creation..."
+
+      $verify = az network public-ip show `
+        --name $publicIpName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -eq $verify -or [string]::IsNullOrEmpty($verify.id)) {
+        Write-Host "[ERROR] Public IP verification failed"
+        exit 1
+      }
+
+      # Apply tags if provided
+      Write-Host "[PROGRESS] Applying resource tags..."
+
+      $tagsJson = '{{RESOURCE_TAGS:-{}}}'
+
+      if ($tagsJson -ne '{}' -and ![string]::IsNullOrEmpty($tagsJson)) {
+        $tags = $tagsJson | ConvertFrom-Json
+        $tagString = ""
+        foreach ($tag in $tags.PSObject.Properties) {
+          if (![string]::IsNullOrEmpty($tagString)) {
+            $tagString += " "
+          }
+          $tagString += "$($tag.Name)=$($tag.Value)"
+        }
+
+        if (![string]::IsNullOrEmpty($tagString)) {
+          az resource tag `
+            --ids $verify.id `
+            --tags $tagString `
+            --output none 2>&1 | Out-Null
+
+          Write-Host "[PROGRESS] Tags applied: $tagString"
+        }
+      }
+
+      # Prepare output
+      $output = @{
+        id = $verify.id
+        name = $verify.name
+        resourceGroup = $verify.resourceGroup
+        location = $verify.location
+        provisioningState = $verify.provisioningState
+        publicIPAllocationMethod = $verify.publicIPAllocationMethod
+        publicIPAddressVersion = $verify.publicIPAddressVersion
+        ipAddress = $verify.ipAddress
+        idleTimeoutInMinutes = $verify.idleTimeoutInMinutes
+        dnsSettings = $verify.dnsSettings
+        sku = $verify.sku
+        tags = $verify.tags
+        createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      }
+
+      # Save to artifacts
+      $output | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/public-ip-create.json"
+
+      Write-Host "[SUCCESS] Public IP address created successfully"
+      Write-Host "[SUCCESS]   Name: $publicIpName"
+      Write-Host "[SUCCESS]   Resource ID: $($verify.id)"
+      Write-Host "[SUCCESS]   IP Address: $($verify.ipAddress)"
+      Write-Host "[SUCCESS]   Allocation Method: $($verify.publicIPAllocationMethod)"
+      Write-Host "[SUCCESS]   SKU: $($verify.sku.name)"
+      if (![string]::IsNullOrEmpty($verify.dnsSettings.fqdn)) {
+        Write-Host "[SUCCESS]   FQDN: $($verify.dnsSettings.fqdn)"
+      }
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Associate with NIC: az network nic ip-config update --nic-name '<nic-name>' --resource-group $resourceGroup --public-ip-address $publicIpName"
+      Write-Host "[INFO]   - Associate with LB: az network lb frontend-ip create --name '<frontend-name>' --lb-name '<lb-name>' --public-ip-address $publicIpName"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-publicip-create-wrapper.ps1
+      rm -f /tmp/networking-publicip-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Public IP Address"
+        description: "Remove the public IP address resource"
+        command: |
+          az network public-ip delete \
+            --name "{{NETWORKING_PUBLIC_IP_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

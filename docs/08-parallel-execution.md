@@ -130,7 +130,7 @@ The `golden-image-install-apps-parallel` operation:
 
 ### File Location
 
-- Operation: `modules/05-golden-image/operations/02.5-install-apps-parallel.yaml`
+- Operation: `capabilities/compute/operations/golden-image-install-apps-parallel.yaml`
 - PowerShell: Embedded in YAML (extracted to artifacts/scripts/)
 
 ### Performance Impact

@@ -1,0 +1,244 @@
+# ==============================================================================
+# Capability Operation: Verify Autoscaling Configuration
+# Migrated from: modules/09-autoscaling/operations/03-verify-configuration.yaml
+# ==============================================================================
+
+operation:
+  id: "autoscaling-verify-configuration"
+  name: "Verify Autoscaling Configuration"
+  description: "Verify autoscaling plan is properly configured and assigned to host pool"
+
+  capability: "avd"
+  operation_mode: "validate"
+  resource_type: "Microsoft.DesktopVirtualization/scalingPlans"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 180    # 3 minutes
+    type: "FAST"
+
+  # Prerequisites
+  prerequisites:
+    required:
+      - operation: "autoscaling-create-plan"
+        status: "completed"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the host pool"
+        default: "{{HOST_POOL_NAME}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "powershell_command"
+        command: |
+          if (Test-Path "artifacts/outputs/autoscaling-verification-complete.txt") {
+            Write-Host "[VALIDATE] Autoscaling verification completed"
+            exit 0
+          } else {
+            Write-Host "[ERROR] Autoscaling verification file not found"
+            exit 1
+          }
+        description: "Verify autoscaling verification completed"
+
+  # Idempotency: Verification is idempotent
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization scaling-plan show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "ScalingPlan-{{HOST_POOL_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/autoscaling-03-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Autoscaling Configuration Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $autoscalingEnabled = "{{AUTOSCALING_ENABLED}}"
+
+      # Scaling plan name
+      $scalingPlanName = "ScalingPlan-$hostPoolName"
+
+      # Counters
+      $totalChecks = 0
+      $passedChecks = 0
+      $failedChecks = 0
+      $warningChecks = 0
+
+      # Step 1: Validate Azure authentication
+      Write-Host "[PROGRESS] Step 1/4: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
+        exit 1
+      }
+
+      # Step 2: Check if autoscaling is enabled in config
+      Write-Host "[PROGRESS] Step 2/4: Checking autoscaling configuration..."
+      if ($autoscalingEnabled -ne "true") {
+        Write-Host "[WARNING] Autoscaling is disabled in configuration"
+        Write-Host "[WARNING] Skipping verification"
+
+        $reportContent = "Autoscaling Verification Skipped" + [Environment]::NewLine + "=================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Autoscaling is disabled in configuration." + [Environment]::NewLine + [Environment]::NewLine
+        $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8
+        exit 0
+      }
+
+      # Step 3: Verify autoscaling configuration
+      Write-Host "[PROGRESS] Step 3/4: Verifying autoscaling configuration..."
+
+      # Check if host pool exists
+      $totalChecks++
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] ✓ Host pool exists: $hostPoolName"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ Host pool not found: $hostPoolName"
+        $failedChecks++
+      }
+
+      # Check if scaling plan exists
+      $totalChecks++
+      az desktopvirtualization scaling-plan show `
+        --resource-group $resourceGroup `
+        --name $scalingPlanName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] ✓ Scaling plan exists: $scalingPlanName"
+        $passedChecks++
+      } else {
+        Write-Host "[ERROR] ✗ Scaling plan not found: $scalingPlanName"
+        $failedChecks++
+      }
+
+      # Check RBAC role assignment
+      $totalChecks++
+      Write-Host "[PROGRESS] Checking RBAC assignments..."
+
+      $avdSpId = az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        $avdSpId = ""
+      }
+
+      if (-not [string]::IsNullOrEmpty($avdSpId) -and $avdSpId -ne "null") {
+        $subscriptionScope = "/subscriptions/$subscriptionId"
+
+        $roleAssignment = az role assignment list `
+          --assignee $avdSpId `
+          --scope $subscriptionScope `
+          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" -o tsv 2>$null
+
+        if ($roleAssignment -match "Desktop") {
+          Write-Host "[SUCCESS] ✓ RBAC role assigned to AVD service principal"
+          $passedChecks++
+        } else {
+          Write-Host "[WARNING] ⚠ RBAC role not found (may need manual assignment)"
+          $warningChecks++
+        }
+      } else {
+        Write-Host "[WARNING] ⚠ Azure Virtual Desktop service principal not found"
+        $warningChecks++
+      }
+
+      # Check session hosts exist
+      $totalChecks++
+      $sessionHostCount = az desktopvirtualization sessionhost list `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostPoolName `
+        --query "length(@)" -o tsv 2>$null
+
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($sessionHostCount)) {
+        $sessionHostCount = "0"
+      }
+
+      if ([int]$sessionHostCount -gt 0) {
+        Write-Host "[SUCCESS] ✓ Session hosts exist: $sessionHostCount host(s)"
+        $passedChecks++
+      } else {
+        Write-Host "[WARNING] ⚠ No session hosts found (autoscaling will have no VMs to manage)"
+        $warningChecks++
+      }
+
+      # Step 4: Summary
+      Write-Host "[PROGRESS] Step 4/4: Generating verification summary..."
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "AUTOSCALING VERIFICATION SUMMARY"
+      Write-Host "=========================================="
+      Write-Host "Total Checks: $totalChecks"
+      Write-Host "Passed: $passedChecks"
+      Write-Host "Failed: $failedChecks"
+      Write-Host "Warnings: $warningChecks"
+      Write-Host "=========================================="
+
+      # Determine overall status
+      if ($failedChecks -eq 0) {
+        Write-Host "[SUCCESS] Autoscaling configuration verification passed!"
+        $verificationStatus = "PASSED"
+        $exitCode = 0
+      } else {
+        Write-Host "[ERROR] Some autoscaling configuration checks failed"
+        Write-Host "[ERROR] Please review the failed checks above"
+        $verificationStatus = "FAILED"
+        $exitCode = 1
+      }
+
+      # Save detailed verification report
+      $reportContent = "Autoscaling Configuration Verification Report" + [Environment]::NewLine + "==============================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + [Environment]::NewLine + "Overall Status: $verificationStatus" + [Environment]::NewLine + [Environment]::NewLine + "Summary:" + [Environment]::NewLine + "  Total Checks: $totalChecks" + [Environment]::NewLine + "  Passed: $passedChecks" + [Environment]::NewLine + "  Failed: $failedChecks" + [Environment]::NewLine + "  Warnings: $warningChecks" + [Environment]::NewLine + [Environment]::NewLine + "Host Pool: $hostPoolName" + [Environment]::NewLine + "Scaling Plan: $scalingPlanName" + [Environment]::NewLine + "Resource Group: $resourceGroup" + [Environment]::NewLine + [Environment]::NewLine + "Automated Checks:" + [Environment]::NewLine + "  1. Host pool exists" + [Environment]::NewLine + "  2. Scaling plan exists" + [Environment]::NewLine + "  3. RBAC role assigned (Desktop Virtualization Power On Off Contributor)" + [Environment]::NewLine + "  4. Session hosts registered" + [Environment]::NewLine + [Environment]::NewLine + "Manual Configuration Required:" + [Environment]::NewLine + "==============================" + [Environment]::NewLine + [Environment]::NewLine + "The scaling plan was created but schedules must be configured manually:" + [Environment]::NewLine + [Environment]::NewLine + "1. Configure Scaling Schedules (via Azure Portal)" + [Environment]::NewLine + "   - Navigate to: Azure Virtual Desktop → Scaling plans" + [Environment]::NewLine + "   - Select: $scalingPlanName" + [Environment]::NewLine + "   - Click: 'Schedules' → '+ Add schedule'" + [Environment]::NewLine + [Environment]::NewLine + "   Recommended Weekday Schedule:" + [Environment]::NewLine + "     - Ramp-Up: 07:00 AM (BreadthFirst, 20-25% min hosts, 70% capacity)" + [Environment]::NewLine + "     - Peak: 09:00 AM - 05:00 PM (BreadthFirst, 70% capacity)" + [Environment]::NewLine + "     - Ramp-Down: 05:00 PM (DepthFirst, 10% min hosts, 80% capacity)" + [Environment]::NewLine + "     - Off-Peak: 07:00 PM (DepthFirst, 5% min hosts, 90% capacity)" + [Environment]::NewLine + [Environment]::NewLine + "   Recommended Weekend Schedule:" + [Environment]::NewLine + "     - Off-Peak 24/7 (DepthFirst, 5% min hosts, 85% capacity)" + [Environment]::NewLine + [Environment]::NewLine + "2. Test Autoscaling Behavior" + [Environment]::NewLine + "   - Monitor session host power states" + [Environment]::NewLine + "   - Verify VMs power on/off according to schedule" + [Environment]::NewLine + "   - Check scaling behavior during different load scenarios" + [Environment]::NewLine + [Environment]::NewLine + "3. Monitor and Adjust" + [Environment]::NewLine + "   - Review Azure Activity Log for scaling events" + [Environment]::NewLine + "   - Check host pool Insights tab for metrics" + [Environment]::NewLine + "   - Adjust thresholds based on usage patterns" + [Environment]::NewLine + [Environment]::NewLine + "Expected Behavior:" + [Environment]::NewLine + "==================" + [Environment]::NewLine + [Environment]::NewLine + "Ramp-Up Phase:" + [Environment]::NewLine + "  - VMs power on 10-15 minutes before users arrive" + [Environment]::NewLine + "  - Minimum percentage of hosts powered on" + [Environment]::NewLine + "  - Additional VMs start based on capacity threshold" + [Environment]::NewLine + [Environment]::NewLine + "Peak Hours:" + [Environment]::NewLine + "  - Scale up/down based on session load" + [Environment]::NewLine + "  - Capacity threshold determines when to start new VMs" + [Environment]::NewLine + "  - Load balancing distributes sessions" + [Environment]::NewLine + [Environment]::NewLine + "Ramp-Down Phase:" + [Environment]::NewLine + "  - Depth-first balancing consolidates sessions" + [Environment]::NewLine + "  - Lightly-loaded hosts drain and shut down" + [Environment]::NewLine + "  - Users receive warning before forced logoff" + [Environment]::NewLine + [Environment]::NewLine + "Off-Peak Hours:" + [Environment]::NewLine + "  - Only minimum hosts remain powered on" + [Environment]::NewLine + "  - Significant cost savings (60-75%)" + [Environment]::NewLine + "  - Weekend: Minimum hosts only" + [Environment]::NewLine + [Environment]::NewLine + "Cost Optimization:" + [Environment]::NewLine + "==================" + [Environment]::NewLine + [Environment]::NewLine + "Typical Savings:" + [Environment]::NewLine + "  - Without autoscaling: 100% VM uptime = High cost" + [Environment]::NewLine + "  - With autoscaling: 25-40% average uptime = 60-75% savings" + [Environment]::NewLine + [Environment]::NewLine + "Example (40 VMs × `$1/hour):" + [Environment]::NewLine + "  - Before: 40 VMs × 24h × 30d = `$28,800/month" + [Environment]::NewLine + "  - After: ~8-12 VMs average × 24h × 30d = `$7,000-9,000/month" + [Environment]::NewLine + "  - Savings: ~`$20,000/month (65-75%)" + [Environment]::NewLine + [Environment]::NewLine + "Troubleshooting:" + [Environment]::NewLine + "================" + [Environment]::NewLine + [Environment]::NewLine + "Issue: VMs not powering on/off" + [Environment]::NewLine + "  - Verify RBAC role assigned" + [Environment]::NewLine + "  - Check scaling plan is enabled" + [Environment]::NewLine + "  - Verify schedules are configured" + [Environment]::NewLine + "  - Wait 15-20 minutes for first cycle" + [Environment]::NewLine + "  - Review Azure Activity Log for errors" + [Environment]::NewLine + [Environment]::NewLine + "Issue: Too many/few VMs running" + [Environment]::NewLine + "  - Adjust capacity thresholds" + [Environment]::NewLine + "  - Change minimum host percentages" + [Environment]::NewLine + "  - Review session load patterns" + [Environment]::NewLine + "  - Modify schedule times" + [Environment]::NewLine + [Environment]::NewLine + "Issue: Users complaining about forced logoff" + [Environment]::NewLine + "  - Increase wait time (20→30 minutes)" + [Environment]::NewLine + "  - Adjust ramp-down start time" + [Environment]::NewLine + "  - Customize notification message" + [Environment]::NewLine + "  - Consider excluding certain users" + [Environment]::NewLine + [Environment]::NewLine
+
+      if ($failedChecks -gt 0) {
+        $reportContent += "Action Required:" + [Environment]::NewLine + "  Review failed checks above and re-run autoscaling configuration operations" + [Environment]::NewLine + [Environment]::NewLine
+      }
+
+      $reportContent | Out-File -FilePath "artifacts/outputs/autoscaling-verification-complete.txt" -Encoding UTF8
+
+      if ($exitCode -eq 0) {
+        Write-Host "[SUCCESS] Autoscaling verification completed successfully"
+        Write-Host ""
+        Write-Host "Next Steps:"
+        Write-Host "  1. Configure scaling schedules in Azure Portal"
+        Write-Host "  2. Monitor autoscaling activity for 1 week"
+        Write-Host "  3. Adjust schedules based on usage patterns"
+        Write-Host "  4. Review cost savings in Azure Cost Management"
+        Write-Host ""
+      } else {
+        Write-Host "[ERROR] Autoscaling verification failed - see report for details"
+      }
+
+      exit $exitCode
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/autoscaling-03-wrapper.ps1
+      rm -f /tmp/autoscaling-03-wrapper.ps1
+
+  # Rollback: No action needed for verification operation
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

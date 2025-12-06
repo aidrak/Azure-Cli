@@ -1,0 +1,185 @@
+# ==============================================================================
+# Capability Operation: Delete Entra Group
+# ==============================================================================
+
+operation:
+  id: "group-delete"
+  name: "Delete Entra Group"
+  description: "Delete Entra (Azure AD) group and all associated memberships permanently"
+
+  capability: "identity"
+  operation_mode: "delete"
+  resource_type: "Microsoft.Graph/groups"
+
+  # Duration expectations
+  duration:
+    expected: 60        # 1 minute
+    timeout: 180        # 3 minutes
+    type: "NORMAL"
+
+  # Parameters for deletion
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Name of the Entra group to delete"
+        validation: "^[a-zA-Z0-9-_ ]{1,256}$"
+    optional:
+      - name: "group_id"
+        type: "string"
+        description: "Object ID of the group (alternative to group_name)"
+      - name: "force_delete"
+        type: "boolean"
+        description: "Force deletion without dependency checking"
+        default: false
+      - name: "dry_run"
+        type: "boolean"
+        description: "Perform validation without actual deletion"
+        default: false
+
+  # Validation checks (pre-checks for delete operations)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Graph/groups"
+        resource_name: "{{group_name}}"
+        description: "Entra group exists"
+
+  # Idempotency: Check if already deleted
+  idempotency:
+    enabled: true
+    check_command: |
+      az ad group show --group "{{group_name}}" --output none 2>/dev/null || exit 0
+    skip_if_exists: false
+
+  # Template command (delete Entra group)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/identity-group-delete-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Entra group deletion: {{group_name}} at $(Get-Date -Format 'HH:mm:ss')"
+
+      $groupName = "{{group_name}}"
+      $groupId = "{{group_id}}"
+      $forceDelete = [System.Convert]::ToBoolean("{{force_delete}}")
+      $dryRun = [System.Convert]::ToBoolean("{{dry_run}}")
+
+      # Get group info by name or ID
+      if (-not [string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[PROGRESS] Looking up group by ID: $groupId"
+        $groupInfo = az ad group show --group $groupId --output json 2>$null
+      } else {
+        Write-Host "[PROGRESS] Looking up group by name: $groupName"
+        $groupInfo = az ad group show --group $groupName --output json 2>$null
+      }
+
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($groupInfo)) {
+        Write-Host "[INFO] Entra group not found: $groupName"
+        exit 0
+      }
+
+      $group = $groupInfo | ConvertFrom-Json
+      $actualGroupId = $group.id
+      $actualGroupName = $group.displayName
+      $groupType = if ($group.isAssignableToRole) { "Role-assignable" } else { "Standard" }
+
+      Write-Host "[WARNING] This operation is IRREVERSIBLE"
+      Write-Host "[INFO] Group Name: $actualGroupName"
+      Write-Host "[INFO] Group ID: $actualGroupId"
+      Write-Host "[INFO] Group Type: $groupType"
+
+      # Check for members if not force deleting
+      if (-not $forceDelete) {
+        Write-Host "[PROGRESS] Checking for group members..."
+
+        $memberInfo = az ad group member list --group $actualGroupId --output json 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $members = $memberInfo | ConvertFrom-Json
+          $memberCount = @($members).Count
+
+          if ($memberCount -gt 0) {
+            Write-Host "[WARNING] Group contains $memberCount member(s)"
+            Write-Host "[WARNING] All members will be removed from group"
+
+            # List first few members
+            $members | Select-Object -First 5 | ForEach-Object {
+              Write-Host "[INFO]   - $($_.displayName) ($($_.userPrincipalName))"
+            }
+            if ($memberCount -gt 5) {
+              Write-Host "[INFO]   ... and $($memberCount - 5) more"
+            }
+          }
+        }
+      }
+
+      # Check for role assignments if role-assignable
+      if ($group.isAssignableToRole -and -not $forceDelete) {
+        Write-Host "[PROGRESS] Checking for role assignments..."
+
+        $roleAssignments = az role assignment list `
+          --assignee $actualGroupId `
+          --output json 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $assignments = $roleAssignments | ConvertFrom-Json
+          $assignmentCount = @($assignments).Count
+
+          if ($assignmentCount -gt 0) {
+            Write-Host "[WARNING] Group has $assignmentCount role assignment(s)"
+            Write-Host "[WARNING] Role assignments will be removed during deletion"
+          }
+        }
+      }
+
+      # Dry run mode
+      if ($dryRun) {
+        Write-Host "[DRY-RUN] Validation only - no deletion performed"
+        Write-Host "[SUCCESS] Dry run completed successfully"
+        exit 0
+      }
+
+      # Perform deletion
+      Write-Host "[PROGRESS] Deleting Entra group..."
+
+      az ad group delete --group $actualGroupId --output none 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to delete Entra group"
+        exit 1
+      }
+
+      # Verify deletion with retry (Azure AD sync delay)
+      Write-Host "[VALIDATE] Verifying deletion..."
+      $maxRetries = 5
+      $retryCount = 0
+
+      while ($retryCount -lt $maxRetries) {
+        Start-Sleep -Seconds 2
+        $verifyDelete = az ad group show --group $actualGroupId --output none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[SUCCESS] Entra group deleted successfully"
+          Write-Host "[INFO] All members and role assignments have been removed"
+          exit 0
+        }
+
+        $retryCount++
+        Write-Host "[PROGRESS] Waiting for deletion to propagate... ($retryCount/$maxRetries)"
+      }
+
+      Write-Host "[WARNING] Group appears to still exist after deletion attempt"
+      Write-Host "[WARNING] This may be due to Azure AD replication delay"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/identity-group-delete-wrapper.ps1
+      rm -f /tmp/identity-group-delete-wrapper.ps1
+
+  # Rollback: Not possible for delete operations
+  rollback:
+    enabled: false
+    note: "Entra group deletion is irreversible. Members and assignments cannot be recovered."
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

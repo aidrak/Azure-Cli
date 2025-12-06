@@ -128,19 +128,19 @@ workflow:
 
   steps:
     - name: "Create Temporary VM"
-      operation: "modules/05-golden-image/operations/00-create-vm.yaml"
+      operation: "capabilities/compute/operations/golden-image-create-vm.yaml"
       continue_on_error: false
 
     - name: "Validate VM Creation"
-      operation: "modules/05-golden-image/operations/01-validate-vm.yaml"
+      operation: "capabilities/compute/operations/golden-image-validate-vm-ready.yaml"
       continue_on_error: false
 
     - name: "System Preparation"
-      operation: "modules/05-golden-image/operations/02-system-prep.yaml"
+      operation: "capabilities/compute/operations/golden-image-configure-defaults.yaml"
       continue_on_error: false
 
     - name: "Install FSLogix"
-      operation: "modules/05-golden-image/operations/03-install-fslogix.yaml"
+      operation: "capabilities/compute/operations/golden-image-configure-profile.yaml"
       continue_on_error: true
 ```
 
@@ -361,7 +361,7 @@ ERROR: Workflow missing required field: .workflow.id
 
 ### Operation Not Found
 ```
-ERROR: Operation file not found: modules/01-networking/operations/op.yaml
+ERROR: Operation file not found: capabilities/networking/operations/op.yaml
 ```
 **Solution**: Verify operation file path and that it exists.
 

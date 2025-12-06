@@ -1,0 +1,291 @@
+# ==============================================================================
+# Capability Operation: Golden Image Comprehensive Validation
+# Migrated from: modules/05-golden-image/operations/10-validate-all.yaml
+# ==============================================================================
+
+operation:
+  id: "golden-image-validate"
+  name: "Validate Golden Image Comprehensive"
+  description: "Comprehensive validation of all software installations and configurations on golden image"
+
+  capability: "compute"
+  operation_mode: "validate"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 120  # 2 minutes
+    timeout: 240   # 4 minutes (fail-fast if exceeds)
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the golden image VM to validate"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "validate_applications"
+        type: "boolean"
+        description: "Validate installed applications"
+        default: true
+      - name: "validate_shortcuts"
+        type: "boolean"
+        description: "Validate desktop shortcuts"
+        default: true
+      - name: "validate_registry"
+        type: "boolean"
+        description: "Validate registry settings"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        description: "Chrome installed"
+
+      - type: "file_exists"
+        path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
+        description: "Office 365 installed"
+
+      - type: "registry_key"
+        path: "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server"
+        description: "RDP registry configured"
+
+  # Idempotency: Read-only validation, safe to run multiple times
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm get-instance-view \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --query "provisioningState" \
+        --output tsv 2>/dev/null | grep -q "Succeeded"
+    skip_if_exists: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/golden-image-validate-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/golden-image-validate-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json > artifacts/outputs/golden-image-validate.json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/golden-image-validate-wrapper.ps1
+      rm -f /tmp/golden-image-validate-wrapper.ps1
+
+  # PowerShell script (embedded inline - preserved from legacy)
+  powershell:
+    file: "golden-image-validate.ps1"
+    content: |
+      # ==============================================================================
+      # Comprehensive Validation of Golden Image
+      # ==============================================================================
+
+      Write-Host "[START] Comprehensive validation: $(Get-Date -Format 'HH:mm:ss')"
+
+      $failed = @()
+      $passed = @()
+
+      # Helper function for validation checks
+      function Test-Component {
+          param(
+              [string]$Name,
+              [string]$Path,
+              [string]$AlternatePath = ""
+          )
+
+          if (Test-Path $Path) {
+              Write-Host "[VALIDATE] [PASS] $Name - Found at $Path"
+              return $true
+          }
+          elseif ($AlternatePath -and (Test-Path $AlternatePath)) {
+              Write-Host "[VALIDATE] [PASS] $Name - Found at $AlternatePath"
+              return $true
+          }
+          else {
+              Write-Host "[VALIDATE] [FAIL] $Name - Not found"
+              return $false
+          }
+      }
+
+      function Test-RegistryKey {
+          param(
+              [string]$Name,
+              [string]$Path
+          )
+
+          if (Test-Path $Path) {
+              Write-Host "[VALIDATE] [PASS] $Name - Registry key exists"
+              return $true
+          }
+          else {
+              Write-Host "[VALIDATE] [FAIL] $Name - Registry key not found"
+              return $false
+          }
+      }
+
+      try {
+          # ========================================================================
+          # Step 1: Validate Applications
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 1/4: Validating installed applications..."
+
+          # Chrome
+          if (Test-Component "Google Chrome" "C:\Program Files\Google\Chrome\Application\chrome.exe") {
+              $passed += "Chrome"
+          } else {
+              $failed += "Chrome"
+          }
+
+          # Adobe Reader (check both paths)
+          if (Test-Component "Adobe Acrobat Reader" "C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe" "C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe") {
+              $passed += "Adobe Reader"
+          } else {
+              $failed += "Adobe Reader"
+          }
+
+          # Office 365
+          if (Test-Component "Microsoft Word" "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE") {
+              $passed += "Word"
+          } else {
+              $failed += "Word"
+          }
+
+          if (Test-Component "Microsoft Excel" "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE") {
+              $passed += "Excel"
+          } else {
+              $failed += "Excel"
+          }
+
+          if (Test-Component "Microsoft Outlook" "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE") {
+              $passed += "Outlook"
+          } else {
+              $failed += "Outlook"
+          }
+
+          # ========================================================================
+          # Step 2: Validate Desktop Shortcuts
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 2/4: Validating desktop shortcuts..."
+
+          $publicDesktop = "C:\Users\Public\Desktop"
+
+          if (Test-Component "Chrome Shortcut" "$publicDesktop\Google Chrome.lnk") {
+              $passed += "Chrome Shortcut"
+          } else {
+              $failed += "Chrome Shortcut"
+          }
+
+          if (Test-Component "Word Shortcut" "$publicDesktop\Microsoft Word.lnk") {
+              $passed += "Word Shortcut"
+          } else {
+              $failed += "Word Shortcut"
+          }
+
+          # ========================================================================
+          # Step 3: Validate Registry Settings
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 3/4: Validating registry settings..."
+
+          if (Test-RegistryKey "RDP Settings" "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server") {
+              $passed += "RDP Registry"
+          } else {
+              $failed += "RDP Registry"
+          }
+
+          if (Test-RegistryKey "OOBE Settings" "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE") {
+              $passed += "OOBE Registry"
+          } else {
+              $failed += "OOBE Registry"
+          }
+
+          if (Test-RegistryKey "Windows Hello Disabled" "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork") {
+              $passed += "PassportForWork Registry"
+          } else {
+              $failed += "PassportForWork Registry"
+          }
+
+          # ========================================================================
+          # Step 4: Validate System Configuration
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 4/4: Validating system configuration..."
+
+          # Check default user profile
+          if (Test-Component "Default User Profile" "C:\Users\Default\NTUSER.DAT") {
+              $passed += "Default Profile"
+          } else {
+              $failed += "Default Profile"
+          }
+
+          # Check temp directories exist
+          if (Test-Component "Temp Directory" "C:\Temp") {
+              $passed += "Temp Directory"
+          } else {
+              $failed += "Temp Directory"
+          }
+
+          # ========================================================================
+          # Summary
+          # ========================================================================
+
+          Write-Host ""
+          Write-Host "=============================================="
+          Write-Host "VALIDATION SUMMARY"
+          Write-Host "=============================================="
+          Write-Host "[INFO] Passed: $($passed.Count) checks"
+          Write-Host "[INFO] Failed: $($failed.Count) checks"
+          Write-Host ""
+
+          if ($passed.Count -gt 0) {
+              Write-Host "[SUCCESS] Passed components:"
+              foreach ($item in $passed) {
+                  Write-Host "  [v] $item"
+              }
+          }
+
+          if ($failed.Count -gt 0) {
+              Write-Host ""
+              Write-Host "[ERROR] Failed components:"
+              foreach ($item in $failed) {
+                  Write-Host "  [x] $item"
+              }
+              Write-Host ""
+              Write-Host "[ERROR] Golden image validation failed with $($failed.Count) error(s)"
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "[SUCCESS] Golden image validation completed successfully"
+          Write-Host "[SUCCESS] All $($passed.Count) components validated"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Rollback: N/A for validation operations
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

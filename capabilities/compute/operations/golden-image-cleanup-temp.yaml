@@ -1,0 +1,230 @@
+# ==============================================================================
+# Capability Operation: Golden Image Cleanup Temp Files
+# Migrated from: modules/05-golden-image/operations/09-cleanup-temp.yaml
+# ==============================================================================
+
+operation:
+  id: "golden-image-cleanup-temp"
+  name: "Cleanup Golden Image Temporary Files"
+  description: "Remove temporary files and caches to reduce golden image size"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 60   # 1 minute
+    timeout: 120   # 2 minutes (fail-fast if exceeds)
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "cleanup_user_temp"
+        type: "boolean"
+        description: "Clean user temp directory"
+        default: true
+      - name: "cleanup_system_temp"
+        type: "boolean"
+        description: "Clean system temp directory"
+        default: true
+      - name: "cleanup_event_logs"
+        type: "boolean"
+        description: "Clear event logs"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "directory_exists"
+        path: "C:\\Windows\\Temp"
+        description: "Windows Temp directory exists (but should be empty)"
+
+  # Idempotency: Safe to run multiple times
+  idempotency:
+    enabled: false
+    check_command: ""
+    skip_if_exists: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/golden-image-cleanup-temp-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/golden-image-cleanup-temp-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json > artifacts/outputs/golden-image-cleanup-temp.json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/golden-image-cleanup-temp-wrapper.ps1
+      rm -f /tmp/golden-image-cleanup-temp-wrapper.ps1
+
+  # PowerShell script (embedded inline - preserved from legacy)
+  powershell:
+    file: "golden-image-cleanup-temp.ps1"
+    content: |
+      # ==============================================================================
+      # Cleanup Temporary Files
+      # ==============================================================================
+
+      Write-Host "[START] Temporary file cleanup: $(Get-Date -Format 'HH:mm:ss')"
+
+      try {
+          $cleanupCount = 0
+          $freedSpace = 0
+
+          # ========================================================================
+          # Step 1: Remove User Temp Files
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 1/5: Removing user temp files..."
+
+          try {
+              $userTempPath = $env:TEMP
+              $beforeSize = (Get-ChildItem -Path $userTempPath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+
+              Remove-Item -Path "$userTempPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+              $afterSize = (Get-ChildItem -Path $userTempPath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+              $freed = ($beforeSize - $afterSize) / 1MB
+
+              Write-Host "[PROGRESS] User temp directory cleaned (freed: $([math]::Round($freed, 2)) MB)"
+              $cleanupCount++
+              $freedSpace += $freed
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Some user temp files may be in use"
+          }
+
+          # ========================================================================
+          # Step 2: Remove System Temp Files
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 2/5: Removing system temp files..."
+
+          try {
+              $sysTempPath = "C:\Windows\Temp"
+              $beforeSize = (Get-ChildItem -Path $sysTempPath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+
+              Remove-Item -Path "$sysTempPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+              $afterSize = (Get-ChildItem -Path $sysTempPath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+              $freed = ($beforeSize - $afterSize) / 1MB
+
+              Write-Host "[PROGRESS] System temp directory cleaned (freed: $([math]::Round($freed, 2)) MB)"
+              $cleanupCount++
+              $freedSpace += $freed
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Some system temp files may be in use"
+          }
+
+          # ========================================================================
+          # Step 3: Clear Recycle Bin
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 3/5: Clearing Recycle Bin..."
+
+          try {
+              Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+              Write-Host "[PROGRESS] Recycle Bin cleared"
+              $cleanupCount++
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Recycle Bin may already be empty"
+          }
+
+          # ========================================================================
+          # Step 4: Clear Windows Update Cache
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 4/5: Clearing Windows Update cache..."
+
+          try {
+              $wuCachePath = "C:\Windows\SoftwareDistribution\Download"
+              if (Test-Path $wuCachePath) {
+                  $beforeSize = (Get-ChildItem -Path $wuCachePath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+
+                  Remove-Item -Path "$wuCachePath\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+                  $afterSize = (Get-ChildItem -Path $wuCachePath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+                  $freed = ($beforeSize - $afterSize) / 1MB
+
+                  Write-Host "[PROGRESS] Windows Update cache cleared (freed: $([math]::Round($freed, 2)) MB)"
+                  $cleanupCount++
+                  $freedSpace += $freed
+              }
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Some Windows Update files may be in use"
+          }
+
+          # ========================================================================
+          # Step 5: Clear Event Logs
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 5/5: Clearing event logs..."
+
+          try {
+              $logCount = 0
+              wevtutil el | ForEach-Object {
+                  try {
+                      wevtutil cl "$_" 2>&1 | Out-Null
+                      $logCount++
+                  }
+                  catch {
+                      # Some logs may fail, that's okay
+                  }
+              }
+
+              Write-Host "[PROGRESS] Cleared $logCount event logs"
+              $cleanupCount++
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Some event logs may be protected"
+          }
+
+          # ========================================================================
+          # Validation
+          # ========================================================================
+
+          Write-Host "[VALIDATE] Verifying cleanup..."
+
+          if (-not (Test-Path "C:\Windows\Temp")) {
+              Write-Host "[ERROR] Windows Temp directory was deleted (should only be emptied)"
+              exit 1
+          }
+
+          Write-Host "[VALIDATE] Cleanup validation successful"
+
+          Write-Host "[SUCCESS] Temporary file cleanup completed"
+          Write-Host "[SUCCESS] Completed $cleanupCount cleanup operations, freed approximately $([math]::Round($freedSpace, 2)) MB"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Rollback: N/A for cleanup operations
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

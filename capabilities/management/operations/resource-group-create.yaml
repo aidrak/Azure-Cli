@@ -1,0 +1,132 @@
+# ==============================================================================
+# Capability Operation: Create Resource Group
+# Migrated from: modules/00-resource-group/operations/01-create.yaml
+# ==============================================================================
+
+operation:
+  id: "resource-group-create"
+  name: "Create Resource Group"
+  description: "Create Azure resource group if it doesn't exist (idempotent)"
+
+  capability: "management"
+  operation_mode: "create"
+  resource_type: "Microsoft.Resources/resourceGroups"
+
+  # Duration expectations
+  duration:
+    expected: 30
+    timeout: 60
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Name of the resource group to create"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource group"
+        default: "{{AZURE_LOCATION}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Resources/resourceGroups"
+        resource_name: "{{AZURE_RESOURCE_GROUP}}"
+        description: "Resource group created successfully"
+
+      - type: "property_equals"
+        property: "properties.provisioningState"
+        expected: "Succeeded"
+        description: "Resource group provisioning completed"
+
+  # Idempotency: Check for existing resource group
+  idempotency:
+    enabled: true
+    check_command: |
+      az group show --name "{{AZURE_RESOURCE_GROUP}}" --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/rg-01-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Resource group creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+
+      Write-Host "[PROGRESS] Checking if resource group exists..."
+
+      $existingRg = @(az group show --name $resourceGroup --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($existingRg.Count -gt 0) {
+        Write-Host "[INFO] Resource group already exists: $resourceGroup"
+        $rgLocation = az group show --name $resourceGroup --query location -o tsv
+        Write-Host "[VALIDATE] Current location: $rgLocation"
+
+        if ($rgLocation -ne $location) {
+          Write-Host "[WARNING] Resource group exists in different location"
+          Write-Host "[WARNING]   Expected: $location"
+          Write-Host "[WARNING]   Actual: $rgLocation"
+          Write-Host "[WARNING] Using existing resource group location"
+        }
+
+        Write-Host "[SUCCESS] Resource group verified: $resourceGroup"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating resource group..."
+      Write-Host "[PROGRESS]   Name: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
+
+      $createOutput = az group create `
+        --name $resourceGroup `
+        --location $location `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create resource group"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying creation..."
+      $rgInfo = $createOutput | ConvertFrom-Json
+      $createdLocation = $rgInfo.location
+      $provisioningState = $rgInfo.properties.provisioningState
+
+      Write-Host "[INFO] Location: $createdLocation"
+      Write-Host "[INFO] Provisioning State: $provisioningState"
+
+      if ($provisioningState -eq "Succeeded") {
+        Write-Host "[SUCCESS] Resource group created successfully"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Unexpected provisioning state: $provisioningState"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/rg-01-wrapper.ps1
+      rm -f /tmp/rg-01-wrapper.ps1
+
+  # Rollback: Delete created resource group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Resource Group"
+        description: "Remove the created resource group"
+        command: |
+          az group delete \
+            --name "{{AZURE_RESOURCE_GROUP}}" \
+            --yes \
+            --no-wait
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

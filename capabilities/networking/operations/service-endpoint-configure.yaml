@@ -1,0 +1,151 @@
+# ==============================================================================
+# Capability Operation: Configure Service Endpoints
+# Migrated from: modules/01-networking/operations/06-configure-service-endpoints.yaml
+# ==============================================================================
+
+operation:
+  id: "service-endpoint-configure"
+  name: "Configure Service Endpoints"
+  description: "Enable Azure service endpoints on subnets (if configured)"
+
+  capability: "networking"
+  operation_mode: "update"
+  resource_type: "Microsoft.Network/virtualNetworks/subnets"
+
+  # Duration expectations
+  duration:
+    expected: 90    # 1.5 minutes
+    timeout: 180    # 3 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "nsg-attach"  # NSGs should be attached first
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name containing subnets"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "subnets_config"
+        type: "array"
+        description: "Subnet configuration array from config.yaml"
+        default: ".networking.subnets"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks/subnets"
+        description: "Subnets exist with service endpoints configured"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Subnet updates completed successfully"
+
+  # Idempotency: Check for existing service endpoint configuration
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet subnet list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --query "[?serviceEndpoints != null] | length(@)" -o tsv
+    skip_if_exists: false  # Check but continue with unconfigured subnets
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-service-endpoint-configure-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Service endpoint configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $configuredCount = 0
+
+      Write-Host "[PROGRESS] Configuring service endpoints for $subnetCount subnet(s)..."
+
+      # Iterate through subnets
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+
+        # Get service endpoints count for this subnet
+        $endpointCount = [int](yq e ".networking.subnets[$i].service_endpoints | length" config.yaml)
+
+        # Skip if no service endpoints configured
+        if ($endpointCount -eq 0) {
+          Write-Host "[INFO] No service endpoints for subnet: $subnetName"
+          continue
+        }
+
+        Write-Host "[PROGRESS] Configuring $endpointCount endpoint(s) for subnet: $subnetName"
+
+        # Build service endpoint list
+        $endpoints = @()
+        for ($j = 0; $j -lt $endpointCount; $j++) {
+          $endpoint = (yq e ".networking.subnets[$i].service_endpoints[$j]" config.yaml)
+          $endpoints += $endpoint
+        }
+
+        Write-Host "[PROGRESS]   Endpoints: $($endpoints -join ' ')"
+
+        # Update subnet with service endpoints
+        az network vnet subnet update `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --service-endpoints @endpoints `
+          --output none
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to configure service endpoints for subnet: $subnetName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Service endpoints configured: $subnetName"
+        $configuredCount++
+      }
+
+      Write-Host "[SUCCESS] All service endpoints configured successfully"
+      Write-Host "[SUCCESS]   Subnets configured: $configuredCount"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-service-endpoint-configure-wrapper.ps1
+      rm -f /tmp/networking-service-endpoint-configure-wrapper.ps1
+
+  # Rollback: Reverse service endpoint configuration
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Service Endpoints"
+        description: "Disable service endpoints on subnets"
+        command: |
+          for subnet in $(az network vnet subnet list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[?serviceEndpoints != null].name" -o tsv); do
+            az network vnet subnet update \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$subnet" \
+              --service-endpoints "" \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

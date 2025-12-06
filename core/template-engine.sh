@@ -30,7 +30,7 @@ parse_operation_yaml() {
 
     echo "[*] Parsing operation: $yaml_file" >&2
 
-    # Extract key fields using yq
+    # Extract key fields using yq (works for both legacy and capability formats)
     OPERATION_ID=$(yq e '.operation.id' "$yaml_file")
     OPERATION_NAME=$(yq e '.operation.name' "$yaml_file")
     OPERATION_DESCRIPTION=$(yq e '.operation.description // ""' "$yaml_file")
@@ -49,6 +49,20 @@ parse_operation_yaml() {
     POWERSHELL_FILE=$(yq e '.operation.powershell.file // ""' "$yaml_file")
     POWERSHELL_CONTENT=$(yq e '.operation.powershell.content // ""' "$yaml_file")
 
+    # === NEW CAPABILITY SCHEMA FIELDS ===
+    # These fields only exist in capability format, defaults to empty for legacy
+    OPERATION_CAPABILITY=$(yq e '.operation.capability // ""' "$yaml_file")
+    OPERATION_MODE=$(yq e '.operation.operation_mode // ""' "$yaml_file")
+    OPERATION_RESOURCE_TYPE=$(yq e '.operation.resource_type // ""' "$yaml_file")
+
+    # Idempotency settings (capability format)
+    IDEMPOTENCY_ENABLED=$(yq e '.operation.idempotency.enabled // false' "$yaml_file")
+    IDEMPOTENCY_CHECK_COMMAND=$(yq e '.operation.idempotency.check_command // ""' "$yaml_file")
+    IDEMPOTENCY_SKIP_IF_EXISTS=$(yq e '.operation.idempotency.skip_if_exists // false' "$yaml_file")
+
+    # Rollback settings (capability format)
+    ROLLBACK_ENABLED=$(yq e '.operation.rollback.enabled // false' "$yaml_file")
+
     # Export for use by other functions
     export OPERATION_ID OPERATION_NAME OPERATION_DESCRIPTION
     export OPERATION_DURATION_EXPECTED OPERATION_DURATION_TIMEOUT OPERATION_DURATION_TYPE
@@ -56,7 +70,15 @@ parse_operation_yaml() {
     export TEMPLATE_TYPE TEMPLATE_COMMAND
     export POWERSHELL_FILE POWERSHELL_CONTENT
 
+    # Export capability-specific fields
+    export OPERATION_CAPABILITY OPERATION_MODE OPERATION_RESOURCE_TYPE
+    export IDEMPOTENCY_ENABLED IDEMPOTENCY_CHECK_COMMAND IDEMPOTENCY_SKIP_IF_EXISTS
+    export ROLLBACK_ENABLED
+
     echo "[v] Parsed operation: $OPERATION_NAME (ID: $OPERATION_ID)" >&2
+    if [[ -n "$OPERATION_CAPABILITY" && "$OPERATION_CAPABILITY" != "null" ]]; then
+        echo "[v] Capability: $OPERATION_CAPABILITY | Mode: $OPERATION_MODE" >&2
+    fi
     return 0
 }
 
@@ -152,14 +174,14 @@ substitute_variables() {
 
     # PowerShell content (for powershell-vm-command template type)
     # Replace {{POWERSHELL_CONTENT}} with the actual PowerShell script from YAML
-    if [[ -n "$POWERSHELL_CONTENT" && "$POWERSHELL_CONTENT" != "null" ]]; then
+    if [[ -n "${POWERSHELL_CONTENT:-}" && "${POWERSHELL_CONTENT:-}" != "null" ]]; then
         # Use a temporary marker to avoid issues with special characters
         local ps_marker="___POWERSHELL_CONTENT___"
         result="${result//\{\{POWERSHELL_CONTENT\}\}/$ps_marker}"
 
         # Create temp file with PowerShell content
         local temp_ps_file=$(mktemp)
-        echo "$POWERSHELL_CONTENT" > "$temp_ps_file"
+        echo "${POWERSHELL_CONTENT:-}" > "$temp_ps_file"
 
         # Read it back and substitute
         local ps_content

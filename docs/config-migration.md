@@ -367,7 +367,7 @@ operation:
       az vm run-command invoke \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --scripts "@modules/05-golden-image/operations/01-system-prep.ps1"
+        --scripts "@capabilities/compute/operations/golden-image-system-prep.ps1"
 
   powershell:
     content: |

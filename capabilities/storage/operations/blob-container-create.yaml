@@ -1,0 +1,170 @@
+# ==============================================================================
+# Capability Operation: Create Blob Container
+# Operation ID: 23
+# ==============================================================================
+
+operation:
+  id: "blob-container-create"
+  name: "Create Blob Storage Container"
+  description: "Create blob storage container for storing deployment artifacts and logs"
+
+  capability: "storage"
+  operation_mode: "create"
+  resource_type: "Microsoft.Storage/storageAccounts/blobServices/containers"
+
+  # Duration expectations
+  duration:
+    expected: 30
+    timeout: 90
+    type: "FAST"
+
+  # Parameters extracted from configuration
+  parameters:
+    required:
+      - name: "container_name"
+        type: "string"
+        description: "Name of the blob container"
+        validation: "^[a-z0-9]([a-z0-9-]{0,60}[a-z0-9])?$"
+        default: "{{STORAGE_BLOB_CONTAINER_NAME}}"
+      - name: "storage_account_name"
+        type: "string"
+        description: "Storage account name"
+        default: "{{STORAGE_ACCOUNT_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "public_access"
+        type: "string"
+        description: "Public access level (None, Blob, or Container)"
+        allowed_values: ["None", "Blob", "Container"]
+        default: "None"
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Storage/storageAccounts/blobServices/containers"
+        resource_name: "{{STORAGE_BLOB_CONTAINER_NAME}}"
+        description: "Blob container exists"
+
+      - type: "property_equals"
+        property: "publicAccess"
+        expected: "{{STORAGE_BLOB_PUBLIC_ACCESS}}"
+        description: "Public access level is correctly set"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az storage container exists \
+        --account-name "{{STORAGE_ACCOUNT_NAME}}" \
+        --name "{{STORAGE_BLOB_CONTAINER_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/storage-blob-container-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Blob container creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $containerName = "{{STORAGE_BLOB_CONTAINER_NAME}}"
+      $storageAccountName = "{{STORAGE_ACCOUNT_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $publicAccess = "{{STORAGE_BLOB_PUBLIC_ACCESS}}"
+
+      # Get storage account key
+      Write-Host "[PROGRESS] Retrieving storage account key..."
+      $storageKey = az storage account keys list `
+        --account-name $storageAccountName `
+        --resource-group $resourceGroup `
+        --query "[0].value" -o tsv
+
+      if ([string]::IsNullOrEmpty($storageKey)) {
+        Write-Host "[ERROR] Failed to retrieve storage account key"
+        exit 1
+      }
+
+      # Check if container already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if blob container exists..."
+      $containerExists = az storage container exists `
+        --account-name $storageAccountName `
+        --account-key $storageKey `
+        --name $containerName `
+        --query "exists" -o tsv 2>$null
+
+      if ($containerExists -eq "True") {
+        Write-Host "[INFO] Blob container already exists: $containerName"
+        Write-Host "[SUCCESS] Blob container creation complete (already exists)"
+        exit 0
+      }
+
+      # Create blob container
+      Write-Host "[PROGRESS] Creating blob container: $containerName"
+      Write-Host "[PROGRESS]   Storage account: $storageAccountName"
+      Write-Host "[PROGRESS]   Public access level: $publicAccess"
+
+      az storage container create `
+        --account-name $storageAccountName `
+        --account-key $storageKey `
+        --name $containerName `
+        --public-access $publicAccess `
+        --output json > artifacts/outputs/storage-blob-container-create.json
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create blob container"
+        exit 1
+      }
+
+      # Validate creation
+      Write-Host "[VALIDATE] Checking blob container creation..."
+      $containerExists = az storage container exists `
+        --account-name $storageAccountName `
+        --account-key $storageKey `
+        --name $containerName `
+        --query "exists" -o tsv 2>$null
+
+      if ($containerExists -ne "True") {
+        Write-Host "[ERROR] Blob container creation verification failed"
+        exit 1
+      }
+
+      # Get container properties
+      $containerProps = az storage container show `
+        --account-name $storageAccountName `
+        --account-key $storageKey `
+        --name $containerName `
+        --query "[name,properties.publicAccess]" -o tsv
+
+      Write-Host "[SUCCESS] Blob container created successfully"
+      Write-Host "[SUCCESS]   Name: $containerName"
+      Write-Host "[SUCCESS]   Storage account: $storageAccountName"
+      Write-Host "[SUCCESS]   Public access: $publicAccess"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-blob-container-create-wrapper.ps1
+      rm -f /tmp/storage-blob-container-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Blob Container"
+        description: "Remove the blob container and all contained blobs"
+        command: |
+          az storage container delete \
+            --account-name "{{STORAGE_ACCOUNT_NAME}}" \
+            --name "{{STORAGE_BLOB_CONTAINER_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

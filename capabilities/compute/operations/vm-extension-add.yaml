@@ -1,0 +1,381 @@
+# ==============================================================================
+# Capability Operation: Add VM Extension
+# ==============================================================================
+
+operation:
+  id: "vm-extension-add"
+  name: "Add Extension to Virtual Machine"
+  description: "Add extensions to Azure VM for configuration management (DSC, Custom Script), monitoring (Azure Monitor), or other functionality"
+
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines/extensions"
+
+  # Duration expectations
+  duration:
+    expected: 180   # 3 minutes
+    timeout: 600    # 10 minutes (extension installation can take time)
+    type: "WAIT"    # Some extensions take considerable time
+
+  # Parameters for VM extension creation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target virtual machine"
+        default: "{{COMPUTE_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "extension_name"
+        type: "string"
+        description: "Name for the extension instance"
+        default: "{{COMPUTE_EXTENSION_NAME}}"
+      - name: "extension_type"
+        type: "string"
+        description: "Type of extension to install"
+        allowed_values:
+          - "DSC"
+          - "CustomScriptExtension"
+          - "AzureMonitoringAgent"
+          - "DependencyAgentWindows"
+          - "GuestAttestation"
+          - "IaaSAntimalware"
+        default: "CustomScriptExtension"
+    optional:
+      - name: "publisher"
+        type: "string"
+        description: "Extension publisher (auto-determined from type if not provided)"
+        default: ""
+      - name: "version"
+        type: "string"
+        description: "Extension version"
+        default: "*"
+      - name: "script_uri"
+        type: "string"
+        description: "URI to script blob storage (for CustomScriptExtension)"
+        default: ""
+      - name: "script_name"
+        type: "string"
+        description: "Name of script to execute (for CustomScriptExtension)"
+        default: ""
+      - name: "command"
+        type: "string"
+        description: "Command to execute (for CustomScriptExtension)"
+        default: ""
+      - name: "dsc_config_url"
+        type: "string"
+        description: "URL to DSC configuration MOF file"
+        default: ""
+      - name: "dsc_config_data_url"
+        type: "string"
+        description: "URL to DSC configuration data file"
+        default: ""
+      - name: "enable_auto_upgrade"
+        type: "boolean"
+        description: "Enable automatic extension upgrade"
+        default: true
+      - name: "protected_settings"
+        type: "object"
+        description: "Protected settings (passwords, tokens) in JSON format"
+        default: "{}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/virtualMachines/extensions"
+        resource_name: "{{COMPUTE_EXTENSION_NAME}}"
+        description: "Extension installed on VM"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Extension provisioned successfully"
+
+  # Idempotency: Check for existing extension
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm extension show \
+        --vm-name "{{COMPUTE_VM_NAME}}" \
+        --name "{{COMPUTE_EXTENSION_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-extension-add-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Adding VM extension: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $vmName = "{{COMPUTE_VM_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $extensionName = "{{COMPUTE_EXTENSION_NAME}}"
+      $extensionType = "{{COMPUTE_EXTENSION_TYPE:-CustomScriptExtension}}"
+      $publisher = "{{COMPUTE_EXTENSION_PUBLISHER}}"
+      $version = "{{COMPUTE_EXTENSION_VERSION:-*}}"
+      $scriptUri = "{{COMPUTE_EXTENSION_SCRIPT_URI}}"
+      $scriptName = "{{COMPUTE_EXTENSION_SCRIPT_NAME}}"
+      $command = "{{COMPUTE_EXTENSION_COMMAND}}"
+      $dscConfigUrl = "{{COMPUTE_EXTENSION_DSC_CONFIG_URL}}"
+      $autoUpgrade = [System.Convert]::ToBoolean("{{COMPUTE_EXTENSION_AUTO_UPGRADE:-true}}")
+
+      # Map extension type to publisher if not provided
+      if ([string]::IsNullOrEmpty($publisher)) {
+        switch ($extensionType) {
+          "DSC" { $publisher = "Microsoft.Powershell" }
+          "CustomScriptExtension" { $publisher = "Microsoft.Compute" }
+          "AzureMonitoringAgent" { $publisher = "Microsoft.Azure.Monitor" }
+          "DependencyAgentWindows" { $publisher = "Microsoft.Azure.Monitoring.DependencyAgent" }
+          "GuestAttestation" { $publisher = "Microsoft.Azure.Security.Attestation" }
+          "IaaSAntimalware" { $publisher = "Microsoft.IaaSAntimalware" }
+          default {
+            Write-Host "[ERROR] Unable to determine publisher for extension type: $extensionType"
+            exit 1
+          }
+        }
+      }
+
+      # Check if VM exists
+      Write-Host "[PROGRESS] Verifying VM exists: $vmName"
+
+      $vm = az vm show `
+        --name $vmName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -eq $vm -or [string]::IsNullOrEmpty($vm.id)) {
+        Write-Host "[ERROR] Virtual machine not found: $vmName in resource group $resourceGroup"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] VM found: $($vm.id)"
+
+      # Check if extension already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if extension already exists: $extensionName"
+
+      $existingExt = az vm extension show `
+        --vm-name $vmName `
+        --name $extensionName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -ne $existingExt -and ![string]::IsNullOrEmpty($existingExt.id)) {
+        Write-Host "[INFO] Extension already installed"
+        Write-Host "[INFO]   Extension ID: $($existingExt.id)"
+        Write-Host "[INFO]   Provisioning State: $($existingExt.provisioningState)"
+        Write-Host "[SUCCESS] Extension installation complete (already exists)"
+
+        $existingExt | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/vm-extension-add.json"
+        exit 0
+      }
+
+      # Build extension-specific settings
+      Write-Host "[PROGRESS] Preparing extension settings for type: $extensionType"
+
+      $settings = @{}
+      $protectedSettings = @{}
+
+      switch ($extensionType) {
+        "CustomScriptExtension" {
+          if (![string]::IsNullOrEmpty($scriptUri)) {
+            $settings["fileUris"] = @($scriptUri)
+          }
+          if (![string]::IsNullOrEmpty($scriptName)) {
+            $settings["commandToExecute"] = "powershell -ExecutionPolicy Unrestricted -File $scriptName"
+            Write-Host "[PROGRESS]   Script: $scriptName"
+          } elseif (![string]::IsNullOrEmpty($command)) {
+            $settings["commandToExecute"] = $command
+            Write-Host "[PROGRESS]   Command: $command"
+          } else {
+            Write-Host "[WARNING] No script or command specified for CustomScriptExtension"
+          }
+        }
+
+        "DSC" {
+          if (![string]::IsNullOrEmpty($dscConfigUrl)) {
+            $settings["configurationFunction"] = "ConfigurationScript.Config"
+            $settings["modulesUrl"] = $dscConfigUrl
+            Write-Host "[PROGRESS]   DSC Config URL: $dscConfigUrl"
+          } else {
+            Write-Host "[WARNING] No DSC configuration URL specified"
+          }
+        }
+
+        "AzureMonitoringAgent" {
+          $settings["monitoringAgentConfiguration"] = @{
+            enabled = $true
+          }
+          Write-Host "[PROGRESS]   Azure Monitor Agent enabled"
+        }
+
+        "DependencyAgentWindows" {
+          Write-Host "[PROGRESS]   Dependency Agent configuration"
+        }
+
+        default {
+          Write-Host "[PROGRESS]   Extension type: $extensionType"
+        }
+      }
+
+      # Parse protected settings if provided
+      $protectedSettingsJson = '{{COMPUTE_EXTENSION_PROTECTED_SETTINGS:-{}}}'
+      if ($protectedSettingsJson -ne '{}' -and ![string]::IsNullOrEmpty($protectedSettingsJson)) {
+        try {
+          $protectedSettings = $protectedSettingsJson | ConvertFrom-Json
+        } catch {
+          Write-Host "[WARNING] Failed to parse protected settings JSON"
+        }
+      }
+
+      # Create temporary settings files
+      $settingsFile = "/tmp/ext-settings-$([guid]::NewGuid()).json"
+      $protectedFile = "/tmp/ext-protected-$([guid]::NewGuid()).json"
+
+      $settings | ConvertTo-Json | Out-File -FilePath $settingsFile
+      if ($protectedSettings.Count -gt 0) {
+        $protectedSettings | ConvertTo-Json | Out-File -FilePath $protectedFile
+      }
+
+      Write-Host "[PROGRESS] Adding extension to VM..."
+      Write-Host "[PROGRESS]   Extension Name: $extensionName"
+      Write-Host "[PROGRESS]   Publisher: $publisher"
+      Write-Host "[PROGRESS]   Type: $extensionType"
+      Write-Host "[PROGRESS]   Version: $version"
+
+      # Build extension creation command
+      $setParams = @(
+        "--vm-name", $vmName,
+        "--name", $extensionName,
+        "--publisher", $publisher,
+        "--version", $version,
+        "--settings", "@$settingsFile",
+        "--resource-group", $resourceGroup,
+        "--output", "json"
+      )
+
+      if ($protectedSettings.Count -gt 0) {
+        $setParams += @("--protected-settings", "@$protectedFile")
+      }
+
+      if ($autoUpgrade) {
+        $setParams += @("--enable-auto-upgrade", "true")
+      }
+
+      # Create extension
+      $extension = az vm extension set @setParams 2>&1
+
+      # Cleanup temp files
+      Remove-Item -Path $settingsFile -Force -ErrorAction SilentlyContinue
+      Remove-Item -Path $protectedFile -Force -ErrorAction SilentlyContinue
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to add extension"
+        Write-Host $extension
+        exit 1
+      }
+
+      $extension = $extension | ConvertFrom-Json
+
+      if ($null -eq $extension -or [string]::IsNullOrEmpty($extension.id)) {
+        Write-Host "[ERROR] Extension creation returned invalid response"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Extension created: $($extension.id)"
+
+      # Validate installation
+      Write-Host "[VALIDATE] Verifying extension installation..."
+
+      $maxRetries = 12
+      $retryCount = 0
+      $installed = $false
+
+      while ($retryCount -lt $maxRetries -and -not $installed) {
+        $verify = az vm extension show `
+          --vm-name $vmName `
+          --name $extensionName `
+          --resource-group $resourceGroup `
+          --output json 2>$null | ConvertFrom-Json
+
+        if ($null -ne $verify -and $verify.provisioningState -eq "Succeeded") {
+          $installed = $true
+          break
+        }
+
+        if ($verify.provisioningState -eq "Failed") {
+          Write-Host "[WARNING] Extension provisioning failed"
+          break
+        }
+
+        Write-Host "[PROGRESS] Waiting for extension installation... (attempt $($retryCount + 1)/$maxRetries)"
+        Start-Sleep -Seconds 10
+        $retryCount++
+      }
+
+      if (-not $installed) {
+        $verify = az vm extension show `
+          --vm-name $vmName `
+          --name $extensionName `
+          --resource-group $resourceGroup `
+          --output json 2>$null | ConvertFrom-Json
+      }
+
+      # Prepare output
+      $output = @{
+        id = $verify.id
+        name = $verify.name
+        vmName = $vmName
+        resourceGroup = $resourceGroup
+        provisioningState = $verify.provisioningState
+        publisher = $verify.publisher
+        extensionType = $verify.type
+        typeHandlerVersion = $verify.typeHandlerVersion
+        autoUpgradeMinorVersion = $verify.autoUpgradeMinorVersion
+        settings = $settings
+        createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      }
+
+      # Save to artifacts
+      $output | ConvertTo-Json -Depth 3 | Out-File -FilePath "artifacts/outputs/vm-extension-add.json"
+
+      Write-Host "[SUCCESS] Extension added successfully"
+      Write-Host "[SUCCESS]   Extension Name: $extensionName"
+      Write-Host "[SUCCESS]   Resource ID: $($verify.id)"
+      Write-Host "[SUCCESS]   Type: $extensionType"
+      Write-Host "[SUCCESS]   Publisher: $($verify.publisher)"
+      Write-Host "[SUCCESS]   Provisioning State: $($verify.provisioningState)"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Monitor extension: az vm extension list --vm-name $vmName --resource-group $resourceGroup"
+      Write-Host "[INFO]   - View extension status: az vm get-instance-view --vm-name $vmName --resource-group $resourceGroup --query 'instanceView.extensions'"
+      Write-Host "[INFO]   - Remove extension: az vm extension delete --vm-name $vmName --name $extensionName --resource-group $resourceGroup"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-extension-add-wrapper.ps1
+      rm -f /tmp/compute-extension-add-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove VM Extension"
+        description: "Uninstall the extension from the VM"
+        command: |
+          az vm extension delete \
+            --vm-name "{{COMPUTE_VM_NAME}}" \
+            --name "{{COMPUTE_EXTENSION_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

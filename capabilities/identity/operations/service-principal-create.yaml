@@ -1,0 +1,248 @@
+# ==============================================================================
+# Capability Operation: Create Service Principal
+# ==============================================================================
+
+operation:
+  id: "service-principal-create"
+  name: "Create Service Principal for Automation"
+  description: "Create Azure service principal (app registration) for automation and deployment scripts with configurable display name and optional certificate/password credentials"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/applications"
+
+  # Duration expectations
+  duration:
+    expected: 45    # 45 seconds
+    timeout: 120    # 2 minutes
+    type: "FAST"
+
+  # Parameters extracted from automation requirements
+  parameters:
+    required:
+      - name: "sp_display_name"
+        type: "string"
+        description: "Display name for the service principal"
+        default: "{{AUTOMATION_SERVICE_PRINCIPAL_NAME}}"
+      - name: "sp_description"
+        type: "string"
+        description: "Description of the service principal purpose"
+        default: "Service principal for AVD deployment automation"
+    optional:
+      - name: "credential_type"
+        type: "string"
+        description: "Type of credential (password or certificate)"
+        allowed_values: ["password", "certificate"]
+        default: "password"
+      - name: "credential_duration"
+        type: "number"
+        description: "Credential validity duration in years"
+        default: 1
+      - name: "homepage_url"
+        type: "string"
+        description: "Homepage URL for the application"
+        default: ""
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Graph/applications"
+        description: "Service principal created successfully"
+
+      - type: "service_principal_exists"
+        description: "Service principal exists in tenant"
+
+  # Idempotency: Check for existing service principal
+  idempotency:
+    enabled: true
+    check_command: |
+      az ad app list \
+        --filter "displayName eq '{{AUTOMATION_SERVICE_PRINCIPAL_NAME}}'" \
+        --query "[0].appId" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/identity-sp-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating service principal: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $displayName = "{{AUTOMATION_SERVICE_PRINCIPAL_NAME}}"
+      $description = "Service principal for AVD deployment automation"
+      $credentialType = "{{AUTOMATION_SP_CREDENTIAL_TYPE:-password}}"
+      $credentialYears = {{AUTOMATION_SP_CREDENTIAL_DURATION:-1}}
+
+      # Check if service principal already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if service principal exists: $displayName"
+
+      $existingApp = az ad app list `
+        --filter "displayName eq '$displayName'" `
+        --query "[0]" -o json 2>$null | ConvertFrom-Json
+
+      if ($null -ne $existingApp -and ![string]::IsNullOrEmpty($existingApp.appId)) {
+        Write-Host "[INFO] Service principal already exists"
+        Write-Host "[INFO]   App ID: $($existingApp.appId)"
+        Write-Host "[SUCCESS] Service principal creation complete (already exists)"
+
+        $existingApp | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/service-principal-create.json"
+        exit 0
+      }
+
+      # Create app registration
+      Write-Host "[PROGRESS] Creating app registration..."
+      Write-Host "[PROGRESS]   Display Name: $displayName"
+      Write-Host "[PROGRESS]   Description: $description"
+
+      $appOutput = az ad app create `
+        --display-name $displayName `
+        --description $description `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create app registration"
+        Write-Host $appOutput
+        exit 1
+      }
+
+      $app = $appOutput | ConvertFrom-Json
+      $appId = $app.appId
+      $objectId = $app.id
+
+      Write-Host "[PROGRESS] App created: $appId"
+      Write-Host "[PROGRESS] Object ID: $objectId"
+
+      # Create service principal from app
+      Write-Host "[PROGRESS] Creating service principal from app registration..."
+
+      $spOutput = az ad sp create --id $appId --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create service principal"
+        Write-Host $spOutput
+        exit 1
+      }
+
+      $sp = $spOutput | ConvertFrom-Json
+      $spObjectId = $sp.id
+
+      Write-Host "[PROGRESS] Service principal created: $spObjectId"
+
+      # Add credential (password or certificate)
+      Write-Host "[PROGRESS] Adding credentials..."
+
+      if ($credentialType -eq "certificate") {
+        # Generate self-signed certificate
+        Write-Host "[PROGRESS] Generating self-signed certificate..."
+        $cert = New-SelfSignedCertificate `
+          -CertStoreLocation "cert:\CurrentUser\My" `
+          -Subject "CN=$displayName" `
+          -KeySpec KeyExchange `
+          -NotAfter (Get-Date).AddYears($credentialYears)
+
+        $certBytes = $cert.GetRawCertData()
+        $certValue = [Convert]::ToBase64String($certBytes)
+
+        # Add certificate credential
+        az ad app credential reset `
+          --id $appId `
+          --cert "$certValue" `
+          --years $credentialYears `
+          --output none 2>&1
+
+        Write-Host "[PROGRESS]   Certificate thumbprint: $($cert.Thumbprint)"
+        Write-Host "[PROGRESS]   Certificate expires: $($cert.NotAfter)"
+
+        $credentialInfo = @{
+          type = "certificate"
+          thumbprint = $cert.Thumbprint
+          expires = $cert.NotAfter.ToString("yyyy-MM-dd")
+        }
+      } else {
+        # Generate password credential
+        Write-Host "[PROGRESS] Generating password credential..."
+
+        $credentialOutput = az ad app credential reset `
+          --id $appId `
+          --years $credentialYears `
+          --output json 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create credential"
+          Write-Host $credentialOutput
+          exit 1
+        }
+
+        $credential = $credentialOutput | ConvertFrom-Json
+
+        Write-Host "[PROGRESS]   Password created (save this securely!)"
+        Write-Host "[PROGRESS]   Expires: $($credential.endDate)"
+
+        $credentialInfo = @{
+          type = "password"
+          password = $credential.password
+          expires = $credential.endDate
+        }
+
+        # Save password to secure location
+        $credentialInfo | ConvertTo-Json | Out-File -FilePath "artifacts/secrets/service-principal-credentials.json" -Force
+        Write-Host "[INFO] Password saved to artifacts/secrets/service-principal-credentials.json (restricted)"
+      }
+
+      # Get full service principal details
+      Write-Host "[VALIDATE] Verifying service principal creation..."
+
+      $spDetails = az ad sp show --id $spObjectId --output json | ConvertFrom-Json
+
+      if ($null -eq $spDetails) {
+        Write-Host "[ERROR] Service principal verification failed"
+        exit 1
+      }
+
+      # Prepare output
+      $output = @{
+        appId = $appId
+        appObjectId = $objectId
+        spObjectId = $spObjectId
+        displayName = $displayName
+        description = $description
+        credential = $credentialInfo
+        createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      }
+
+      # Save to artifacts
+      $output | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/service-principal-create.json"
+
+      Write-Host "[SUCCESS] Service principal created successfully"
+      Write-Host "[SUCCESS]   App ID: $appId"
+      Write-Host "[SUCCESS]   SP Object ID: $spObjectId"
+      Write-Host "[SUCCESS]   Display Name: $displayName"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Assign RBAC roles: az role assignment create --assignee $spObjectId --role '<role-name>'"
+      Write-Host "[INFO]   - Use in scripts with: az login --service-principal -u $appId -p '<password>' --tenant {{AZURE_TENANT_ID}}"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/identity-sp-create-wrapper.ps1
+      rm -f /tmp/identity-sp-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Service Principal"
+        description: "Remove the service principal and app registration"
+        command: |
+          az ad app delete \
+            --id "{{AUTOMATION_SERVICE_PRINCIPAL_APP_ID}}" \
+            --yes 2>/dev/null || true
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

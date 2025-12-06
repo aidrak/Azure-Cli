@@ -1,0 +1,219 @@
+# ==============================================================================
+# Capability Operation: Create VPN Gateway
+# Migrated from: modules/01-networking/operations/14-create-vpn-gateway.yaml
+# ==============================================================================
+
+operation:
+  id: "vpn-gateway-create"
+  name: "Create VPN Gateway"
+  description: "Create VPN Gateway for site-to-site or point-to-site connectivity (if enabled)"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworkGateways"
+
+  # Duration expectations
+  duration:
+    expected: 600     # 10 minutes
+    timeout: 1200     # 20 minutes (VPN gateway creation is slow)
+    type: "LONG"
+
+  # Dependencies
+  requires:
+    - "gateway-subnet-create"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "vpn_config"
+        type: "object"
+        description: "VPN gateway configuration from config.yaml"
+        default: ".networking.vpn_gateway"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworkGateways"
+        resource_name: "$(yq e '.networking.vpn_gateway.name' config.yaml)"
+        description: "VPN Gateway exists"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "VPN Gateway provisioned successfully"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet-gateway show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "$(yq e '.networking.vpn_gateway.name' config.yaml)" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-vpn-gateway-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VPN Gateway creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if VPN gateway is enabled
+      $vpnEnabled = (yq e '.networking.vpn_gateway.enabled' config.yaml)
+
+      if ($vpnEnabled -ne "true") {
+        Write-Host "[INFO] VPN Gateway disabled - skipping"
+        exit 0
+      }
+
+      $gatewayName = (yq e '.networking.vpn_gateway.name' config.yaml)
+      $gatewayType = (yq e '.networking.vpn_gateway.type' config.yaml)
+      $gatewaySku = (yq e '.networking.vpn_gateway.sku' config.yaml)
+      $generation = (yq e '.networking.vpn_gateway.generation' config.yaml)
+      $activeActive = (yq e '.networking.vpn_gateway.active_active' config.yaml)
+
+      Write-Host "[PROGRESS] Gateway Name: $gatewayName, Type: $gatewayType, SKU: $gatewaySku"
+
+      # Check if gateway already exists
+      az network vnet-gateway show `
+        --resource-group $resourceGroup `
+        --name $gatewayName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] VPN Gateway already exists: $gatewayName"
+        exit 0
+      }
+
+      # Create public IP for VPN gateway
+      $publicIpName = "$gatewayName-pip"
+      Write-Host "[PROGRESS] Creating public IP: $publicIpName"
+
+      az network public-ip show `
+        --resource-group $resourceGroup `
+        --name $publicIpName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        az network public-ip create `
+          --resource-group $resourceGroup `
+          --name $publicIpName `
+          --allocation-method Static `
+          --sku Standard `
+          --output none
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create public IP"
+          exit 1
+        }
+      }
+
+      # For active-active, create second public IP
+      if ($activeActive -eq "true") {
+        $publicIpName2 = "$gatewayName-pip2"
+        Write-Host "[PROGRESS] Active-Active mode enabled - creating second public IP: $publicIpName2"
+
+        az network public-ip show `
+          --resource-group $resourceGroup `
+          --name $publicIpName2 `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+          az network public-ip create `
+            --resource-group $resourceGroup `
+            --name $publicIpName2 `
+            --allocation-method Static `
+            --sku Standard `
+            --output none
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "[ERROR] Failed to create second public IP"
+            exit 1
+          }
+        }
+      }
+
+      # Create VPN Gateway
+      Write-Host "[PROGRESS] Creating VPN Gateway: $gatewayName (this may take 10-15 minutes)..."
+
+      if ($activeActive -eq "true") {
+        $createCmd = "az network vnet-gateway create " +
+          "--name $gatewayName " +
+          "--public-ip-addresses $publicIpName $publicIpName2 " +
+          "--resource-group $resourceGroup " +
+          "--vnet $vnetName " +
+          "--gateway-type $gatewayType " +
+          "--vpn-type RouteBased " +
+          "--sku $gatewaySku " +
+          "--no-wait " +
+          "--output none"
+      } else {
+        $createCmd = "az network vnet-gateway create " +
+          "--name $gatewayName " +
+          "--public-ip-address $publicIpName " +
+          "--resource-group $resourceGroup " +
+          "--vnet $vnetName " +
+          "--gateway-type $gatewayType " +
+          "--vpn-type RouteBased " +
+          "--sku $gatewaySku " +
+          "--no-wait " +
+          "--output none"
+      }
+
+      Invoke-Expression $createCmd
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create VPN Gateway"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] VPN Gateway creation initiated: $gatewayName"
+      Write-Host "[INFO] Gateway is being created in the background. This typically takes 10-15 minutes."
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-vpn-gateway-create-wrapper.ps1
+      rm -f /tmp/networking-vpn-gateway-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete VPN Gateway"
+        description: "Remove the VPN Gateway"
+        command: |
+          az network vnet-gateway delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "$(yq e '.networking.vpn_gateway.name' config.yaml)" \
+            --yes
+        continue_on_error: false
+
+      - name: "Delete VPN Gateway Public IPs"
+        description: "Remove associated public IP addresses"
+        command: |
+          gateway_name=$(yq e '.networking.vpn_gateway.name' config.yaml)
+          for pip in $(az network public-ip list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --query "[?contains(name, '$gateway_name')].name" -o tsv); do
+            az network public-ip delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --name "$pip" \
+              --yes
+          done
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

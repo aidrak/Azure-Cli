@@ -50,7 +50,7 @@ log_structured() {
     fi
 
     local timestamp
-    timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 
     local log_entry
     log_entry=$(jq -cn \
@@ -59,13 +59,13 @@ log_structured() {
         --arg msg "$message" \
         --arg op_id "$operation_id" \
         --argjson meta "$metadata" \
-        '{
+        '{ 
             timestamp: $ts,
             level: $lvl,
             message: $msg,
             operation_id: $op_id,
             metadata: $meta
-        }' 2>/dev/null)
+        }' 2>/dev/null || echo "")
 
     # Only write if log entry was generated successfully
     if [[ -n "$log_entry" ]]; then
@@ -135,11 +135,11 @@ log_operation_start() {
     metadata=$(jq -n \
         --arg name "$operation_name" \
         --argjson duration "$expected_duration" \
-        '{
+        '{ 
             operation_name: $name,
             expected_duration: $duration,
             start_time: now
-        }')
+        }' 2>/dev/null || echo "{}")
 
     log_structured "OPERATION_START" "Starting operation: $operation_name" "$operation_id" "$metadata"
     echo "" >&2
@@ -159,9 +159,9 @@ log_operation_progress() {
     local metadata
     metadata=$(jq -n \
         --argjson elapsed "$elapsed" \
-        '{
+        '{ 
             elapsed_seconds: $elapsed
-        }')
+        }' 2>/dev/null || echo "{}")
 
     log_structured "OPERATION_PROGRESS" "$progress_message" "$operation_id" "$metadata"
 }
@@ -187,13 +187,13 @@ log_operation_complete() {
         --argjson expected "$expected_duration" \
         --argjson exit_code "$exit_code" \
         --arg status "$status" \
-        '{
+        '{ 
             duration_seconds: $duration,
             expected_duration: $expected,
             exit_code: $exit_code,
             status: $status,
             end_time: now
-        }')
+        }' 2>/dev/null || echo "{}")
 
     log_structured "OPERATION_COMPLETE" "Operation $status: $operation_id" "$operation_id" "$metadata"
 
@@ -218,11 +218,11 @@ log_operation_error() {
         --arg error "$error_message" \
         --argjson code "$error_code" \
         --argjson elapsed "$elapsed" \
-        '{
+        '{ 
             error_message: $error,
             error_code: $code,
             elapsed_seconds: $elapsed
-        }')
+        }' 2>/dev/null || echo "{}")
 
     log_structured "OPERATION_ERROR" "Operation error: $error_message" "$operation_id" "$metadata"
 }
@@ -239,11 +239,11 @@ log_artifact_created() {
     metadata=$(jq -n \
         --arg type "$artifact_type" \
         --arg path "$artifact_path" \
-        '{
+        '{ 
             artifact_type: $type,
             artifact_path: $path,
             created_at: now
-        }')
+        }' 2>/dev/null || echo "{}")
 
     log_structured "ARTIFACT_CREATED" "Created $artifact_type: $artifact_path" "$operation_id" "$metadata"
 }

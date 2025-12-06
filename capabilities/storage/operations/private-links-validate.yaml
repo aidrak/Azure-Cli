@@ -1,0 +1,269 @@
+# ==============================================================================
+# Capability Operation: Validate Private Links and Connectivity
+# Migrated from: modules/02-storage/operations/07-validate-private-links.yaml
+# ==============================================================================
+
+operation:
+  id: "private-links-validate"
+  name: "Validate Private Links Configuration"
+  description: "Comprehensive validation of private endpoint, DNS zone, and VNet integration"
+
+  capability: "storage"
+  operation_mode: "validate"
+  resource_type: "Microsoft.Network/privateEndpoints"
+
+  # Duration expectations
+  duration:
+    expected: 60       # 60 seconds (1 minute)
+    timeout: 120       # 2 minutes
+    type: "FAST"
+
+  # Dependencies
+  requires:
+    - "private-endpoint-create"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "storage_account_name"
+        type: "string"
+        description: "Premium FileStorage account name"
+        default: "{{STORAGE_ACCOUNT_NAME}}"
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "file_share_name"
+        type: "string"
+        description: "File share name"
+        default: "{{STORAGE_FILE_SHARE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "dns_zone_name"
+        type: "string"
+        description: "Private DNS zone name"
+        default: "privatelink.file.core.windows.net"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/privateEndpoints"
+        resource_name: "{{STORAGE_ACCOUNT_NAME}}-file-pe"
+        description: "Private endpoint exists"
+
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/privateDnsZones"
+        resource_name: "privatelink.file.core.windows.net"
+        description: "Private DNS zone exists"
+
+      - type: "vnet_link_exists"
+        zone_name: "privatelink.file.core.windows.net"
+        vnet_name: "{{NETWORKING_VNET_NAME}}"
+        description: "VNet link exists"
+
+  # No idempotency check - validation operations are always run
+  idempotency:
+    enabled: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/storage-private-links-validate-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Validating Private Links Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $dnsZoneName = "privatelink.file.core.windows.net"
+
+      # Get storage account name from config
+      if (Test-Path /tmp/storage-account-name.txt) {
+        $storageName = Get-Content /tmp/storage-account-name.txt
+      } else {
+        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
+      }
+
+      $peEndpointName = "${storageName}-file-pe"
+      $validationPassed = $true
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "PRIVATE ENDPOINT VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 1: Private Endpoint exists
+      Write-Host "[CHECK] Private Endpoint exists: $peEndpointName"
+      $peDetails = az network private-endpoint show `
+        --resource-group $resourceGroup `
+        --name $peEndpointName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($peDetails) {
+        Write-Host "[SUCCESS] Private Endpoint found"
+        Write-Host "  Name: $($peDetails.name)"
+        Write-Host "  State: $($peDetails.provisioningState)"
+
+        # Get private IP
+        $nicId = $peDetails.networkInterfaces[0].id
+        $nicDetails = az network nic show --ids $nicId --output json 2>$null | ConvertFrom-Json
+        $privateIp = $nicDetails.ipConfigurations[0].privateIPAddress
+        Write-Host "  Private IP: $privateIp"
+      } else {
+        Write-Host "[WARN] Private Endpoint not found: $peEndpointName"
+        $validationPassed = $false
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "PRIVATE DNS ZONE VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 2: Private DNS Zone exists
+      Write-Host "[CHECK] Private DNS Zone exists: $dnsZoneName"
+      $dnsZoneDetails = az network private-dns zone show `
+        --resource-group $resourceGroup `
+        --name $dnsZoneName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($dnsZoneDetails) {
+        Write-Host "[SUCCESS] Private DNS Zone found"
+        Write-Host "  Name: $($dnsZoneDetails.name)"
+        Write-Host "  ID: $($dnsZoneDetails.id)"
+      } else {
+        Write-Host "[WARN] Private DNS Zone not found: $dnsZoneName"
+        $validationPassed = $false
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "VNET LINK VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 3: VNet Link exists
+      $linkName = "${vnetName}-link"
+      Write-Host "[CHECK] VNet Link exists: $linkName"
+      $vnetLinkDetails = az network private-dns link vnet show `
+        --resource-group $resourceGroup `
+        --zone-name $dnsZoneName `
+        --name $linkName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($vnetLinkDetails) {
+        Write-Host "[SUCCESS] VNet Link found"
+        Write-Host "  Name: $($vnetLinkDetails.name)"
+        Write-Host "  Link State: $($vnetLinkDetails.virtualNetworkLinkState)"
+        Write-Host "  Auto-registration: $($vnetLinkDetails.registrationEnabled)"
+      } else {
+        Write-Host "[WARN] VNet Link not found: $linkName"
+        $validationPassed = $false
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "DNS RECORD VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 4: DNS A record exists
+      Write-Host "[CHECK] DNS A record for storage account"
+      $dnsRecords = az network private-dns record-set a list `
+        --resource-group $resourceGroup `
+        --zone-name $dnsZoneName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($dnsRecords -and $dnsRecords.Count -gt 0) {
+        Write-Host "[SUCCESS] DNS A records found in zone"
+        foreach ($record in $dnsRecords) {
+          Write-Host "  Name: $($record.name)"
+          Write-Host "  FQDN: $($record.fqdn)"
+          if ($record.aRecords) {
+            foreach ($aRecord in $record.aRecords) {
+              Write-Host "  IP Address: $($aRecord.ipv4Address)"
+            }
+          }
+        }
+      } else {
+        Write-Host "[WARN] No DNS A records found yet (may be created automatically)"
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "STORAGE ACCOUNT VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 5: Storage Account network access
+      Write-Host "[CHECK] Storage Account network configuration"
+      $storageDetails = az storage account show `
+        --name $storageName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($storageDetails) {
+        Write-Host "[SUCCESS] Storage Account found"
+        Write-Host "  Name: $($storageDetails.name)"
+        Write-Host "  Public Network Access: $($storageDetails.publicNetworkAccess)"
+        Write-Host "  HTTPS Only: $($storageDetails.supportsHttpsTrafficOnly)"
+        Write-Host "  Minimum TLS: $($storageDetails.minimumTlsVersion)"
+      } else {
+        Write-Host "[ERROR] Storage Account not found: $storageName"
+        $validationPassed = $false
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "FILE SHARE VALIDATION"
+      Write-Host "=========================================="
+
+      # Check 6: File share exists
+      $fileShareName = "{{STORAGE_FILE_SHARE_NAME}}"
+      Write-Host "[CHECK] File share exists: $fileShareName"
+      $fileShare = az storage share-rm show `
+        --storage-account $storageName `
+        --resource-group $resourceGroup `
+        --name $fileShareName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($fileShare) {
+        Write-Host "[SUCCESS] File share found"
+        Write-Host "  Name: $($fileShare.name)"
+        Write-Host "  Quota (GB): $($fileShare.shareQuota)"
+      } else {
+        Write-Host "[WARN] File share not found: $fileShareName"
+        $validationPassed = $false
+      }
+
+      Write-Host ""
+      Write-Host "=========================================="
+      Write-Host "CONNECTIVITY SUMMARY"
+      Write-Host "=========================================="
+      Write-Host ""
+      Write-Host "Private Link Resolution Flow:"
+      Write-Host "  1. Client in VNet requests: $storageName.file.core.windows.net"
+      Write-Host "  2. Private DNS Zone ($dnsZoneName) intercepts query"
+      Write-Host "  3. DNS resolves to private IP: $privateIp"
+      Write-Host "  4. Traffic flows through Private Endpoint (no internet)"
+      Write-Host "  5. Secure access to Azure Premium Files"
+      Write-Host ""
+
+      if ($validationPassed) {
+        Write-Host "[SUCCESS] All private links validated successfully"
+        exit 0
+      } else {
+        Write-Host "[WARN] Some validation checks failed - please review above"
+        exit 0  # Exit 0 to allow deployment to continue
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-private-links-validate-wrapper.ps1
+      rm -f /tmp/storage-private-links-validate-wrapper.ps1
+
+  # Rollback: Not applicable for validation operations
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

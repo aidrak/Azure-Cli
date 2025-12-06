@@ -1,0 +1,142 @@
+# ==============================================================================
+# Capability Operation: Create Gateway Subnet
+# Migrated from: modules/01-networking/operations/12-create-gateway-subnet.yaml
+# ==============================================================================
+
+operation:
+  id: "gateway-subnet-create"
+  name: "Create Gateway Subnet"
+  description: "Create GatewaySubnet for VPN or ExpressRoute Gateway (if enabled)"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks/subnets"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 120    # 2 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "route-table-configure"  # Route tables should be configured first
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "vpn_enabled"
+        type: "boolean"
+        description: "Whether VPN gateway is enabled"
+        default: "{{NETWORKING_VPN_ENABLED|false}}"
+      - name: "gateway_subnet_name"
+        type: "string"
+        description: "Name of the gateway subnet"
+        default: "GatewaySubnet"
+      - name: "gateway_subnet_prefix"
+        type: "string"
+        description: "Address prefix for the gateway subnet"
+        default: "{{NETWORKING_GATEWAY_SUBNET_PREFIX|10.0.255.0/27}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks/subnets"
+        description: "Gateway subnet exists"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Gateway subnet provisioned successfully"
+
+  # Idempotency: Check for existing gateway subnet
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet subnet show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --name "GatewaySubnet" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-gateway-subnet-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Gateway subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if VPN gateway is enabled
+      $vpnEnabled = (yq e '.networking.vpn_gateway.enabled' config.yaml)
+
+      if ($vpnEnabled -ne "true") {
+        Write-Host "[INFO] VPN Gateway disabled - skipping gateway subnet creation"
+        exit 0
+      }
+
+      $gatewaySubnetName = "GatewaySubnet"
+      $gatewaySubnetPrefix = "10.0.255.0/27" # Standard /27 subnet for gateways
+
+      Write-Host "[PROGRESS] Checking if GatewaySubnet already exists..."
+
+      az network vnet subnet show `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $gatewaySubnetName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] GatewaySubnet already exists"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating GatewaySubnet with prefix: $gatewaySubnetPrefix"
+
+      az network vnet subnet create `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $gatewaySubnetName `
+        --address-prefix $gatewaySubnetPrefix `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create GatewaySubnet"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] GatewaySubnet created successfully"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-gateway-subnet-create-wrapper.ps1
+      rm -f /tmp/networking-gateway-subnet-create-wrapper.ps1
+
+  # Rollback: Delete gateway subnet
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Gateway Subnet"
+        description: "Remove the GatewaySubnet"
+        command: |
+          az network vnet subnet delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --name "GatewaySubnet" \
+            --yes 2>/dev/null || true
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

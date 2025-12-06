@@ -158,6 +158,27 @@ networking:
         #   connection_type: "IPsec"
         #   shared_key: ""
         #   enable_bgp: true
+
+  # ===========================================================================
+  # Additional Networking Resources (For operations)
+  # ===========================================================================
+
+  # Load Balancer (for session host load balancing)
+  load_balancer_name: "lb-session-hosts"
+  load_balancer_sku: "Standard" # Basic or Standard
+  load_balancer_type: "Internal" # Internal or Public
+
+  # Public IP (for VPN gateway or load balancer)
+  public_ip_name: "pip-vpn-gateway"
+  public_ip_sku: "Standard" # Basic or Standard
+  public_ip_allocation_method: "Static" # Static or Dynamic
+
+  # Route Table (for custom routing/forced tunneling)
+  route_table_name: "rt-session-hosts"
+
+  # Session Host Subnet Name (reference for operations)
+  session_host_subnet_name: "subnet-session-hosts"
+
 # ==============================================================================
 # Storage Configuration (Module 02)
 # ==============================================================================
@@ -198,6 +219,11 @@ storage:
   enable_large_file_share: true # Support for large file shares
   enable_soft_delete: true # Enable soft delete for file shares
   soft_delete_retention_days: 7 # Retention period for deleted shares
+
+  # Blob Storage Settings (for general-purpose storage accounts)
+  blob_container_name: "" # TODO: Set if using blob containers
+  blob_public_access: "None" # None, Blob, Container
+
 # ==============================================================================
 # Entra ID Configuration (Module 03)
 # ==============================================================================
@@ -224,6 +250,9 @@ host_pool:
   type: "Pooled" # Pooled or Personal
   max_sessions: 10
   load_balancer: "BreadthFirst" # BreadthFirst or DepthFirst
+  friendly_name: "Production Pooled Desktop" # Host pool friendly name
+  description: "Pooled desktop host pool for production users" # Host pool description
+
 # ==============================================================================
 # Workspace Configuration (Module 04)
 # ==============================================================================
@@ -238,6 +267,29 @@ app_group:
   name: "Desktop-Prod"
   type: "Desktop" # Desktop or RemoteApp
   friendly_name: "Desktop"
+
+# ==============================================================================
+# AVD Application Configuration
+# ==============================================================================
+avd_application:
+  name: "" # TODO: Set application name when adding RemoteApps
+  friendly_name: "" # Application display name
+  description: "" # Application description
+  path: "" # Application executable path
+  command_line_args: "" # Command line arguments
+  icon_path: "" # Icon file path
+  icon_index: 0 # Icon index in the file
+  show_in_portal: true # Show in Azure portal
+
+# ==============================================================================
+# AVD Scaling Plan Configuration
+# ==============================================================================
+avd_scaling_plan:
+  name: "scaling-plan-pooled-prod"
+  description: "Autoscaling plan for pooled host pool"
+  time_zone: "Central Standard Time"
+  enabled: true
+
 # ==============================================================================
 # Golden Image Configuration (Module 05)
 # ==============================================================================
@@ -271,6 +323,15 @@ golden_image:
   # Software versions
   fslogix_version: "2.9.8653.48899"
   vdot_version: "3.8"
+
+  # Golden Image Name (for compute gallery image definition)
+  image_name: "windows11-golden-image" # Alias for definition_name
+
+  # Compute-related settings
+  vm_name: "gm-temp-vm" # Alias for temp_vm_name (used by some operations)
+  disk_name: "gm-temp-vm-osdisk" # OS disk name for golden image VM
+  disk_size_gb: 128 # OS disk size in GB
+
 # ==============================================================================
 # Session Host Configuration (Module 06)
 # ==============================================================================
@@ -280,6 +341,26 @@ session_host:
   name_prefix: "avd-sh"
   # Image source (from golden image)
   use_golden_image: true
+
+  # Compute VM name (for individual VMs)
+  vm_name: "avd-sh-01" # Individual session host VM name
+
+# ==============================================================================
+# Compute Resources (Availability Sets, Extensions)
+# ==============================================================================
+compute:
+  # Availability Set Configuration
+  availability_set_name: "avset-session-hosts"
+  availability_set_enabled: false # Set to true to use availability sets
+  fault_domain_count: 2
+  update_domain_count: 5
+
+  # VM Extension Configuration
+  extension_name: "" # TODO: Set when deploying VM extensions
+  extension_publisher: "" # e.g., "Microsoft.Compute"
+  extension_type: "" # e.g., "CustomScriptExtension"
+  extension_version: "" # e.g., "1.10"
+
 # ==============================================================================
 # Intune Configuration (Module 07)
 # ==============================================================================
@@ -304,15 +385,25 @@ sso:
 # ==============================================================================
 autoscaling:
   enabled: true
+
+  # Schedule Configuration
   schedule:
     weekday_start_hour: 7 # 7 AM
     weekday_stop_hour: 19 # 7 PM
     weekend_enabled: false
+
+  # Capacity Configuration
   capacity:
-    min_vms: 1
-    max_vms: 10
+    min_vms: 1 # Minimum number of session hosts
+    max_vms: 10 # Maximum number of session hosts
     ramp_up_capacity_threshold: 60 # Percentage
     ramp_down_capacity_threshold: 30 # Percentage
+
+  # Additional autoscaling variables (for operations)
+  min_vms: 1 # Top-level alias for operations
+  max_vms: 10 # Top-level alias for operations
+  weekday_start_hour: 7 # Top-level alias for operations
+  weekday_stop_hour: 19 # Top-level alias for operations
 # ==============================================================================
 # Testing Configuration (Module 11)
 # ==============================================================================

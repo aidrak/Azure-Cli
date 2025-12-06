@@ -71,6 +71,13 @@ else
     exit 1
 fi
 
+if [[ -f "${PROJECT_ROOT}/core/template-engine.sh" ]]; then
+    source "${PROJECT_ROOT}/core/template-engine.sh"
+else
+    echo "[x] ERROR: template-engine.sh not found" >&2
+    exit 1
+fi
+
 # ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
@@ -116,62 +123,79 @@ parse_operation_file() {
     return 0
 }
 
-# Substitute variables in command using environment
-substitute_variables() {
-    local template="$1"
-    local result="$template"
-
-    # Use envsubst for ${VAR} style substitution
-    # This supports all environment variables loaded by config-manager.sh
-    result=$(echo "$result" | envsubst)
-
-    echo "$result"
-}
-
 # Extract prerequisites from operation YAML
 get_prerequisites() {
     local yaml_file="$1"
 
-    # Get count of prerequisites
+    # Try root level prerequisites (Legacy/Executor Schema)
     local prereq_count=$(yq eval '.prerequisites | length' "$yaml_file")
 
-    if [[ "$prereq_count" == "0" ]] || [[ "$prereq_count" == "null" ]]; then
-        echo "[]"
+    if [[ "$prereq_count" != "0" ]] && [[ "$prereq_count" != "null" ]]; then
+        yq eval -o=json '.prerequisites' "$yaml_file"
         return 0
     fi
 
-    # Return prerequisites as JSON array
-    yq eval -o=json '.prerequisites' "$yaml_file"
+    # Try operation level prerequisites (Capability Schema)
+    prereq_count=$(yq eval '.operation.prerequisites | length' "$yaml_file")
+    if [[ "$prereq_count" != "0" ]] && [[ "$prereq_count" != "null" ]]; then
+        yq eval -o=json '.operation.prerequisites' "$yaml_file"
+        return 0
+    fi
+
+    echo "[]"
+    return 0
 }
 
 # Extract steps from operation YAML
 get_steps() {
     local yaml_file="$1"
 
+    # Try explicit steps (Legacy/Executor Schema)
     local step_count=$(yq eval '.steps | length' "$yaml_file")
 
-    if [[ "$step_count" == "0" ]] || [[ "$step_count" == "null" ]]; then
-        log_error "No steps defined in operation"
-        return 1
+    if [[ "$step_count" != "0" ]] && [[ "$step_count" != "null" ]]; then
+        yq eval -o=json '.steps' "$yaml_file"
+        return 0
     fi
 
-    # Return steps as JSON array
-    yq eval -o=json '.steps' "$yaml_file"
+    # Try template command (Capability Schema)
+    local template_command=$(yq eval '.operation.template.command' "$yaml_file")
+
+    if [[ -n "$template_command" ]] && [[ "$template_command" != "null" ]]; then
+        # Construct a synthetic step
+        # escape double quotes for JSON
+        local escaped_command=$(echo "$template_command" | jq -Rs .)
+        echo "[{\"name\": \"Execute Operation Template\", \"command\": $escaped_command}]"
+        return 0
+    fi
+
+    log_error "No steps or template defined in operation"
+    return 1
 }
 
 # Extract rollback steps from operation YAML
 get_rollback_steps() {
     local yaml_file="$1"
 
+    # Try root level rollback (Legacy/Executor Schema)
     local rollback_count=$(yq eval '.rollback | length' "$yaml_file")
 
-    if [[ "$rollback_count" == "0" ]] || [[ "$rollback_count" == "null" ]]; then
-        echo "[]"
+    if [[ "$rollback_count" != "0" ]] && [[ "$rollback_count" != "null" ]]; then
+        yq eval -o=json '.rollback' "$yaml_file"
         return 0
     fi
 
-    # Return rollback steps as JSON array
-    yq eval -o=json '.rollback' "$yaml_file"
+    # Try operation level rollback steps (Capability Schema)
+    # Schema: operation.rollback.steps
+    rollback_count=$(yq eval '.operation.rollback.steps | length' "$yaml_file")
+
+    if [[ "$rollback_count" != "0" ]] && [[ "$rollback_count" != "null" ]]; then
+        yq eval -o=json '.operation.rollback.steps' "$yaml_file"
+        return 0
+    fi
+
+    echo "[]"
+    return 0
 }
 
 # ==============================================================================
@@ -284,7 +308,7 @@ execute_operation() {
     local operation_id=$(yq eval '.operation.id' "$yaml_file")
     local operation_name=$(yq eval '.operation.name' "$yaml_file")
     local operation_type=$(yq eval '.operation.type' "$yaml_file")
-    local resource_type=$(yq eval '.operation.resource_type // empty' "$yaml_file")
+    local resource_type=$(yq eval '.operation.resource_type // ""' "$yaml_file")
 
     # Generate unique execution ID
     local operation_exec_id=$(generate_operation_id "$operation_id")
@@ -363,7 +387,7 @@ execute_operation() {
     # Handle execution result
     if [[ "$execution_success" == "true" ]]; then
         # Query Azure to get final resource state
-        local resource_name=$(yq eval '.operation.resource_name // empty' "$yaml_file")
+        local resource_name=$(yq eval '.operation.resource_name // ""' "$yaml_file")
         if [[ -n "$resource_name" ]] && [[ -n "$resource_type" ]]; then
             local resource_name_resolved=$(substitute_variables "$resource_name")
             query_and_store_resource "$resource_type" "$resource_name_resolved" "${AZURE_RESOURCE_GROUP:-}"

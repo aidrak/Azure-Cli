@@ -1,0 +1,242 @@
+# ==============================================================================
+# Capability Operation: Golden Image Configure AVD Registry
+# Migrated from: modules/05-golden-image/operations/07-registry-avd.yaml
+# ==============================================================================
+
+operation:
+  id: "golden-image-registry-avd"
+  name: "Configure AVD Registry Settings"
+  description: "Configure Windows registry settings for Azure Virtual Desktop optimization"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 120  # 2 minutes
+    timeout: 240   # 4 minutes (fail-fast if exceeds)
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "configure_rdp"
+        type: "boolean"
+        description: "Configure RDP settings"
+        default: true
+      - name: "configure_fsl ogix"
+        type: "boolean"
+        description: "Configure FSLogix exclusions"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "registry_key"
+        path: "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server"
+        description: "RDP registry key exists"
+
+      - type: "registry_key"
+        path: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\OOBE"
+        description: "OOBE registry key configured"
+
+  # Idempotency: Check if registry keys exist
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "Test-Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\OOBE'" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/golden-image-registry-avd-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/golden-image-registry-avd-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json > artifacts/outputs/golden-image-registry-avd.json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/golden-image-registry-avd-wrapper.ps1
+      rm -f /tmp/golden-image-registry-avd-wrapper.ps1
+
+  # PowerShell script (embedded inline - preserved from legacy)
+  powershell:
+    file: "golden-image-registry-avd.ps1"
+    content: |
+      # ==============================================================================
+      # Configure Windows Registry for Azure Virtual Desktop
+      # ==============================================================================
+
+      Write-Host "[START] Registry configuration for AVD: $(Get-Date -Format 'HH:mm:ss')"
+
+      try {
+          # ========================================================================
+          # Step 1: Configure RDP Settings
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 1/7: Configuring RDP settings..."
+
+          $rdpPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server"
+          if (!(Test-Path $rdpPath)) {
+              New-Item -Path $rdpPath -Force | Out-Null
+          }
+
+          # Enable timezone redirection
+          Set-ItemProperty -Path $rdpPath -Name "fEnableTimeZoneRedirection" -Value 1 -Type DWord -Force
+          Write-Host "[PROGRESS] RDP timezone redirection enabled"
+
+          # ========================================================================
+          # Step 2: Configure FSLogix Defender Exclusions
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 2/7: Configuring Windows Defender exclusions for FSLogix..."
+
+          try {
+              Add-MpPreference -ExclusionPath "C:\Program Files\FSLogix" -ErrorAction SilentlyContinue
+              Add-MpPreference -ExclusionPath "C:\ProgramData\FSLogix" -ErrorAction SilentlyContinue
+              Add-MpPreference -ExclusionProcess "frx.exe" -ErrorAction SilentlyContinue
+              Add-MpPreference -ExclusionExtension "vhd" -ErrorAction SilentlyContinue
+              Add-MpPreference -ExclusionExtension "vhdx" -ErrorAction SilentlyContinue
+              Write-Host "[PROGRESS] Defender exclusions configured for FSLogix"
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: Some Defender exclusions may already exist"
+          }
+
+          # ========================================================================
+          # Step 3: Disable System Restore and VSS
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 3/7: Disabling System Restore and VSS..."
+
+          try {
+              Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
+              vssadmin delete shadows /all /quiet 2>&1 | Out-Null
+              Stop-Service -Name VSS -Force -ErrorAction SilentlyContinue
+              Set-Service -Name VSS -StartupType Disabled -ErrorAction SilentlyContinue
+              Write-Host "[PROGRESS] System Restore and VSS disabled"
+          }
+          catch {
+              Write-Host "[PROGRESS] Note: System Restore may already be disabled"
+          }
+
+          # ========================================================================
+          # Step 4: Disable First Logon Animation
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 4/7: Disabling first logon animation..."
+
+          $winlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+          if (!(Test-Path $winlogonPath)) {
+              New-Item -Path $winlogonPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $winlogonPath -Name "EnableFirstLogonAnimation" -Value 0 -Type DWord -Force
+
+          $policySysPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+          if (!(Test-Path $policySysPath)) {
+              New-Item -Path $policySysPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $policySysPath -Name "DelayedDesktopSwitchTimeout" -Value 0 -Type DWord -Force
+
+          Write-Host "[PROGRESS] First logon animation disabled"
+
+          # ========================================================================
+          # Step 5: Disable OOBE Privacy Experience
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 5/7: Disabling OOBE privacy experience..."
+
+          $oobePath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE"
+          if (!(Test-Path $oobePath)) {
+              New-Item -Path $oobePath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $oobePath -Name "DisablePrivacyExperience" -Value 1 -Type DWord -Force
+
+          Write-Host "[PROGRESS] OOBE privacy experience disabled"
+
+          # ========================================================================
+          # Step 6: Disable Windows Hello for Business
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 6/7: Disabling Windows Hello for Business..."
+
+          $passportPath = "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork"
+          if (!(Test-Path $passportPath)) {
+              New-Item -Path $passportPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $passportPath -Name "Enabled" -Value 0 -Type DWord -Force
+
+          Write-Host "[PROGRESS] Windows Hello for Business disabled"
+
+          # ========================================================================
+          # Step 7: Disable Biometrics
+          # ========================================================================
+
+          Write-Host "[PROGRESS] Step 7/7: Disabling biometrics..."
+
+          $biometricsPath = "HKLM:\SOFTWARE\Policies\Microsoft\Biometrics"
+          if (!(Test-Path $biometricsPath)) {
+              New-Item -Path $biometricsPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $biometricsPath -Name "Enabled" -Value 0 -Type DWord -Force
+
+          Write-Host "[PROGRESS] Biometrics disabled"
+
+          # ========================================================================
+          # Validation
+          # ========================================================================
+
+          Write-Host "[VALIDATE] Verifying registry configuration..."
+
+          $validationPaths = @(
+              "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server",
+              "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE",
+              "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork"
+          )
+
+          foreach ($path in $validationPaths) {
+              if (-not (Test-Path $path)) {
+                  Write-Host "[ERROR] Registry key not found: $path"
+                  exit 1
+              }
+          }
+
+          Write-Host "[VALIDATE] All registry keys validated successfully"
+
+          Write-Host "[SUCCESS] Windows registry configured for Azure Virtual Desktop"
+          Write-Host "[SUCCESS] Applied: RDP settings, FSLogix exclusions, OOBE disabled, Windows Hello disabled"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Rollback: N/A for registry configuration
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

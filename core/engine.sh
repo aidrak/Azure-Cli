@@ -1,21 +1,22 @@
 #!/bin/bash
 # ==============================================================================
-# Main Engine - Orchestrates Module and Operation Execution
+# Main Engine - Orchestrates Capability Operation Execution
 # ==============================================================================
 #
-# Purpose: Main entry point for executing modules and operations
+# Purpose: Main entry point for executing capability operations
 # Usage:
-#   ./core/engine.sh run <module> [operation]
+#   ./core/engine.sh run <operation-id>
 #   ./core/engine.sh resume
 #   ./core/engine.sh status
 #   ./core/engine.sh list
 #
 # Examples:
-#   ./core/engine.sh run 05-golden-image                    # Run entire module
-#   ./core/engine.sh run 05-golden-image 02-install-fslogix # Run single operation
-#   ./core/engine.sh resume                                 # Resume from failure
-#   ./core/engine.sh status                                 # Show current state
-#   ./core/engine.sh list                                   # List all modules/operations
+#   ./core/engine.sh run golden-image-install-apps           # Run golden image app installation
+#   ./core/engine.sh run vnet-create                         # Run VNet creation operation
+#   ./core/engine.sh run storage-account-create              # Run storage account creation
+#   ./core/engine.sh resume                                  # Resume from failure
+#   ./core/engine.sh status                                  # Show current state
+#   ./core/engine.sh list                                    # List all capability operations
 #
 # ==============================================================================
 
@@ -26,7 +27,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PROJECT_ROOT
 
 STATE_FILE="${PROJECT_ROOT}/state.json"
-MODULES_DIR="${PROJECT_ROOT}/modules"
+CAPABILITIES_DIR="${PROJECT_ROOT}/capabilities"
+LOGS_DIR="${PROJECT_ROOT}/artifacts/logs"
 
 # Source core components
 source "${PROJECT_ROOT}/core/config-manager.sh"
@@ -34,6 +36,7 @@ source "${PROJECT_ROOT}/core/template-engine.sh"
 source "${PROJECT_ROOT}/core/progress-tracker.sh"
 source "${PROJECT_ROOT}/core/error-handler.sh"
 source "${PROJECT_ROOT}/core/logger.sh"
+source "${PROJECT_ROOT}/core/executor.sh"  # Include the executor for command tracking helpers
 
 # ==============================================================================
 # Initialize State File
@@ -121,7 +124,7 @@ get_module_operations() {
 }
 
 # ==============================================================================
-# Find Operation YAML File
+# Find Operation YAML File (Legacy)
 # ==============================================================================
 find_operation_yaml() {
     local module_dir="$1"
@@ -153,16 +156,107 @@ find_operation_yaml() {
 }
 
 # ==============================================================================
-# Create Checkpoint for Operation
+# Find Capability Operation YAML File (New Format)
+# ==============================================================================
+# Searches for operation across all capability directories
+find_capability_operation() {
+    local operation_id="$1"
+
+    if [[ ! -d "$CAPABILITIES_DIR" ]]; then
+        return 1
+    fi
+
+    # Search through all capability directories
+    for capability_dir in "${CAPABILITIES_DIR}"/*; do
+        if [[ -d "$capability_dir" ]]; then
+            local operations_dir="${capability_dir}/operations"
+
+            if [[ ! -d "$operations_dir" ]]; then
+                continue
+            fi
+
+            # Search for YAML file matching operation ID
+            # Optimized: try direct filename match first if convention followed
+            if [[ -f "${operations_dir}/${operation_id}.yaml" ]]; then
+                echo "${operations_dir}/${operation_id}.yaml"
+                return 0
+            fi
+
+            # Fallback: Search inside files
+            for file in "${operations_dir}"/*.yaml; do
+                if [[ -f "$file" ]]; then
+                    local op_id
+                    op_id=$(yq e '.operation.id' "$file" 2>/dev/null)
+                    if [[ "$op_id" == "$operation_id" ]]; then
+                        echo "$file"
+                        return 0
+                    fi
+                fi
+            done
+        fi
+    done
+
+    return 1
+}
+
+# ==============================================================================
+# Detect Operation Schema Format
+# ==============================================================================
+detect_operation_format() {
+    local yaml_file="$1"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "unknown"
+        return 1
+    fi
+
+    # Check if capability field exists (new format)
+    local capability
+    capability=$(yq e '.operation.capability // ""' "$yaml_file" 2>/dev/null)
+
+    if [[ -n "$capability" && "$capability" != "null" ]]; then
+        echo "capability"
+    else
+        echo "legacy"
+    fi
+}
+
+# ==============================================================================
+# Find Operation YAML (Dual-Mode: Legacy + Capability)
+# ==============================================================================
+find_operation_yaml_dual() {
+    local module_dir="$1"
+    local operation_id="$2"
+
+    # Try legacy format first (if module_dir provided)
+    if [[ -n "$module_dir" && -d "$module_dir" ]]; then
+        local legacy_yaml
+        legacy_yaml=$(find_operation_yaml "$module_dir" "$operation_id" 2>/dev/null) && {
+            echo "$legacy_yaml"
+            return 0
+        }
+    fi
+
+    # Try capability format
+    local capability_yaml
+    capability_yaml=$(find_capability_operation "$operation_id") && {
+        echo "$capability_yaml"
+        return 0
+    }
+
+    # Not found in either location
+    log_error "Operation YAML not found for: $operation_id (tried legacy and capability)" "engine"
+    return 1
+}
+
+# ==============================================================================
+# Create Checkpoint (Placeholder for future expansion)
 # ==============================================================================
 create_checkpoint() {
     local operation_id="$1"
     local status="$2"
     local duration="$3"
     local log_file="$4"
-
-    # Checkpoint is implicitly created by update_operation_state
-    # This function is kept for future expansion if needed
     log_debug "Checkpoint created for operation: $operation_id (status: $status, duration: ${duration}s)" "engine"
 }
 
@@ -175,16 +269,44 @@ execute_single_operation() {
 
     log_info "Executing operation: $operation_id" "engine"
 
-    # Find operation YAML
+    # Find operation YAML (dual-mode: legacy + capability)
     local yaml_file
-    yaml_file=$(find_operation_yaml "$module_dir" "$operation_id") || return 1
+    yaml_file=$(find_operation_yaml_dual "$module_dir" "$operation_id") || return 1
 
-    log_info "Found operation file: $yaml_file" "engine"
+    # Detect format and log
+    local operation_format
+    operation_format=$(detect_operation_format "$yaml_file")
+    log_info "Found operation file: $yaml_file (format: $operation_format)" "engine"
+
+    # If Capability Format, use the new Executor directly if possible
+    if [[ "$operation_format" == "capability" ]]; then
+        # Use the new Executor logic (imported from core/executor.sh)
+        # But we need to wrap it to match the engine's state tracking
+        
+        update_state "current_operation" "$operation_id"
+        update_state "status" "running"
+        
+        local start_time=$(date +%s)
+        
+        # Call execute_operation from core/executor.sh
+        if execute_operation "$yaml_file" "false"; then
+             local duration=$(($(date +%s) - start_time))
+             update_operation_state "$operation_id" "completed" "$duration"
+             create_checkpoint "$operation_id" "completed" "$duration" ""
+             return 0
+        else
+             local duration=$(($(date +%s) - start_time))
+             update_operation_state "$operation_id" "failed" "$duration"
+             create_checkpoint "$operation_id" "failed" "$duration" ""
+             return 1
+        fi
+    fi
+
+    # --- LEGACY EXECUTION PATH ---
 
     # Parse operation to get metadata
     parse_operation_yaml "$yaml_file" || return 1
 
-    # Update state
     update_state "current_operation" "$operation_id"
     update_state "status" "running"
 
@@ -221,12 +343,6 @@ execute_single_operation() {
         log_operation_complete "$operation_id" "$duration" "0" "$OPERATION_DURATION_EXPECTED"
         update_operation_state "$operation_id" "completed" "$duration"
         reset_retry_counter "$operation_id"
-
-        # Create checkpoint
-        local log_file
-        log_file=$(find "$LOGS_DIR" -name "${operation_id}_*.log" -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
-        create_checkpoint "$operation_id" "completed" "$duration" "$log_file"
-
         return 0
     else
         local exit_code=$?
@@ -236,22 +352,6 @@ execute_single_operation() {
 
         log_operation_error "$operation_id" "Operation failed" "$exit_code" "$duration"
         update_operation_state "$operation_id" "failed" "$duration"
-
-        # Find log file for error analysis
-        local log_file
-        log_file=$(find "$LOGS_DIR" -name "${operation_id}_*.log" -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
-
-        if [[ -n "$log_file" ]]; then
-            create_checkpoint "$operation_id" "failed" "$duration" "$log_file"
-
-            # Trigger error handler
-            echo ""
-            echo "========================================================================"
-            echo "  Error Handler"
-            echo "========================================================================"
-            handle_operation_error "$operation_id" "$log_file" "$exit_code" "$yaml_file" "false"
-        fi
-
         return $exit_code
     fi
 }
@@ -262,7 +362,7 @@ execute_single_operation() {
 execute_parallel_group() {
     local module_dir="$1"
     shift
-    local operations=("$@")
+    local operations=($@)
     local pids=()
     local results=()
     local op_count=${#operations[@]}
@@ -307,9 +407,8 @@ execute_parallel_group() {
         idx=$((idx + 1))
     done
 
-    echo ""
     if [[ $failed -eq 1 ]]; then
-        echo "[x] Parallel group failed - one or more operations failed"
+        echo "[x] Parallel group failed"
         return 1
     else
         echo "[v] All parallel operations completed successfully"
@@ -335,20 +434,12 @@ execute_module() {
     update_state "current_module" "$module_name"
     update_module_state "$module_name" "running"
 
-    # Get operations list with parallel groups
+    # Get operations list from module.yaml
     local module_yaml="${module_dir}/module.yaml"
     local total_ops
     total_ops=$(yq e '.module.operations | length' "$module_yaml")
     local current_op=0
 
-    echo ""
-    echo "========================================================================"
-    echo "  Module: $module_name"
-    echo "========================================================================"
-    echo "Operations: $total_ops"
-    echo ""
-
-    # Execute operations in definition order (preserves sequence)
     # Group operations by parallel_group to support parallel execution
     local op_index=0
     while [[ $op_index -lt $total_ops ]]; do
@@ -360,16 +451,14 @@ execute_module() {
         local parallel_group
         parallel_group=$(yq e ".module.operations[$op_index].parallel_group // \"\"" "$module_yaml")
 
-        # Collect all operations in this group starting from current index
-        local group_ops=("$op_id")
+        # Collect all operations in this group
+        local group_ops=($op_id)
         local next_index=$((op_index + 1))
 
-        # If parallel_group is defined, collect all other operations in the same group
         if [[ -n "$parallel_group" && "$parallel_group" != "null" ]]; then
             while [[ $next_index -lt $total_ops ]]; do
                 local next_group
                 next_group=$(yq e ".module.operations[$next_index].parallel_group // \"\"" "$module_yaml")
-
                 if [[ "$next_group" == "$parallel_group" ]]; then
                     local next_op_id
                     next_op_id=$(yq e ".module.operations[$next_index].id" "$module_yaml")
@@ -386,16 +475,7 @@ execute_module() {
 
         current_op=$((current_op + ${#group_ops[@]}))
 
-        echo ""
-        echo "========================================================================"
-        echo "  Operations $((current_op - ${#group_ops[@]} + 1)) to $current_op of $total_ops"
-        if [[ ${#group_ops[@]} -gt 1 ]]; then
-            echo "  Parallel Group: $parallel_group"
-        fi
-        echo "========================================================================"
-        echo ""
-
-        # Execute operations in parallel if more than one, otherwise sequential
+        # Execute operations
         if [[ ${#group_ops[@]} -gt 1 ]]; then
             if ! execute_parallel_group "$module_dir" "${group_ops[@]}"; then
                 log_error "Module failed at parallel group: $parallel_group" "engine"
@@ -456,17 +536,8 @@ resume_execution() {
 
     if [[ -n "$failed_operation" ]]; then
         echo ""
-        echo "========================================================================"
-        echo "  Resuming from Failed Operation"
-        echo "========================================================================"
-        echo "Module: $current_module"
-        echo "Operation: $failed_operation"
-        echo ""
-        echo "Previous error information:"
-        get_error_history "$failed_operation"
-        echo ""
-
-        read -p "Retry this operation? (y/n): " -n 1 -r
+        echo "Resume failed operation: $failed_operation?"
+        read -p "Retry? (y/n): " -n 1 -r
         echo ""
 
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -491,93 +562,39 @@ show_status() {
         return 0
     fi
 
-    echo ""
-    echo "========================================================================"
-    echo "  Deployment Status"
-    echo "========================================================================"
-    echo ""
-
     local status
     status=$(jq -r '.status // "unknown"' "$STATE_FILE")
     local current_module
     current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
-    local started_at
-    started_at=$(jq -r '.started_at // "unknown"' "$STATE_FILE")
 
     echo "Status: $status"
     echo "Current Module: $current_module"
-    echo "Started: $started_at"
-    echo ""
-
-    # Show completed operations
-    local completed_ops
-    completed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "completed") | .key' "$STATE_FILE" | wc -l)
-    local failed_ops
-    failed_ops=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | wc -l)
-
+    
     echo "Operations:"
-    echo "  Completed: $completed_ops"
-    echo "  Failed: $failed_ops"
-    echo ""
-
-    if [[ $failed_ops -gt 0 ]]; then
-        echo "Failed Operations:"
-        jq -r '.operations | to_entries[] | select(.value.status == "failed") | "  - " + .key' "$STATE_FILE"
-        echo ""
-    fi
-
-    echo "========================================================================"
+    jq -r '.operations | to_entries[] | "  - " + .key + ": " + .value.status' "$STATE_FILE"
 }
 
 # ==============================================================================
-# List Available Modules and Operations
+# List Modules and Capabilities
 # ==============================================================================
 list_modules() {
-    echo ""
-    echo "========================================================================"
-    echo "  Available Modules"
-    echo "========================================================================"
-    echo ""
-
-    for module_dir in "${MODULES_DIR}"/*; do
-        if [[ -d "$module_dir" ]]; then
-            local module_name
-            module_name=$(basename "$module_dir")
-            local module_yaml="${module_dir}/module.yaml"
-
-            if [[ -f "$module_yaml" ]]; then
-                local module_title
-                module_title=$(yq e '.module.name // "Unknown"' "$module_yaml")
-                local module_desc
-                module_desc=$(yq e '.module.description // ""' "$module_yaml")
-
-                echo "Module: $module_name"
-                echo "  Name: $module_title"
-                if [[ -n "$module_desc" ]]; then
-                    echo "  Description: $module_desc"
-                fi
-
-                # List operations
-                echo "  Operations:"
-                local ops
-                ops=$(get_module_operations "$module_dir" 2>/dev/null)
-                if [[ -n "$ops" ]]; then
-                    while IFS= read -r op_id; do
-                        local op_yaml
-                        op_yaml=$(find_operation_yaml "$module_dir" "$op_id" 2>/dev/null)
-                        if [[ -n "$op_yaml" ]]; then
-                            local op_name
-                            op_name=$(yq e '.operation.name // "Unknown"' "$op_yaml")
-                            echo "    - $op_id: $op_name"
-                        fi
-                    done <<< "$ops"
-                fi
-                echo ""
-            fi
-        fi
+    echo "Legacy Modules:"
+    for d in "${MODULES_DIR}"/*; do
+        [[ -d "$d" ]] && basename "$d"
     done
 
-    echo "========================================================================"
+    echo ""
+    echo "Capabilities (New):"
+    if [[ -d "$CAPABILITIES_DIR" ]]; then
+        for d in "${CAPABILITIES_DIR}"/*; do
+            if [[ -d "$d" ]]; then
+                echo "$(basename "$d"):"
+                for op in "$d"/operations/*.yaml; do
+                    [[ -f "$op" ]] && echo "  - $(basename "$op" .yaml)"
+                done
+            fi
+        done
+    fi
 }
 
 # ==============================================================================
@@ -592,8 +609,9 @@ main() {
             local operation_id="${3:-}"
 
             if [[ -z "$module_name" ]]; then
-                echo "ERROR: Module name required"
+                echo "ERROR: Module name or operation ID required"
                 echo "Usage: $0 run <module> [operation]"
+                echo "   OR: $0 run <operation-id>"
                 exit 1
             fi
 
@@ -601,35 +619,30 @@ main() {
             log_info "Loading configuration" "engine"
             load_config || exit 1
 
-            # Validate configuration for specific module
-            validate_config "$module_name" || exit 1
-
             # Initialize state
             init_state
 
-            if [[ -n "$operation_id" ]]; then
-                # Execute single operation
+            # Check if module_name is actually a capability operation ID
+            local capability_yaml
+            capability_yaml=$(find_capability_operation "$module_name" 2>/dev/null)
+
+            if [[ -n "$capability_yaml" && -z "$operation_id" ]]; then
+                # Direct capability operation execution
+                log_info "Executing capability operation: $module_name" "engine"
+                execute_single_operation "" "$module_name"
+            elif [[ -n "$operation_id" ]]; then
+                # Traditional: module + operation
+                validate_config "$module_name" || exit 1
                 execute_single_operation "${MODULES_DIR}/${module_name}" "$operation_id"
             else
                 # Execute entire module
+                validate_config "$module_name" || exit 1
                 execute_module "$module_name"
             fi
-            ;;
+            ;; 
 
         resume)
-            # Load configuration
             load_config || exit 1
-
-            # For resume, get current module from state and validate for that module
-            local current_module
-            current_module=$(jq -r '.current_module // ""' "$STATE_FILE" 2>/dev/null)
-            if [[ -n "$current_module" ]]; then
-                validate_config "$current_module" || exit 1
-            else
-                # If no current module in state, do full validation
-                validate_config || exit 1
-            fi
-
             resume_execution
             ;;
 
@@ -642,19 +655,7 @@ main() {
             ;;
 
         *)
-            echo "Azure VDI Deployment Engine"
-            echo ""
-            echo "Usage:"
-            echo "  $0 run <module> [operation]  Execute module or single operation"
-            echo "  $0 resume                    Resume from failed operation"
-            echo "  $0 status                    Show deployment status"
-            echo "  $0 list                      List available modules"
-            echo ""
-            echo "Examples:"
-            echo "  $0 run 05-golden-image"
-            echo "  $0 run 05-golden-image 02-install-fslogix"
-            echo "  $0 resume"
-            echo ""
+            echo "Usage: $0 {run|resume|status|list} ..."
             exit 1
             ;;
     esac

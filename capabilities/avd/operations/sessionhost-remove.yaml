@@ -1,0 +1,216 @@
+# ==============================================================================
+# Capability Operation: Remove Session Host from Host Pool
+# ==============================================================================
+
+operation:
+  id: "sessionhost-remove"
+  name: "Remove Session Host from Host Pool"
+  description: "Remove session host VM from AVD host pool and optionally delete the VM"
+
+  capability: "avd"
+  operation_mode: "delete"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
+
+  # Duration expectations
+  duration:
+    expected: 150       # 2.5 minutes
+    timeout: 300        # 5 minutes
+    type: "WAIT"
+
+  # Parameters for removal
+  parameters:
+    required:
+      - name: "sessionhost_name"
+        type: "string"
+        description: "Name of the session host VM to remove"
+        validation: "^[a-zA-Z0-9-]{1,64}$"
+      - name: "hostpool_name"
+        type: "string"
+        description: "Name of the host pool"
+        validation: "^[a-zA-Z0-9-]{1,64}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "delete_vm"
+        type: "boolean"
+        description: "Delete the underlying VM after removing from host pool"
+        default: false
+      - name: "drain_sessions"
+        type: "boolean"
+        description: "Drain active sessions before removal"
+        default: true
+
+  # Validation checks (pre-checks for delete operations)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/hostPools"
+        resource_name: "{{hostpool_name}}"
+        description: "Host pool exists"
+
+  # Idempotency: Check if session host already removed
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization hostpool show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{hostpool_name}}" \
+        --query "sessionHosts[?name=='{{sessionhost_name}}']" \
+        --output json 2>/dev/null | grep -q "{{sessionhost_name}}" || exit 0
+    skip_if_exists: false
+
+  # Template command (remove session host)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-sessionhost-remove-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Session host removal: {{sessionhost_name}} at $(Get-Date -Format 'HH:mm:ss')"
+
+      $sessionhostName = "{{sessionhost_name}}"
+      $hostpoolName = "{{hostpool_name}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $deleteVm = [System.Convert]::ToBoolean("{{delete_vm}}")
+      $drainSessions = [System.Convert]::ToBoolean("{{drain_sessions}}")
+
+      # Verify host pool exists
+      $hostpoolInfo = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostpoolName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Host pool not found: $hostpoolName"
+        exit 1
+      }
+
+      $hostpool = $hostpoolInfo | ConvertFrom-Json
+      Write-Host "[INFO] Host pool: $hostpoolName"
+      Write-Host "[INFO] Host pool type: $($hostpool.hostPoolType)"
+
+      # Check if session host exists in host pool
+      $sessionhostInfo = az desktopvirtualization hostpool session-host show `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostpoolName `
+        --session-host-name "$sessionhostName" `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[INFO] Session host not found in host pool: $sessionhostName"
+        exit 0
+      }
+
+      $sessionhost = $sessionhostInfo | ConvertFrom-Json
+      $vmName = $sessionhost.name -replace "\..*$", ""
+      $activeSessions = $sessionhost.sessions
+
+      Write-Host "[INFO] Session host: $sessionhostName"
+      Write-Host "[INFO] Active sessions: $activeSessions"
+      Write-Host "[INFO] Allow new connections: $($sessionhost.allowNewSession)"
+
+      # Drain sessions if enabled
+      if ($drainSessions -and $activeSessions -gt 0) {
+        Write-Host "[PROGRESS] Draining active sessions..."
+
+        # Set allow new session to false to prevent new connections
+        az desktopvirtualization hostpool session-host update `
+          --resource-group $resourceGroup `
+          --host-pool-name $hostpoolName `
+          --session-host-name "$sessionhostName" `
+          --allow-new-session false `
+          --output none 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[WARNING] Could not disable new connections, continuing with removal"
+        }
+
+        Write-Host "[PROGRESS] Waiting for sessions to drain (max 60 seconds)..."
+        $startTime = Get-Date
+        $timeout = 60
+
+        while ((Get-Date) -lt $startTime.AddSeconds($timeout)) {
+          $currentSessions = az desktopvirtualization hostpool session-host show `
+            --resource-group $resourceGroup `
+            --host-pool-name $hostpoolName `
+            --session-host-name "$sessionhostName" `
+            --query "sessions" `
+            --output tsv 2>$null
+
+          if ([int]$currentSessions -eq 0) {
+            Write-Host "[INFO] All sessions drained"
+            break
+          }
+
+          Write-Host "[PROGRESS] Remaining sessions: $currentSessions"
+          Start-Sleep -Seconds 10
+        }
+      }
+
+      # Remove session host from host pool
+      Write-Host "[PROGRESS] Removing session host from host pool..."
+
+      az desktopvirtualization hostpool session-host remove `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostpoolName `
+        --session-host-name "$sessionhostName" `
+        --output none 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to remove session host from host pool"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying removal from host pool..."
+      $verifyRemoval = az desktopvirtualization hostpool session-host show `
+        --resource-group $resourceGroup `
+        --host-pool-name $hostpoolName `
+        --session-host-name "$sessionhostName" `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[ERROR] Session host still exists in host pool"
+        exit 1
+      }
+
+      # Delete VM if requested
+      if ($deleteVm) {
+        Write-Host "[PROGRESS] Deleting session host VM..."
+
+        az vm delete `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --yes `
+          --no-wait `
+          --output none 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[WARNING] VM deletion command failed or VM not found"
+        } else {
+          Write-Host "[INFO] VM deletion initiated (running in background)"
+        }
+      }
+
+      Write-Host "[SUCCESS] Session host removed from host pool"
+      Write-Host "[INFO] Session host: $sessionhostName"
+      Write-Host "[INFO] VM deletion: $(if ($deleteVm) { 'Initiated' } else { 'Skipped' })"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-sessionhost-remove-wrapper.ps1
+      rm -f /tmp/avd-sessionhost-remove-wrapper.ps1
+
+  # Rollback: Re-add session host if possible
+  rollback:
+    enabled: true
+    steps:
+      - name: "Warning About Irreversibility"
+        description: "Session host removal may be partially irreversible"
+        command: |
+          echo "[WARNING] Session host removal has been reversed in state tracking"
+          echo "[WARNING] However, the session host VM must be re-added to the host pool manually"
+          echo "[WARNING] Use 'sessionhost-add' operation to re-register the VM"
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

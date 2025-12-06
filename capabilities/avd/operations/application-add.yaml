@@ -1,0 +1,204 @@
+# ==============================================================================
+# Capability Operation: Add Application to AVD Application Group
+# Operation ID: 25
+# ==============================================================================
+
+operation:
+  id: "application-add"
+  name: "Add Application to AVD Application Group"
+  description: "Add RemoteApp application to AVD application group for user access"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/applicationGroups/applications"
+
+  # Duration expectations
+  duration:
+    expected: 45
+    timeout: 120
+    type: "FAST"
+
+  # Parameters extracted from configuration
+  parameters:
+    required:
+      - name: "application_name"
+        type: "string"
+        description: "Name of the application"
+        default: "{{AVD_APPLICATION_NAME}}"
+      - name: "app_group_name"
+        type: "string"
+        description: "Name of the application group"
+        default: "{{APP_GROUP_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "app_path"
+        type: "string"
+        description: "Path to the application executable"
+        default: "{{AVD_APPLICATION_PATH}}"
+    optional:
+      - name: "app_icon_path"
+        type: "string"
+        description: "Path to application icon"
+        default: "{{AVD_APPLICATION_ICON_PATH}}"
+      - name: "app_description"
+        type: "string"
+        description: "Description of the application"
+        default: "{{AVD_APPLICATION_DESCRIPTION}}"
+      - name: "show_in_portal"
+        type: "boolean"
+        description: "Show application in user portal"
+        default: true
+      - name: "command_line_args"
+        type: "string"
+        description: "Command line arguments for the application"
+        default: ""
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/applicationGroups/applications"
+        resource_name: "{{AVD_APPLICATION_NAME}}"
+        description: "Application exists in application group"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization applicationgroup application show \
+        --name "{{AVD_APPLICATION_NAME}}" \
+        --application-group-name "{{APP_GROUP_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-application-add-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] AVD application add operation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $applicationName = "{{AVD_APPLICATION_NAME}}"
+      $appGroupName = "{{APP_GROUP_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $appPath = "{{AVD_APPLICATION_PATH}}"
+      $appIconPath = "{{AVD_APPLICATION_ICON_PATH}}"
+      $appDescription = "{{AVD_APPLICATION_DESCRIPTION}}"
+      $showInPortal = [bool]"{{AVD_APPLICATION_SHOW_IN_PORTAL}}"
+      $commandLineArgs = "{{AVD_APPLICATION_COMMAND_LINE_ARGS}}"
+
+      # Check if application already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if application already exists..."
+      az desktopvirtualization applicationgroup application show `
+        --name $applicationName `
+        --application-group-name $appGroupName `
+        --resource-group $resourceGroup `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Application already exists in application group: $applicationName"
+        Write-Host "[SUCCESS] Application add operation complete (already exists)"
+        exit 0
+      }
+
+      # Validate application group exists
+      Write-Host "[PROGRESS] Validating application group exists..."
+      $appGroupExists = @(az desktopvirtualization applicationgroup show `
+        --name $appGroupName `
+        --resource-group $resourceGroup `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($appGroupExists.Count -eq 0) {
+        Write-Host "[ERROR] Application group not found: $appGroupName"
+        exit 1
+      }
+
+      # Add application to application group
+      Write-Host "[PROGRESS] Adding application to application group..."
+      Write-Host "[PROGRESS]   Application: $applicationName"
+      Write-Host "[PROGRESS]   App Group: $appGroupName"
+      Write-Host "[PROGRESS]   Path: $appPath"
+
+      $addAppCmd = @(
+        "az", "desktopvirtualization", "applicationgroup", "application", "create",
+        "--name", $applicationName,
+        "--application-group-name", $appGroupName,
+        "--resource-group", $resourceGroup,
+        "--app-path", $appPath,
+        "--show-in-portal", $showInPortal.ToString().ToLower()
+      )
+
+      if (-not [string]::IsNullOrEmpty($appDescription)) {
+        $addAppCmd += @("--description", $appDescription)
+      }
+
+      if (-not [string]::IsNullOrEmpty($appIconPath)) {
+        $addAppCmd += @("--icon-path", $appIconPath)
+      }
+
+      if (-not [string]::IsNullOrEmpty($commandLineArgs)) {
+        $addAppCmd += @("--command-line-args", $commandLineArgs)
+      }
+
+      $addAppCmd += @("--output", "json")
+
+      & $addAppCmd[0] $addAppCmd[1..($addAppCmd.Length-1)] > artifacts/outputs/avd-application-add.json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to add application to application group"
+        exit 1
+      }
+
+      # Validate application was added
+      Write-Host "[VALIDATE] Checking if application was added..."
+      $appExists = @(az desktopvirtualization applicationgroup application show `
+        --name $applicationName `
+        --application-group-name $appGroupName `
+        --resource-group $resourceGroup `
+        --query "[0]" 2>$null | ConvertFrom-Json)
+
+      if ($appExists.Count -eq 0) {
+        Write-Host "[ERROR] Application add verification failed"
+        exit 1
+      }
+
+      # Get application details
+      $appDetails = az desktopvirtualization applicationgroup application show `
+        --name $applicationName `
+        --application-group-name $appGroupName `
+        --resource-group $resourceGroup `
+        --query "[id,name,description,showInPortal,appPath]" -o tsv
+
+      Write-Host "[SUCCESS] Application added successfully to application group"
+      Write-Host "[SUCCESS]   Application: $applicationName"
+      Write-Host "[SUCCESS]   App Group: $appGroupName"
+      Write-Host "[SUCCESS]   Show in portal: $showInPortal"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-application-add-wrapper.ps1
+      rm -f /tmp/avd-application-add-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Application from Application Group"
+        description: "Remove the application from the application group"
+        command: |
+          az desktopvirtualization applicationgroup application delete \
+            --name "{{AVD_APPLICATION_NAME}}" \
+            --application-group-name "{{APP_GROUP_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

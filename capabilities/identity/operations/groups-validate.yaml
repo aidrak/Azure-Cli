@@ -1,0 +1,165 @@
+# ==============================================================================
+# Capability Operation: Validate All Entra ID Security Groups
+# Migrated from: modules/03-entra-group/operations/07-validate-groups.yaml
+# ==============================================================================
+
+operation:
+  id: "groups-validate"
+  name: "Validate All Entra ID Security Groups"
+  description: "Comprehensive validation of all Entra ID security groups created for AVD"
+
+  capability: "identity"
+  operation_mode: "validate"
+  resource_type: "Microsoft.Graph/groups"
+
+  # Duration expectations
+  duration:
+    expected: 30    # 30 seconds
+    timeout: 60     # 1 minute
+    type: "FAST"
+
+  # Dependencies on group creation operations
+  # Note: users, admins, and sso groups are typically created via the generic
+  # group-create operation with different parameters. Dependencies removed as
+  # the validation will fail if groups don't exist regardless.
+  requires:
+    - "fslogix-group-create"
+    - "network-group-create"
+    - "security-group-create"
+
+  # Parameters
+  parameters:
+    optional:
+      - name: "fail_on_missing"
+        type: "boolean"
+        description: "Fail if any expected group is missing"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "all_groups_exist"
+        description: "All configured groups exist in Entra ID"
+
+  # Idempotency: Validation is always executed
+  idempotency:
+    enabled: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/groups-validate-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Validating all Entra ID security groups: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Define expected groups from config
+      $expectedGroups = @{
+        "Users" = "{{ENTRA_GROUP_USERS_STANDARD}}"
+        "Admins" = "{{ENTRA_GROUP_USERS_ADMINS}}"
+        "SSO Devices" = "{{ENTRA_GROUP_DEVICES_SSO}}"
+        "FSLogix Devices" = "{{ENTRA_GROUP_DEVICES_FSLOGIX}}"
+        "Network Devices" = "{{ENTRA_GROUP_DEVICES_NETWORK}}"
+        "Security Devices" = "{{ENTRA_GROUP_DEVICES_SECURITY}}"
+      }
+
+      $validationPassed = $true
+      $foundGroups = 0
+      $missingGroups = @()
+      $groupDetails = @{}
+
+      Write-Host "[PROGRESS] Checking all security groups..."
+      Write-Host ""
+
+      # Validate each group
+      foreach ($groupType in $expectedGroups.Keys) {
+        $groupName = $expectedGroups[$groupType]
+
+        Write-Host "[VALIDATE] Checking: $groupType ($groupName)"
+
+        $groupId = az ad group list `
+          --filter "displayName eq '$groupName'" `
+          --query "[0].id" -o tsv 2>$null
+
+        if ([string]::IsNullOrEmpty($groupId) -eq $false -and $groupId -ne "None") {
+          $foundGroups++
+
+          # Get group details
+          $securityEnabled = az ad group show --group $groupId `
+            --query "securityEnabled" -o tsv 2>$null
+          $memberCount = az ad group member list --group $groupId `
+            --query "length(@)" -o tsv 2>$null
+
+          Write-Host "  ✓ Found: $groupName"
+          Write-Host "    ID: $groupId"
+          Write-Host "    Security Enabled: $securityEnabled"
+          Write-Host "    Members: $memberCount"
+
+          $groupDetails[$groupType] = @{
+            "name" = $groupName
+            "id" = $groupId
+            "securityEnabled" = $securityEnabled
+            "memberCount" = $memberCount
+          }
+        } else {
+          Write-Host "  ✗ MISSING: $groupName"
+          $missingGroups += $groupName
+          $validationPassed = $false
+        }
+        Write-Host ""
+      }
+
+      # Generate summary
+      Write-Host "[VALIDATE] =========================================="
+      Write-Host "[VALIDATE] Validation Summary"
+      Write-Host "[VALIDATE] =========================================="
+      Write-Host "[VALIDATE] Total groups expected: $($expectedGroups.Count)"
+      Write-Host "[VALIDATE] Groups found: $foundGroups"
+      Write-Host "[VALIDATE] Groups missing: $($missingGroups.Count)"
+      Write-Host ""
+
+      if ($validationPassed) {
+        Write-Host "[SUCCESS] All security groups validated successfully"
+        Write-Host ""
+        Write-Host "[INFO] Next steps:"
+        Write-Host "[INFO]   1. Add user members to groups:"
+        Write-Host "[INFO]      az ad group member add --group <group-id> --member-id <user-object-id>"
+        Write-Host "[INFO]   2. Proceed to Module 04: Host Pool & Workspace creation"
+        Write-Host "[INFO]   3. Use groups for application group assignments"
+        Write-Host "[INFO]   4. Configure RBAC role assignments (Module 08)"
+        Write-Host "[INFO]   5. Apply Intune/Conditional Access policies to device groups"
+
+        # Save validation results
+        $validationResult = @{
+          "timestamp" = (Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ")
+          "validation_passed" = $true
+          "total_groups" = $expectedGroups.Count
+          "found_groups" = $foundGroups
+          "groups" = $groupDetails
+        }
+
+        $validationResult | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/groups-validate.json"
+
+        exit 0
+      } else {
+        Write-Host "[ERROR] Validation failed - missing groups:"
+        foreach ($missingGroup in $missingGroups) {
+          Write-Host "[ERROR]   - $missingGroup"
+        }
+        Write-Host ""
+        Write-Host "[ERROR] Please re-run the failed operations or check logs"
+
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/groups-validate-wrapper.ps1
+      rm -f /tmp/groups-validate-wrapper.ps1
+
+  # Rollback: Validation has no rollback
+  rollback:
+    enabled: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

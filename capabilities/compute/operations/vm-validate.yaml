@@ -1,0 +1,185 @@
+# ==============================================================================
+# Capability Operation: Validate Virtual Machine Configuration
+# ==============================================================================
+
+operation:
+  id: "vm-validate"
+  name: "Validate Virtual Machine Configuration"
+  description: "Validate VM configuration, health status, and compliance with deployment standards"
+
+  capability: "compute"
+  operation_mode: "validate"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 60        # 1 minute
+    timeout: 120        # 2 minutes
+    type: "NORMAL"
+
+  # Parameters for validation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the virtual machine to validate"
+        validation: "^[a-zA-Z0-9-]{1,64}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "check_networking"
+        type: "boolean"
+        description: "Validate network configuration"
+        default: true
+      - name: "check_storage"
+        type: "boolean"
+        description: "Validate storage configuration"
+        default: true
+      - name: "check_security"
+        type: "boolean"
+        description: "Validate security settings"
+        default: true
+
+  # Validation checks (pre-checks for validate operations are read-only)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/virtualMachines"
+        resource_name: "{{vm_name}}"
+        description: "VM exists and is accessible"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "VM provisioning completed successfully"
+
+  # Idempotency: Read-only operation, always safe to run
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{vm_name}}" \
+        --output none 2>/dev/null
+    skip_if_exists: false
+
+  # Template command (read-only validation)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-vm-validate-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VM validation: {{vm_name}} at $(Get-Date -Format 'HH:mm:ss')"
+
+      $vmName = "{{vm_name}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if VM exists
+      $vmInfo = az vm show `
+        --resource-group $resourceGroup `
+        --name $vmName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] VM not found: $vmName"
+        exit 1
+      }
+
+      $vm = $vmInfo | ConvertFrom-Json
+      $provisioningState = $vm.provisioningState
+      $vmId = $vm.id
+      $location = $vm.location
+
+      Write-Host "[VALIDATE] VM ID: $vmId"
+      Write-Host "[VALIDATE] Location: $location"
+      Write-Host "[VALIDATE] Provisioning State: $provisioningState"
+
+      # Validate provisioning state
+      if ($provisioningState -ne "Succeeded") {
+        Write-Host "[ERROR] VM is not in 'Succeeded' state"
+        Write-Host "[ERROR] Current state: $provisioningState"
+        exit 1
+      }
+
+      # Get VM details
+      $vmDetails = az vm show `
+        --resource-group $resourceGroup `
+        --name $vmName `
+        --show-details `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        $vmDetail = $vmDetails | ConvertFrom-Json
+        Write-Host "[VALIDATE] Power State: $($vmDetail.powerState)"
+        Write-Host "[VALIDATE] Public IP: $($vmDetail.publicIps)"
+        Write-Host "[VALIDATE] Private IP: $($vmDetail.privateIps)"
+      }
+
+      # Check networking if enabled
+      if ("{{check_networking}}" -eq "true") {
+        Write-Host "[VALIDATE] Checking network configuration..."
+        $nics = az vm show `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --query "networkProfile.networkInterfaces[*].id" `
+          --output json 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $nicList = $nics | ConvertFrom-Json
+          Write-Host "[VALIDATE] Network interfaces: $($nicList.Count)"
+        } else {
+          Write-Host "[WARNING] Could not validate network configuration"
+        }
+      }
+
+      # Check storage if enabled
+      if ("{{check_storage}}" -eq "true") {
+        Write-Host "[VALIDATE] Checking storage configuration..."
+        $storageProfile = az vm show `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --query "storageProfile.osDisk" `
+          --output json 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $osDisk = $storageProfile | ConvertFrom-Json
+          Write-Host "[VALIDATE] OS Disk: $($osDisk.name) (Type: $($osDisk.osType))"
+        } else {
+          Write-Host "[WARNING] Could not validate storage configuration"
+        }
+      }
+
+      # Check security if enabled
+      if ("{{check_security}}" -eq "true") {
+        Write-Host "[VALIDATE] Checking security settings..."
+        $securityProfile = az vm show `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --query "securityProfile" `
+          --output json 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          $security = $securityProfile | ConvertFrom-Json
+          Write-Host "[VALIDATE] Security Type: $($security.securityType)"
+          if ($security.securityType -eq "TrustedLaunch") {
+            Write-Host "[VALIDATE] Secure Boot: $($security.uefiSettings.secureBootEnabled)"
+            Write-Host "[VALIDATE] vTPM: $($security.uefiSettings.vTpmEnabled)"
+          }
+        } else {
+          Write-Host "[WARNING] Could not validate security settings"
+        }
+      }
+
+      Write-Host "[SUCCESS] VM validation completed"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-validate-wrapper.ps1
+      rm -f /tmp/compute-vm-validate-wrapper.ps1
+
+  # No rollback needed for validate operations (read-only)
+  rollback:
+    enabled: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

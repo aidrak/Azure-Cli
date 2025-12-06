@@ -1,0 +1,213 @@
+# ==============================================================================
+# Capability Operation: Create User-Assigned Managed Identity
+# ==============================================================================
+
+operation:
+  id: "managed-identity-create"
+  name: "Create User-Assigned Managed Identity"
+  description: "Create user-assigned managed identity for Azure resources with automatic credential management and no secrets to manage"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.ManagedIdentity/userAssignedIdentities"
+
+  # Duration expectations
+  duration:
+    expected: 30    # 30 seconds
+    timeout: 90     # 1.5 minutes
+    type: "FAST"
+
+  # Parameters for managed identity creation
+  parameters:
+    required:
+      - name: "identity_name"
+        type: "string"
+        description: "Name for the managed identity"
+        default: "{{MANAGED_IDENTITY_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "tags"
+        type: "object"
+        description: "Azure resource tags"
+        default: "{}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.ManagedIdentity/userAssignedIdentities"
+        resource_name: "{{MANAGED_IDENTITY_NAME}}"
+        description: "Managed identity created successfully"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Managed identity provisioned successfully"
+
+  # Idempotency: Check for existing managed identity
+  idempotency:
+    enabled: true
+    check_command: |
+      az identity show \
+        --name "{{MANAGED_IDENTITY_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/identity-managed-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating managed identity: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $identityName = "{{MANAGED_IDENTITY_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+
+      # Check if managed identity already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if managed identity exists: $identityName"
+
+      $existingIdentity = az identity show `
+        --name $identityName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -ne $existingIdentity -and ![string]::IsNullOrEmpty($existingIdentity.id)) {
+        Write-Host "[INFO] Managed identity already exists"
+        Write-Host "[INFO]   Resource ID: $($existingIdentity.id)"
+        Write-Host "[INFO]   Principal ID: $($existingIdentity.principalId)"
+        Write-Host "[INFO]   Client ID: $($existingIdentity.clientId)"
+        Write-Host "[SUCCESS] Managed identity creation complete (already exists)"
+
+        $existingIdentity | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/managed-identity-create.json"
+        exit 0
+      }
+
+      # Create managed identity
+      Write-Host "[PROGRESS] Creating user-assigned managed identity..."
+      Write-Host "[PROGRESS]   Name: $identityName"
+      Write-Host "[PROGRESS]   Resource Group: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
+
+      $identity = az identity create `
+        --name $identityName `
+        --resource-group $resourceGroup `
+        --location $location `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create managed identity"
+        Write-Host $identity
+        exit 1
+      }
+
+      $identity = $identity | ConvertFrom-Json
+
+      if ($null -eq $identity -or [string]::IsNullOrEmpty($identity.id)) {
+        Write-Host "[ERROR] Managed identity creation returned empty response"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Managed identity created: $($identity.id)"
+      Write-Host "[PROGRESS] Principal ID: $($identity.principalId)"
+      Write-Host "[PROGRESS] Client ID: $($identity.clientId)"
+
+      # Validate creation
+      Write-Host "[VALIDATE] Verifying managed identity creation..."
+
+      $verify = az identity show `
+        --name $identityName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -eq $verify -or [string]::IsNullOrEmpty($verify.id)) {
+        Write-Host "[ERROR] Managed identity verification failed"
+        exit 1
+      }
+
+      # Add tags if provided
+      Write-Host "[PROGRESS] Applying resource tags..."
+
+      $tagsJson = '{{RESOURCE_TAGS:-{}}}'
+
+      # Only apply tags if not empty
+      if ($tagsJson -ne '{}' -and ![string]::IsNullOrEmpty($tagsJson)) {
+        # Parse tags and apply
+        $tags = $tagsJson | ConvertFrom-Json
+
+        $tagString = ""
+        foreach ($tag in $tags.PSObject.Properties) {
+          if (![string]::IsNullOrEmpty($tagString)) {
+            $tagString += " "
+          }
+          $tagString += "$($tag.Name)=$($tag.Value)"
+        }
+
+        if (![string]::IsNullOrEmpty($tagString)) {
+          az resource tag `
+            --ids $verify.id `
+            --tags $tagString `
+            --output none 2>&1 | Out-Null
+
+          Write-Host "[PROGRESS] Tags applied: $tagString"
+        }
+      }
+
+      # Prepare output with all identity details
+      $output = @{
+        id = $verify.id
+        name = $verify.name
+        resourceGroup = $verify.resourceGroup
+        location = $verify.location
+        principalId = $verify.principalId
+        clientId = $verify.clientId
+        tenantId = $verify.tenantId
+        tags = $verify.tags
+        createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      }
+
+      # Save to artifacts
+      $output | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/managed-identity-create.json"
+
+      Write-Host "[SUCCESS] User-assigned managed identity created successfully"
+      Write-Host "[SUCCESS]   Name: $identityName"
+      Write-Host "[SUCCESS]   Resource ID: $($verify.id)"
+      Write-Host "[SUCCESS]   Principal ID: $($verify.principalId)"
+      Write-Host "[SUCCESS]   Client ID: $($verify.clientId)"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Assign RBAC roles: az role assignment create --assignee-object-id $($verify.principalId) --role '<role-name>'"
+      Write-Host "[INFO]   - Assign to VM: az vm identity assign --resource-group $resourceGroup --name '<vm-name>' --identities $($verify.id)"
+      Write-Host "[INFO]   - Use in applications to authenticate without secrets"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/identity-managed-create-wrapper.ps1
+      rm -f /tmp/identity-managed-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Managed Identity"
+        description: "Remove the user-assigned managed identity"
+        command: |
+          az identity delete \
+            --name "{{MANAGED_IDENTITY_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

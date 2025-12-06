@@ -1,0 +1,454 @@
+# ==============================================================================
+# Capability Operation: Create Autoscaling Plan
+# Migrated from: modules/09-autoscaling/operations/02-create-plan.yaml
+# ==============================================================================
+
+operation:
+  id: "autoscaling-create-plan"
+  name: "Create Autoscaling Plan"
+  description: "Create AVD autoscaling plan with cost-optimized schedules"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/scalingPlans"
+
+  # Duration expectations
+  duration:
+    expected: 180   # 3 minutes
+    timeout: 600    # 10 minutes
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "scaling_plan_name"
+        type: "string"
+        description: "Name of the scaling plan"
+        default: "ScalingPlan-{{HOST_POOL_NAME}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the target host pool"
+        default: "{{HOST_POOL_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the scaling plan"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "autoscaling_enabled"
+        type: "boolean"
+        description: "Enable autoscaling functionality"
+        default: "{{AUTOSCALING_ENABLED}}"
+      - name: "weekday_start_hour"
+        type: "integer"
+        description: "Weekday start hour for scaling"
+        default: "{{AUTOSCALING_WEEKDAY_START_HOUR}}"
+      - name: "weekday_stop_hour"
+        type: "integer"
+        description: "Weekday stop hour for scaling"
+        default: "{{AUTOSCALING_WEEKDAY_STOP_HOUR}}"
+      - name: "min_vms"
+        type: "integer"
+        description: "Minimum number of VMs to keep running"
+        default: "{{AUTOSCALING_MIN_VMS}}"
+      - name: "max_vms"
+        type: "integer"
+        description: "Maximum number of VMs in scaling plan"
+        default: "{{AUTOSCALING_MAX_VMS}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          SCALING_PLAN_NAME="ScalingPlan-{{HOST_POOL_NAME}}"
+
+          if az desktopvirtualization scaling-plan show \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "$SCALING_PLAN_NAME" &>/dev/null; then
+            echo "[VALIDATE] Scaling plan exists: $SCALING_PLAN_NAME"
+            exit 0
+          else
+            echo "[ERROR] Scaling plan not found: $SCALING_PLAN_NAME"
+            exit 1
+          fi
+        description: "Verify scaling plan exists"
+
+  # Idempotency: Check for existing scaling plan
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization scaling-plan show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "ScalingPlan-{{HOST_POOL_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "bash-script"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Autoscaling Plan Creation: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration from config.yaml
+      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      LOCATION="{{AZURE_LOCATION}}"
+      HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+      SUBSCRIPTION_ID="{{AZURE_SUBSCRIPTION_ID}}"
+      AUTOSCALING_ENABLED="{{AUTOSCALING_ENABLED}}"
+
+      # Autoscaling schedule settings from config
+      WEEKDAY_START_HOUR="{{AUTOSCALING_WEEKDAY_START_HOUR}}"
+      WEEKDAY_STOP_HOUR="{{AUTOSCALING_WEEKDAY_STOP_HOUR}}"
+      MIN_VMS="{{AUTOSCALING_MIN_VMS}}"
+      MAX_VMS="{{AUTOSCALING_MAX_VMS}}"
+
+      # Scaling plan name
+      SCALING_PLAN_NAME="ScalingPlan-${HOST_POOL_NAME}"
+
+      # Step 1: Validate Azure authentication
+      echo "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      if ! az account show &>/dev/null; then
+        echo "[ERROR] Not authenticated to Azure"
+        exit 1
+      fi
+
+      # Step 2: Check if autoscaling is enabled in config
+      echo "[PROGRESS] Step 2/5: Checking autoscaling configuration..."
+      if [[ "$AUTOSCALING_ENABLED" != "true" ]]; then
+        echo "[WARNING] Autoscaling is disabled in configuration"
+        echo "[WARNING] Skipping scaling plan creation"
+
+        {
+          echo "Autoscaling Plan Creation Skipped"
+          echo "=================================="
+          echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Autoscaling is disabled in configuration."
+          echo ""
+        } > "artifacts/outputs/autoscaling-create-plan.txt"
+
+        exit 0
+      fi
+
+      # Step 3: Verify host pool exists
+      echo "[PROGRESS] Step 3/5: Verifying host pool exists..."
+      if ! az desktopvirtualization hostpool show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$HOST_POOL_NAME" &>/dev/null; then
+        echo "[ERROR] Host pool not found: $HOST_POOL_NAME"
+        echo "[ERROR] Please ensure host pool was created (Module 04)"
+        exit 1
+      fi
+
+      echo "[VALIDATE] Host pool found: $HOST_POOL_NAME"
+
+      # Get host pool resource ID
+      HOST_POOL_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.DesktopVirtualization/hostPools/${HOST_POOL_NAME}"
+
+      echo "[VALIDATE] Host pool ID: $HOST_POOL_ID"
+
+      # Step 4: Check if scaling plan already exists
+      echo "[PROGRESS] Step 4/5: Checking if scaling plan exists..."
+      if az desktopvirtualization scaling-plan show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$SCALING_PLAN_NAME" &>/dev/null; then
+        echo "[SUCCESS] Scaling plan already exists: $SCALING_PLAN_NAME"
+        SCALING_PLAN_CREATED=false
+      else
+        SCALING_PLAN_CREATED=false
+      fi
+
+      # Step 5: Create/Update scaling plan with schedules using PowerShell
+      echo "[PROGRESS] Step 5/5: Creating scaling plan with schedules via PowerShell..."
+      echo "[PROGRESS] Name: $SCALING_PLAN_NAME"
+      echo "[PROGRESS] Location: $LOCATION"
+      echo "[PROGRESS] Weekday hours: ${WEEKDAY_START_HOUR}:00 - ${WEEKDAY_STOP_HOUR}:00"
+
+      # Create PowerShell script for scaling plan
+      cat > /tmp/create-scaling-plan.ps1 << 'PWSH_EOF'
+      # Autoscaling Plan Creation with Schedules
+      Write-Host "[START] Creating Autoscaling Plan with Schedules" -ForegroundColor Cyan
+
+      try {
+          # Get environment variables
+          $resourceGroup = $env:RESOURCE_GROUP
+          $location = $env:LOCATION
+          $scalingPlanName = $env:SCALING_PLAN_NAME
+          $hostPoolId = $env:HOST_POOL_ID
+          $weekdayStartHour = [int]$env:WEEKDAY_START_HOUR
+          $weekdayStopHour = [int]$env:WEEKDAY_STOP_HOUR
+
+          Write-Host "[PROGRESS] Configuration:" -ForegroundColor Yellow
+          Write-Host "  Resource Group: $resourceGroup" -ForegroundColor Gray
+          Write-Host "  Scaling Plan: $scalingPlanName" -ForegroundColor Gray
+          Write-Host "  Location: $location" -ForegroundColor Gray
+          Write-Host "  Host Pool: $hostPoolId" -ForegroundColor Gray
+
+          # Check if scaling plan exists
+          $existingPlan = Get-AzWvdScalingPlan -ResourceGroupName $resourceGroup -Name $scalingPlanName -ErrorAction SilentlyContinue
+
+          if ($existingPlan) {
+              Write-Host "[SUCCESS] Scaling plan already exists, updating schedules..." -ForegroundColor Green
+          } else {
+              Write-Host "[PROGRESS] Creating new scaling plan..." -ForegroundColor Yellow
+          }
+
+          # Define weekday schedule
+          $weekdaySchedule = New-AzWvdScalingPlanPooledSchedule `
+              -ScheduleName "Weekday-Schedule" `
+              -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday `
+              -RampUpStartTimeHour $weekdayStartHour `
+              -RampUpStartTimeMinute 0 `
+              -RampUpLoadBalancingAlgorithm BreadthFirst `
+              -RampUpMinimumHostsPct 25 `
+              -RampUpCapacityThresholdPct 70 `
+              -PeakStartTimeHour 9 `
+              -PeakStartTimeMinute 0 `
+              -PeakLoadBalancingAlgorithm BreadthFirst `
+              -RampDownStartTimeHour $weekdayStopHour `
+              -RampDownStartTimeMinute 0 `
+              -RampDownLoadBalancingAlgorithm DepthFirst `
+              -RampDownMinimumHostsPct 10 `
+              -RampDownCapacityThresholdPct 80 `
+              -RampDownForceLogoffUser `
+              -RampDownWaitTimeMinute 20 `
+              -RampDownNotificationMessage "Your session will end in 20 minutes. Please save your work." `
+              -RampDownStopHostsWhen ZeroActiveSessions `
+              -OffPeakStartTimeHour 19 `
+              -OffPeakStartTimeMinute 0 `
+              -OffPeakLoadBalancingAlgorithm DepthFirst `
+              -OffPeakMinimumHostsPct 5 `
+              -OffPeakCapacityThresholdPct 90
+
+          # Define weekend schedule
+          $weekendSchedule = New-AzWvdScalingPlanPooledSchedule `
+              -ScheduleName "Weekend-OffPeak" `
+              -DaysOfWeek Saturday,Sunday `
+              -RampUpStartTimeHour 0 `
+              -RampUpStartTimeMinute 0 `
+              -RampUpLoadBalancingAlgorithm DepthFirst `
+              -RampUpMinimumHostsPct 5 `
+              -RampUpCapacityThresholdPct 85 `
+              -PeakStartTimeHour 1 `
+              -PeakStartTimeMinute 0 `
+              -PeakLoadBalancingAlgorithm DepthFirst `
+              -RampDownStartTimeHour 2 `
+              -RampDownStartTimeMinute 0 `
+              -RampDownLoadBalancingAlgorithm DepthFirst `
+              -RampDownMinimumHostsPct 5 `
+              -RampDownCapacityThresholdPct 85 `
+              -RampDownForceLogoffUser:$false `
+              -RampDownWaitTimeMinute 30 `
+              -RampDownNotificationMessage "Your session may end soon. Please save your work." `
+              -RampDownStopHostsWhen ZeroActiveSessions `
+              -OffPeakStartTimeHour 3 `
+              -OffPeakStartTimeMinute 0 `
+              -OffPeakLoadBalancingAlgorithm DepthFirst `
+              -OffPeakMinimumHostsPct 5 `
+              -OffPeakCapacityThresholdPct 85
+
+          # Create/Update scaling plan
+          $hostPoolReference = New-AzWvdScalingPlanPooledHost `
+              -HostPoolArmPath $hostPoolId `
+              -ScalingPlanEnabled:$true
+
+          if ($existingPlan) {
+              Write-Host "[PROGRESS] Updating existing scaling plan with schedules..." -ForegroundColor Yellow
+              Update-AzWvdScalingPlan `
+                  -ResourceGroupName $resourceGroup `
+                  -Name $scalingPlanName `
+                  -Schedule $weekdaySchedule,$weekendSchedule `
+                  -HostPoolReference $hostPoolReference `
+                  -TimeZone "Central Standard Time" `
+                  -ErrorAction Stop | Out-Null
+
+              Write-Host "[SUCCESS] Scaling plan updated with schedules" -ForegroundColor Green
+          } else {
+              Write-Host "[PROGRESS] Creating new scaling plan with schedules..." -ForegroundColor Yellow
+              New-AzWvdScalingPlan `
+                  -ResourceGroupName $resourceGroup `
+                  -Name $scalingPlanName `
+                  -Location $location `
+                  -Schedule $weekdaySchedule,$weekendSchedule `
+                  -HostPoolReference $hostPoolReference `
+                  -TimeZone "Central Standard Time" `
+                  -ErrorAction Stop | Out-Null
+
+              Write-Host "[SUCCESS] Scaling plan created with schedules" -ForegroundColor Green
+          }
+
+          # Verify creation
+          $finalPlan = Get-AzWvdScalingPlan -ResourceGroupName $resourceGroup -Name $scalingPlanName
+          Write-Host "[VALIDATE] Scaling plan verified:" -ForegroundColor Cyan
+          Write-Host "  Name: $($finalPlan.Name)" -ForegroundColor White
+          Write-Host "  Location: $($finalPlan.Location)" -ForegroundColor White
+          Write-Host "  Time Zone: $($finalPlan.TimeZone)" -ForegroundColor White
+          Write-Host "  Schedules: $($finalPlan.Schedule.Count)" -ForegroundColor White
+          Write-Host "  Host Pools: $($finalPlan.HostPoolReference.Count)" -ForegroundColor White
+
+          Write-Host "[SUCCESS] Autoscaling plan configuration completed" -ForegroundColor Green
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Failed to create scaling plan: $($_.Exception.Message)" -ForegroundColor Red
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)" -ForegroundColor Red
+          exit 1
+      }
+      PWSH_EOF
+
+      # Export variables for PowerShell
+      export RESOURCE_GROUP LOCATION SCALING_PLAN_NAME HOST_POOL_ID WEEKDAY_START_HOUR WEEKDAY_STOP_HOUR
+
+      # Execute PowerShell script
+      if pwsh -NoProfile -NonInteractive -File /tmp/create-scaling-plan.ps1; then
+        echo "[SUCCESS] Scaling plan created/updated with schedules"
+        SCALING_PLAN_CREATED=true
+      else
+        echo "[WARNING] PowerShell scaling plan creation failed"
+        echo "[WARNING] Falling back to manual configuration instructions"
+        SCALING_PLAN_CREATED=false
+      fi
+
+      # Cleanup
+      rm -f /tmp/create-scaling-plan.ps1
+
+      # Save scaling plan details
+      {
+        echo "Autoscaling Plan Configuration"
+        echo "==============================="
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo ""
+        echo "Scaling Plan:"
+        echo "  Name: $SCALING_PLAN_NAME"
+        echo "  Resource Group: $RESOURCE_GROUP"
+        echo "  Location: $LOCATION"
+        echo "  Status: $(if $SCALING_PLAN_CREATED; then echo 'Created'; else echo 'Already Exists'; fi)"
+        echo ""
+        echo "Host Pool:"
+        echo "  Name: $HOST_POOL_NAME"
+        echo "  Resource ID: $HOST_POOL_ID"
+        echo ""
+        echo "Recommended Schedule Configuration:"
+        echo "=================================="
+        echo ""
+        echo "Weekday Schedule (Monday-Friday):"
+        echo "  Ramp-Up Phase (07:00 AM):"
+        echo "    - Start time: 07:00 AM"
+        echo "    - Load balancing: BreadthFirst"
+        echo "    - Minimum hosts: 20-25%"
+        echo "    - Capacity threshold: 70%"
+        echo ""
+        echo "  Peak Hours (09:00 AM - 05:00 PM):"
+        echo "    - Start time: 09:00 AM"
+        echo "    - Load balancing: BreadthFirst (or DepthFirst for consolidation)"
+        echo "    - Capacity threshold: 70%"
+        echo "    - Scale based on demand"
+        echo ""
+        echo "  Ramp-Down Phase (05:00 PM):"
+        echo "    - Start time: 05:00 PM"
+        echo "    - Load balancing: DepthFirst"
+        echo "    - Minimum hosts: 10%"
+        echo "    - Capacity threshold: 80%"
+        echo "    - Force logoff users: Yes"
+        echo "    - Wait time: 20 minutes"
+        echo "    - Notification: 'Your session will end in 20 minutes. Please save your work.'"
+        echo ""
+        echo "  Off-Peak Hours (07:00 PM):"
+        echo "    - Start time: 07:00 PM"
+        echo "    - Load balancing: DepthFirst"
+        echo "    - Minimum hosts: 5%"
+        echo "    - Capacity threshold: 90%"
+        echo ""
+        echo "Weekend Schedule (Saturday-Sunday):"
+        echo "  Off-Peak 24/7:"
+        echo "    - Minimum hosts: 5%"
+        echo "    - Capacity threshold: 85%"
+        echo "    - Stop all non-essential hosts"
+        echo ""
+        echo "Cost Savings Estimate:"
+        echo "======================"
+        echo ""
+        echo "Without Autoscaling:"
+        echo "  - All VMs running 24/7"
+        echo "  - Monthly cost: High"
+        echo ""
+        echo "With Autoscaling:"
+        echo "  - VMs scaled based on demand"
+        echo "  - Off-peak: Minimum hosts only (${MIN_VMS} VMs)"
+        echo "  - Estimated savings: 60-75%"
+        echo ""
+        echo "Manual Configuration Required:"
+        echo "=============================="
+        echo ""
+        echo "The scaling plan was created, but schedules must be configured manually:"
+        echo ""
+        echo "Option 1: Azure Portal (Recommended)"
+        echo "  1. Navigate to: Azure Virtual Desktop → Scaling plans"
+        echo "  2. Select: $SCALING_PLAN_NAME"
+        echo "  3. Click: 'Schedules' → '+ Add schedule'"
+        echo "  4. Configure weekday and weekend schedules"
+        echo "  5. Save changes"
+        echo ""
+        echo "Option 2: PowerShell"
+        echo "  Use New-AzWvdScalingPlan cmdlet with schedule parameters"
+        echo "  See Azure documentation for detailed PowerShell examples"
+        echo ""
+        echo "Monitoring:"
+        echo "==========="
+        echo ""
+        echo "After configuration, monitor autoscaling activity:"
+        echo "  1. Azure Portal → Azure Virtual Desktop → Host pools"
+        echo "  2. Select: $HOST_POOL_NAME"
+        echo "  3. View: 'Insights' tab for scaling events"
+        echo "  4. Check: Session host power states during different times"
+        echo ""
+        echo "Troubleshooting:"
+        echo "================"
+        echo ""
+        echo "If VMs not scaling:"
+        echo "  - Verify RBAC role assigned (Module 10, Operation 1)"
+        echo "  - Check scaling plan is enabled"
+        echo "  - Verify schedules are configured"
+        echo "  - Wait 15 minutes for first scaling cycle"
+        echo "  - Review Azure Activity Log for errors"
+        echo ""
+      } > "artifacts/outputs/autoscaling-create-plan.txt"
+
+      echo "[SUCCESS] Autoscaling plan creation completed"
+      echo ""
+      echo "IMPORTANT: Manual Configuration Required"
+      echo "========================================="
+      echo "The scaling plan has been created, but schedules must be configured"
+      echo "manually via Azure Portal or PowerShell."
+      echo ""
+      echo "See artifacts/outputs/autoscaling-create-plan.txt for:"
+      echo "  - Recommended schedule configurations"
+      echo "  - Step-by-step Portal instructions"
+      echo "  - Cost savings estimates"
+      echo ""
+
+      exit 0
+
+  # Rollback: Delete created scaling plan
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Scaling Plan"
+        description: "Remove the created scaling plan"
+        command: |
+          az desktopvirtualization scaling-plan delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "ScalingPlan-{{HOST_POOL_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

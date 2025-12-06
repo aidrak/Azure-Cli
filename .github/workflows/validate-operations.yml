@@ -1,0 +1,148 @@
+name: Validate Operations
+
+# Trigger on pushes and pull requests that modify operation files
+on:
+  push:
+    paths:
+      - 'capabilities/*/operations/*.yaml'
+      - 'scripts/validate-*.sh'
+      - 'scripts/validate-*.py'
+      - '.github/workflows/validate-operations.yml'
+  pull_request:
+    paths:
+      - 'capabilities/*/operations/*.yaml'
+      - 'scripts/validate-*.sh'
+      - 'scripts/validate-*.py'
+      - '.github/workflows/validate-operations.yml'
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Operation Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x scripts/*.py
+
+      - name: Run YAML Syntax Validation
+        id: yaml-syntax
+        run: |
+          ./scripts/validate-yaml-syntax.sh
+        continue-on-error: true
+
+      - name: Run Schema Compliance Validation
+        id: schema
+        run: |
+          python3 ./scripts/validate-schema.py
+        continue-on-error: true
+
+      - name: Run Variable Reference Validation
+        id: variables
+        run: |
+          ./scripts/validate-variables.sh
+        continue-on-error: true
+
+      - name: Run Dependency Validation
+        id: dependencies
+        run: |
+          ./scripts/validate-dependencies.sh
+        continue-on-error: true
+
+      - name: Generate validation report
+        if: always()
+        run: |
+          echo "## Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.yaml-syntax.outcome }}" == "success" ]; then
+            echo "| YAML Syntax | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| YAML Syntax | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.schema.outcome }}" == "success" ]; then
+            echo "| Schema Compliance | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Schema Compliance | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.variables.outcome }}" == "success" ]; then
+            echo "| Variable References | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Variable References | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.dependencies.outcome }}" == "success" ]; then
+            echo "| Dependencies | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Dependencies | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check overall result
+        if: always()
+        run: |
+          if [ "${{ steps.yaml-syntax.outcome }}" != "success" ] || \
+             [ "${{ steps.schema.outcome }}" != "success" ] || \
+             [ "${{ steps.variables.outcome }}" != "success" ] || \
+             [ "${{ steps.dependencies.outcome }}" != "success" ]; then
+            echo "❌ One or more validations failed"
+            exit 1
+          else
+            echo "✅ All validations passed"
+            exit 0
+          fi
+
+  # Optional: Run validation suite as a single step (alternative approach)
+  validate-suite:
+    name: Validate with Suite Runner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x scripts/*.py
+
+      - name: Run validation suite
+        run: |
+          ./scripts/validate-operations.sh

@@ -1,0 +1,151 @@
+# ==============================================================================
+# Capability Operation: Create VNet Peering
+# Migrated from: modules/01-networking/operations/09-create-peering.yaml
+# ==============================================================================
+
+operation:
+  id: "vnet-peering-create"
+  name: "Create Virtual Network Peering"
+  description: "Establish VNet peering to hub VNet (if configured)"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks/virtualNetworkPeerings"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 240    # 4 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "dns-zone-link"  # DNS zones should be linked first
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Local virtual network name"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "peering_config"
+        type: "object"
+        description: "Peering configuration from config.yaml"
+        default: ".networking.peering"
+      - name: "peering_enabled"
+        type: "boolean"
+        description: "Whether VNet peering is enabled"
+        default: "{{NETWORKING_PEERING_ENABLED|false}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks/virtualNetworkPeerings"
+        description: "VNet peering relationship exists"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Peering provisioned successfully"
+
+  # Idempotency: Check for existing peering
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet peering list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --query "length(@)" -o tsv
+    skip_if_exists: false  # Check but continue if peering doesn't exist
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-vnet-peering-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VNet peering creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      $peeringEnabled = (yq e '.networking.peering.enabled' config.yaml)
+
+      if ($peeringEnabled -ne "true") {
+        Write-Host "[INFO] VNet peering disabled - skipping"
+        exit 0
+      }
+
+      $hubVnetName = (yq e '.networking.peering.hub_vnet.name' config.yaml)
+      $hubVnetRg = (yq e '.networking.peering.hub_vnet.resource_group' config.yaml)
+      $hubSubscription = (yq e '.networking.peering.hub_vnet.subscription_id' config.yaml)
+      $allowVnetAccess = (yq e '.networking.peering.allow_virtual_network_access' config.yaml)
+      $allowForwarded = (yq e '.networking.peering.allow_forwarded_traffic' config.yaml)
+      $allowGatewayTransit = (yq e '.networking.peering.allow_gateway_transit' config.yaml)
+      $useRemoteGateways = (yq e '.networking.peering.use_remote_gateways' config.yaml)
+
+      $remoteVnetId = "/subscriptions/$hubSubscription/resourceGroups/$hubVnetRg/providers/Microsoft.Network/virtualNetworks/$hubVnetName"
+      $peeringName = "$vnetName-to-$hubVnetName"
+
+      Write-Host "[PROGRESS] Creating peering: $peeringName"
+
+      az network vnet peering show `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $peeringName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Peering already exists: $peeringName"
+        exit 0
+      }
+
+      az network vnet peering create `
+        --resource-group $resourceGroup `
+        --vnet-name $vnetName `
+        --name $peeringName `
+        --remote-vnet $remoteVnetId `
+        --allow-vnet-access $allowVnetAccess `
+        --allow-forwarded-traffic $allowForwarded `
+        --allow-gateway-transit $allowGatewayTransit `
+        --use-remote-gateways $useRemoteGateways `
+        --output json > artifacts/outputs/networking-peering.json
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create peering"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] VNet peering created: $peeringName"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-vnet-peering-create-wrapper.ps1
+      rm -f /tmp/networking-vnet-peering-create-wrapper.ps1
+
+  # Rollback: Delete VNet peering
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Virtual Network Peering"
+        description: "Remove VNet peering relationship"
+        command: |
+          for peering in $(az network vnet peering list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[].name" -o tsv); do
+            az network vnet peering delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$peering" \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

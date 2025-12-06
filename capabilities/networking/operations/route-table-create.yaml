@@ -1,0 +1,163 @@
+# ==============================================================================
+# Capability Operation: Create Route Table
+# Operation ID: 21
+# ==============================================================================
+
+operation:
+  id: "route-table-create"
+  name: "Create Route Table"
+  description: "Create Azure route table for network routing and traffic management"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/routeTables"
+
+  # Duration expectations
+  duration:
+    expected: 45
+    timeout: 120
+    type: "FAST"
+
+  # Parameters extracted from configuration
+  parameters:
+    required:
+      - name: "route_table_name"
+        type: "string"
+        description: "Name of the route table"
+        default: "{{NETWORKING_ROUTE_TABLE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "disable_bgp_propagation"
+        type: "boolean"
+        description: "Disable BGP route propagation"
+        default: false
+      - name: "environment"
+        type: "string"
+        description: "Environment tag"
+        default: "{{AZURE_ENVIRONMENT}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/routeTables"
+        resource_name: "{{NETWORKING_ROUTE_TABLE_NAME}}"
+        description: "Route table exists"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Route table provisioned successfully"
+
+  # Idempotency: Check for existing resource
+  idempotency:
+    enabled: true
+    check_command: |
+      az network route-table show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{NETWORKING_ROUTE_TABLE_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-route-table-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Route table creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $routeTableName = "{{NETWORKING_ROUTE_TABLE_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $disableBgpPropagation = [bool]"{{NETWORKING_ROUTE_TABLE_DISABLE_BGP}}"
+      $tags = "environment={{AZURE_ENVIRONMENT}} project=avd-deployment managed_by=azure-cli-automation"
+
+      # Check if route table already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if route table exists..."
+      az network route-table show `
+        --resource-group $resourceGroup `
+        --name $routeTableName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] Route table already exists: $routeTableName"
+        Write-Host "[SUCCESS] Route table creation complete (already exists)"
+        exit 0
+      }
+
+      # Create route table
+      Write-Host "[PROGRESS] Creating route table: $routeTableName"
+      Write-Host "[PROGRESS]   Location: $location"
+      Write-Host "[PROGRESS]   BGP propagation disabled: $disableBgpPropagation"
+
+      if ($disableBgpPropagation) {
+        az network route-table create `
+          --resource-group $resourceGroup `
+          --name $routeTableName `
+          --location $location `
+          --disable-bgp-route-propagation `
+          --tags $tags `
+          --output json > artifacts/outputs/networking-route-table-create.json
+      } else {
+        az network route-table create `
+          --resource-group $resourceGroup `
+          --name $routeTableName `
+          --location $location `
+          --tags $tags `
+          --output json > artifacts/outputs/networking-route-table-create.json
+      }
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create route table"
+        exit 1
+      }
+
+      # Validate creation
+      Write-Host "[VALIDATE] Checking route table provisioning state..."
+      $provisioningState = az network route-table show `
+        --resource-group $resourceGroup `
+        --name $routeTableName `
+        --query "provisioningState" -o tsv
+
+      if ($provisioningState -ne "Succeeded") {
+        Write-Host "[ERROR] Route table provisioning failed: $provisioningState"
+        exit 1
+      }
+
+      # Get route table ID for reference
+      $routeTableId = az network route-table show `
+        --resource-group $resourceGroup `
+        --name $routeTableName `
+        --query "id" -o tsv
+
+      Write-Host "[SUCCESS] Route table created successfully"
+      Write-Host "[SUCCESS]   Name: $routeTableName"
+      Write-Host "[SUCCESS]   ID: $routeTableId"
+      Write-Host "[SUCCESS]   State: $provisioningState"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-route-table-create-wrapper.ps1
+      rm -f /tmp/networking-route-table-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Route Table"
+        description: "Remove the route table and associated routes"
+        command: |
+          az network route-table delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{NETWORKING_ROUTE_TABLE_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

@@ -1,0 +1,223 @@
+# ==============================================================================
+# Capability Operation: Configure Host Pool for SSO
+# Migrated from: modules/08-sso/operations/01-configure-host-pool.yaml
+# ==============================================================================
+
+operation:
+  id: "sso-hostpool-configure"
+  name: "Configure Host Pool RDP Properties for SSO"
+  description: "Enable Entra ID authentication (SSO) in host pool RDP properties"
+
+  capability: "avd"
+  operation_mode: "update"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 300    # 5 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        default: "{{HOST_POOL_NAME}}"
+    optional:
+      - name: "sso_enabled"
+        type: "boolean"
+        description: "Whether SSO is enabled in configuration"
+        default: "{{SSO_ENABLED}}"
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "hostpool-create"
+      status: "completed"
+      optional: true  # Host pool may have been created previously
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "powershell_command"
+        command: |
+          $rdpProps = az desktopvirtualization hostpool show `
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+            --name "{{HOST_POOL_NAME}}" `
+            --query "customRdpProperty" -o tsv
+
+          if ($rdpProps -match "enablerdsaadauth:i:1") {
+            Write-Host "[VALIDATE] SSO enabled in RDP properties"
+            exit 0
+          } else {
+            Write-Host "[ERROR] SSO not found in RDP properties"
+            exit 1
+          }
+        description: "Verify SSO enabled in host pool"
+
+  # Idempotency: Check for existing SSO configuration
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization hostpool show \
+        --name "{{HOST_POOL_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "customRdpProperty" -o tsv 2>/dev/null | grep -q "enablerdsaadauth:i:1"
+    skip_if_exists: true
+
+  # Template command (executed via PowerShell)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/sso-hostpool-configure-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] SSO Host Pool Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $ssoEnabled = "{{SSO_ENABLED}}"
+
+      # Step 1: Validate Azure authentication
+      Write-Host "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
+        exit 1
+      }
+
+      # Step 2: Check if SSO is enabled in config
+      Write-Host "[PROGRESS] Step 2/5: Checking SSO configuration..."
+      if ($ssoEnabled -ne "true") {
+        Write-Host "[WARNING] SSO is disabled in config.yaml (sso.enabled: false)"
+        Write-Host "[WARNING] Skipping SSO configuration"
+
+        $reportContent = "\n" + [Environment]::NewLine + "SSO Configuration Skipped" + [Environment]::NewLine + "=========================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "SSO is disabled in configuration." + [Environment]::NewLine + "To enable SSO, set sso.enabled: true in config.yaml" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
+        $reportContent | Out-File -FilePath "artifacts/outputs/sso-hostpool-configure.txt" -Encoding UTF8
+        exit 0
+      }
+
+      # Step 3: Verify host pool exists
+      Write-Host "[PROGRESS] Step 3/5: Verifying host pool exists..."
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Host pool not found: $hostPoolName"
+        Write-Host "[ERROR] Please ensure host pool was created (Module 04)"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Host pool found: $hostPoolName"
+
+      # Step 4: Get current RDP properties
+      Write-Host "[PROGRESS] Step 4/5: Getting current RDP properties..."
+      $currentRdpProps = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --query "customRdpProperty" -o tsv
+
+      if ([string]::IsNullOrEmpty($currentRdpProps) -or $currentRdpProps -eq "null") {
+        $currentRdpProps = ""
+      }
+
+      Write-Host "[VALIDATE] Current RDP properties: $(if ($currentRdpProps) { $currentRdpProps } else { '<empty>' })"
+
+      # Check if SSO already enabled
+      if ($currentRdpProps -match "enablerdsaadauth:i:1") {
+        Write-Host "[SUCCESS] SSO already enabled in host pool"
+      } else {
+        # Step 5: Update RDP properties to enable SSO
+        Write-Host "[PROGRESS] Step 5/5: Enabling SSO in RDP properties..."
+
+        # Add SSO property to existing properties
+        if (-not [string]::IsNullOrEmpty($currentRdpProps)) {
+          # Append to existing properties
+          $newRdpProps = "${currentRdpProps};enablerdsaadauth:i:1"
+        } else {
+          # No existing properties, just set SSO
+          $newRdpProps = "enablerdsaadauth:i:1"
+        }
+
+        # Update host pool
+        az desktopvirtualization hostpool update `
+          --resource-group $resourceGroup `
+          --name $hostPoolName `
+          --custom-rdp-property $newRdpProps `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[SUCCESS] SSO enabled in host pool"
+        } else {
+          Write-Host "[ERROR] Failed to update host pool RDP properties"
+          exit 1
+        }
+
+        # Verify the update
+        $updatedRdpProps = az desktopvirtualization hostpool show `
+          --resource-group $resourceGroup `
+          --name $hostPoolName `
+          --query "customRdpProperty" -o tsv
+
+        Write-Host "[VALIDATE] Updated RDP properties: $updatedRdpProps"
+      }
+
+      # Save configuration details
+      $reportContent = "\n" + [Environment]::NewLine + "SSO Host Pool Configuration" + [Environment]::NewLine + "===========================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Host Pool:" + [Environment]::NewLine + "  Name: $hostPoolName" + [Environment]::NewLine + "  Resource Group: $resourceGroup" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "SSO Configuration:" + [Environment]::NewLine + "  Enabled: Yes" + [Environment]::NewLine + "  Method: Entra ID (Azure AD)" + [Environment]::NewLine + "  RDP Property: enablerdsaadauth:i:1" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "What This Enables:" + [Environment]::NewLine + "  - Single Sign-On with Entra ID credentials" + [Environment]::NewLine + "  - Passwordless authentication support" + [Environment]::NewLine + "  - Windows Hello for Business integration" + [Environment]::NewLine + "  - FIDO2 security key support" + [Environment]::NewLine + "  - Seamless authentication from Entra-joined devices" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Configure Windows Cloud Login service principal (manual)" + [Environment]::NewLine + "  2. Add trusted device groups for SSO (manual)" + [Environment]::NewLine + "  3. Configure Conditional Access policies (manual)" + [Environment]::NewLine + "  4. Test user SSO experience" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Manual Configuration Required:" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Step 1: Enable RDP on Windows Cloud Login Service Principal" + [Environment]::NewLine + "  Service Principal ID: 270efc09-cd0d-444b-a71f-39af4910ec45" + [Environment]::NewLine + "  This must be done via Microsoft Graph API or Portal" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Step 2: Configure Trusted Device Groups (Optional but Recommended)" + [Environment]::NewLine + "  Add your device group (e.g., AVD-Devices-Pooled-SSO) to eliminate" + [Environment]::NewLine + "  consent prompts for users connecting from managed devices" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Step 3: Configure Conditional Access Policies" + [Environment]::NewLine + "  Required Cloud Apps:" + [Environment]::NewLine + "    - Azure Virtual Desktop (9cdead84-a844-4324-93f2-b2e6bb768d07)" + [Environment]::NewLine + "    - Windows Cloud Login (270efc09-cd0d-444b-a71f-39af4910ec45)" + [Environment]::NewLine + "    - Microsoft Remote Desktop (a4a365df-50f1-4397-bc59-1a1564b8bb9c)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "  IMPORTANT: Do NOT apply sign-in frequency policies to Windows Cloud Login" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Testing SSO:" + [Environment]::NewLine + "  1. User launches Windows App or Remote Desktop client" + [Environment]::NewLine + "  2. Signs in with Entra ID credentials (once)" + [Environment]::NewLine + "  3. Desktop should launch without additional credential prompt" + [Environment]::NewLine + "  4. If credential prompt appears, SSO configuration needs review" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Troubleshooting:" + [Environment]::NewLine + "  - Wait 10-15 minutes for changes to propagate" + [Environment]::NewLine + "  - Verify session hosts are Entra-joined (not hybrid)" + [Environment]::NewLine + "  - Check Virtual Machine User Login RBAC role is assigned" + [Environment]::NewLine + "  - Review Conditional Access policies for conflicts" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
+      $reportContent | Out-File -FilePath "artifacts/outputs/sso-hostpool-configure.txt" -Encoding UTF8
+
+      Write-Host "[SUCCESS] SSO host pool configuration completed"
+      Write-Host ""
+      Write-Host "IMPORTANT: Manual Steps Required"
+      Write-Host "================================="
+      Write-Host "The host pool has been configured for SSO, but additional manual"
+      Write-Host "configuration is required in the Azure Portal:"
+      Write-Host ""
+      Write-Host "1. Configure Windows Cloud Login service principal"
+      Write-Host "2. Add trusted device groups (optional)"
+      Write-Host "3. Configure Conditional Access policies"
+      Write-Host ""
+      Write-Host "See artifacts/outputs/sso-hostpool-configure.txt for detailed instructions"
+      Write-Host ""
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/sso-hostpool-configure-wrapper.ps1
+      rm -f /tmp/sso-hostpool-configure-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disable SSO in Host Pool RDP Properties"
+        description: "Remove the SSO property from host pool RDP configuration"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+
+          CURRENT_RDP=$(az desktopvirtualization hostpool show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$HOST_POOL_NAME" \
+            --query "customRdpProperty" -o tsv 2>/dev/null)
+
+          if [ -n "$CURRENT_RDP" ] && echo "$CURRENT_RDP" | grep -q "enablerdsaadauth:i:1"; then
+            # Remove the SSO property
+            NEW_RDP=$(echo "$CURRENT_RDP" | sed 's/enablerdsaadauth:i:1//g' | sed 's/;;/;/g' | sed 's/^;//g' | sed 's/;$//g')
+
+            az desktopvirtualization hostpool update \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$HOST_POOL_NAME" \
+              --custom-rdp-property "$NEW_RDP" \
+              --output none 2>/dev/null || true
+          fi
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

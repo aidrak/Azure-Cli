@@ -10,7 +10,7 @@ Complete technical reference for the YAML-based deployment engine.
 
 ## Quick Reference
 
-- **Active System**: YAML engine (`core/` + `modules/`)
+- **Active System**: YAML engine (`core/` + `capabilities/`)
 - **User Guide & Ops**: See the main [.claude/CLAUDE.md](.claude/CLAUDE.md) for operational guides.
 - **Configuration**: `config.yaml` (single source of truth)
 - **Execution**: `./core/engine.sh run [module] [operation]`
@@ -81,21 +81,21 @@ azure-cli/
 │   ├── logger.sh
 │   └── validator.sh
 │
-├── modules/                     # YAML-based modules
-│   ├── 01-networking/
-│   ├── 02-storage/
-│   ├── 03-entra-group/
-│   ├── 04-host-pool-workspace/
-│   ├── 05-golden-image/        # ✅ Complete (11 operations)
-│   │   ├── module.yaml
-│   │   └── operations/
-│   │       ├── 01-system-prep.yaml
-│   │       ├── 02-install-fslogix.yaml
-│   │       └── ... (9 more operations)
-│   ├── 06-session-host-deployment/
-│   ├── 08-rbac/
-│   ├── 09-sso/
-│   └── 10-autoscaling/
+├── capabilities/                # Capability-based operations (ACTIVE)
+│   ├── networking/
+│   │   └── operations/          # 21 networking operations
+│   ├── storage/
+│   │   └── operations/          # 10 storage operations
+│   ├── identity/
+│   │   └── operations/          # 16 identity operations
+│   ├── compute/
+│   │   └── operations/          # 18 compute operations
+│   ├── avd/
+│   │   └── operations/          # 15 AVD operations
+│   ├── management/
+│   │   └── operations/          # 2 management operations
+│   └── test-capability/
+│       └── operations/          # 1 test operation
 │
 ├── artifacts/                   # Centralized output
 │   ├── logs/                    # JSONL structured logs
@@ -114,9 +114,9 @@ azure-cli/
 ├── .claude/
 │   └── CLAUDE.md                # AI assistant instructions
 │
-└── legacy/                      # ARCHIVED: Bash-based modules
-    ├── README.md
-    └── modules/                 # 12 legacy modules (reference only)
+└── legacy/                      # ARCHIVED: Original module-based system
+    ├── README.md                # Archive documentation
+    └── modules/                 # 10 legacy modules (reference only)
 ```
 
 ---
@@ -180,7 +180,7 @@ operation:
       az vm run-command invoke \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --scripts "@modules/05-golden-image/operations/install-fslogix.ps1"
+        --scripts "@capabilities/compute/operations/golden-image-install-fslogix.ps1"
 ```
 
 **Available Variable Categories**:
@@ -203,17 +203,13 @@ operation:
 ### Commands
 
 ```bash
-# Run entire module (all operations sequentially)
-./core/engine.sh run 05-golden-image
-
-# Run single operation
-./core/engine.sh run 05-golden-image 01-system-prep
+# Run operations by capability (current system)
+./core/engine.sh run golden-image-install-apps
+./core/engine.sh run vnet-create
+./core/engine.sh run storage-account-create
 
 # Resume from last failure
 ./core/engine.sh resume
-
-# List operations in module
-./core/engine.sh list 05-golden-image
 
 # Check execution status
 ./core/engine.sh status
@@ -235,8 +231,8 @@ operation:
    ├─ Export 50+ environment variables
    └─ Validate required fields
 
-4. Get Module Operations
-   ├─ Read modules/05-golden-image/module.yaml
+4. Get Capability Operations
+   ├─ Read capabilities/*/operations/*.yaml
    └─ Extract operation list
 
 5. For Each Operation:
@@ -281,6 +277,37 @@ exit 0  # Required
 
 ---
 
+## Capability System
+
+The deployment engine uses a capability-based organization:
+
+### Benefits
+- **Domain Organization:** Operations grouped by Azure service domain
+- **Discoverability:** Easy to find networking, storage, or identity operations
+- **Reusability:** Operations can be used across different deployment scenarios
+- **Composability:** Build workflows from capability operations
+
+### Capability Structure
+Each operation defines:
+- **capability:** Domain (networking, storage, identity, compute, avd, management)
+- **operation_mode:** Action type (create, configure, validate, update, delete)
+- **resource_type:** Azure resource (Microsoft.Network/virtualNetworks)
+- **parameters:** Required and optional configuration
+- **idempotency:** Check before execution
+- **validation:** Verify after execution
+- **rollback:** Cleanup procedures
+
+### Available Capabilities
+- **networking** - VNets, subnets, NSGs, VPN gateways, DNS, load balancers (20 operations)
+- **storage** - Storage accounts, file shares, private endpoints, blob containers (9 operations)
+- **identity** - Entra ID groups, RBAC, service principals, managed identities (15 operations)
+- **compute** - VMs, images, disks, golden image preparation, extensions (17 operations)
+- **avd** - Host pools, workspaces, app groups, scaling plans, session hosts (15 operations)
+- **management** - Resource groups, validation, deployment state (2 operations)
+- **test-capability** - Testing and validation framework (1 operation)
+
+---
+
 ## Module Development
 
 ### Creating a New Module
@@ -293,28 +320,13 @@ Use the generator:
 
 Or manually:
 
-#### 1. Create Directory
+#### 1. Create Capability Directory
 
 ```bash
-mkdir -p modules/06-session-host-deployment/operations/
+mkdir -p capabilities/compute/operations/
 ```
 
-#### 2. Define Module (`module.yaml`)
-
-```yaml
-module:
-  id: "06-session-host-deployment"
-  name: "Session Host Deployment"
-  description: "Deploy session host VMs from golden image"
-
-  operations:
-    - id: "session-host-create-vms"
-      name: "Create Session Host VMs"
-      duration: 300
-      type: "NORMAL"
-```
-
-#### 3. Create Operation Template (`operations/01-create-vms.yaml`)
+#### 2. Create Operation Template (`operations/session-host-create-vms.yaml`)
 
 ```yaml
 operation:
@@ -345,7 +357,7 @@ operation:
     # Auto-populated by error handler
 ```
 
-#### 4. Add Configuration to `config.yaml`
+#### 3. Add Configuration to `config.yaml`
 
 ```yaml
 session_host:
@@ -354,11 +366,11 @@ session_host:
   name_prefix: "avd-sh"
 ```
 
-#### 5. Execute Module
+#### 4. Execute Operation
 
 ```bash
 source core/config-manager.sh && load_config
-./core/engine.sh run 06-session-host-deployment
+./core/engine.sh run session-host-create-vms
 ```
 
 ### Operation YAML Template Format
@@ -504,7 +516,7 @@ echo $AZURE_RESOURCE_GROUP  # Should not be empty
 ```bash
 # Check expected vs actual duration
 # Adjust timeout if operation legitimately takes longer
-yq eval '.operation.duration.timeout = 900' -i modules/05-golden-image/operations/01-system-prep.yaml
+yq eval '.operation.duration.timeout = 900' -i capabilities/compute/operations/golden-image-system-prep.yaml
 ```
 
 ### Resume After Failure
@@ -532,20 +544,22 @@ grep '\[ERROR\]' artifacts/logs/*.jsonl
 
 ---
 
-## Module Status
+## Operation Status
 
-| Module | Status | Operations | Notes |
-|--------|--------|------------|-------|
-| 01 - Networking | 🔨 In Progress | TBD | YAML conversion |
-| 02 - Storage | 🔨 In Progress | TBD | YAML conversion |
-| 03 - Entra ID Groups | 🔨 In Progress | TBD | YAML conversion |
-| 04 - Host Pool & Workspace | 🔨 In Progress | 5 ops | YAML templates created |
-| **05 - Golden Image** | ✅ **Complete** | 11 ops | **Production-ready** |
-| 06 - Session Host Deployment | 🔨 In Progress | 2 ops | YAML templates created |
-| 08 - RBAC | 🔨 In Progress | 4 ops | YAML templates created |
-| 09 - SSO | 🔨 In Progress | 3 ops | YAML templates created |
-| 10 - Autoscaling | 🔨 In Progress | 3 ops | YAML templates created |
-| 07, 11, 12 - Intune, Testing, Cleanup | 📋 Pending | - | Awaiting conversion |
+| Capability | Operations | Status | Notes |
+|------------|-----------|--------|-------|
+| Networking | 20 | ✅ Migrated | VNets, subnets, NSGs, DNS, VPN, gateways |
+| Compute | 17 | ✅ Migrated | VMs, images, golden image prep, extensions |
+| Identity | 15 | ✅ Migrated | Groups, RBAC, service principals, managed identities |
+| AVD | 15 | ✅ Migrated | Host pools, workspaces, app groups, scaling, SSO |
+| Storage | 9 | ✅ Migrated | Accounts, shares, private endpoints, DNS zones |
+| Management | 2 | ✅ Migrated | Resource groups, validation |
+| Test-Capability | 1 | ✅ Migrated | Testing framework |
+
+**Total:** 79 operations across 7 capabilities
+**Migration Status:** ✅ COMPLETE (2025-12-06)
+
+See [MIGRATION-INDEX.md](MIGRATION-INDEX.md) for complete operation catalog.
 
 ---
 
@@ -560,6 +574,7 @@ grep '\[ERROR\]' artifacts/logs/*.jsonl
 
 ---
 
-**Last Updated**: 2025-12-05
+**Last Updated**: 2025-12-06
 **Engine Version**: Phase 3 Complete (Self-Healing)
-**Active Modules**: 1/12 (Module 05: Golden Image ✅)
+**System**: Capability-based (79 operations across 7 capabilities)
+**Migration Status**: ✅ Complete

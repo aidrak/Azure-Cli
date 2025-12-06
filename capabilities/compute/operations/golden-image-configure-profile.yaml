@@ -1,0 +1,188 @@
+# ==============================================================================
+# Capability Operation: Golden Image Configure Default User Profile
+# Migrated from: modules/05-golden-image/operations/08-configure-default-profile.yaml
+# ==============================================================================
+
+operation:
+  id: "golden-image-configure-profile"
+  name: "Configure Golden Image Default User Profile"
+  description: "Configure default user profile settings for FSLogix and AVD"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 60   # 1 minute
+    timeout: 120   # 2 minutes (fail-fast if exceeds)
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "disable_content_delivery"
+        type: "boolean"
+        description: "Disable content delivery manager"
+        default: true
+      - name: "disable_user_engagement"
+        type: "boolean"
+        description: "Disable user engagement prompts"
+        default: true
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Users\\Default\\NTUSER.DAT"
+        description: "Default user profile hive exists"
+
+  # Idempotency: Check if default profile exists
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "Test-Path 'C:\\Users\\Default\\NTUSER.DAT'" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/golden-image-configure-profile-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/golden-image-configure-profile-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json > artifacts/outputs/golden-image-configure-profile.json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/golden-image-configure-profile-wrapper.ps1
+      rm -f /tmp/golden-image-configure-profile-wrapper.ps1
+
+  # PowerShell script (embedded inline - preserved from legacy)
+  powershell:
+    file: "golden-image-configure-profile.ps1"
+    content: |
+      # ==============================================================================
+      # Configure Default User Profile for FSLogix and AVD
+      # ==============================================================================
+
+      Write-Host "[START] Default user profile configuration: $(Get-Date -Format 'HH:mm:ss')"
+
+      try {
+          # Step 1: Load Default User hive
+          Write-Host "[PROGRESS] Step 1/4: Loading default user registry hive..."
+
+          $defaultHive = "C:\Users\Default\NTUSER.DAT"
+
+          if (-not (Test-Path $defaultHive)) {
+              Write-Host "[ERROR] Default user hive not found at: $defaultHive"
+              exit 1
+          }
+
+          # Load the hive
+          $result = reg load "HKU\DefaultUser" $defaultHive 2>&1
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "[ERROR] Failed to load default user hive: $result"
+              exit 1
+          }
+
+          Write-Host "[PROGRESS] Default user hive loaded"
+
+          # Step 2: Disable ContentDeliveryManager (pre-installed apps and suggestions)
+          Write-Host "[PROGRESS] Step 2/4: Disabling pre-installed apps and suggestions..."
+
+          $contentDelivery = "Registry::HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+          if (!(Test-Path $contentDelivery)) {
+              New-Item -Path $contentDelivery -Force | Out-Null
+          }
+
+          Set-ItemProperty -Path $contentDelivery -Name "OemPreInstalledAppsEnabled" -Value 0 -Type DWord -Force
+          Set-ItemProperty -Path $contentDelivery -Name "PreInstalledAppsEnabled" -Value 0 -Type DWord -Force
+          Set-ItemProperty -Path $contentDelivery -Name "SilentInstalledAppsEnabled" -Value 0 -Type DWord -Force
+
+          Write-Host "[PROGRESS] Pre-installed apps disabled"
+
+          # Step 3: Disable User Engagement prompts
+          Write-Host "[PROGRESS] Step 3/4: Disabling user engagement prompts..."
+
+          $userEngagement = "Registry::HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement"
+          if (!(Test-Path $userEngagement)) {
+              New-Item -Path $userEngagement -Force | Out-Null
+          }
+
+          Set-ItemProperty -Path $userEngagement -Name "ScoobeSystemSettingEnabled" -Value 0 -Type DWord -Force
+
+          Write-Host "[PROGRESS] User engagement prompts disabled"
+
+          # Step 4: Unload the hive
+          Write-Host "[PROGRESS] Step 4/4: Unloading default user registry hive..."
+
+          # Force garbage collection to release file handles
+          [gc]::Collect()
+          [gc]::WaitForPendingFinalizers()
+          Start-Sleep -Seconds 2
+
+          # Unload the hive
+          $result = reg unload "HKU\DefaultUser" 2>&1
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "[ERROR] Failed to unload default user hive: $result"
+              Write-Host "[ERROR] This may cause issues with future profile operations"
+              # Don't exit 1 here, as the configuration was likely successful
+          }
+          else {
+              Write-Host "[PROGRESS] Default user hive unloaded successfully"
+          }
+
+          # Validation
+          Write-Host "[VALIDATE] Verifying default user profile configuration..."
+
+          if (-not (Test-Path $defaultHive)) {
+              Write-Host "[ERROR] Default user hive verification failed"
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] Default user profile configured successfully"
+          Write-Host "[SUCCESS] Disabled: pre-installed apps, content suggestions, user engagement prompts"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+
+          # Attempt to unload hive in case of error
+          try {
+              [gc]::Collect()
+              [gc]::WaitForPendingFinalizers()
+              reg unload "HKU\DefaultUser" 2>&1 | Out-Null
+          }
+          catch {
+              # Ignore errors during cleanup
+          }
+
+          exit 1
+      }
+
+  # Rollback: N/A for profile configuration
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

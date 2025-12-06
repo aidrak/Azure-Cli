@@ -1,0 +1,139 @@
+# ==============================================================================
+# Capability Operation: Create Private DNS Zones
+# Migrated from: modules/01-networking/operations/07-create-dns-zones.yaml
+# ==============================================================================
+
+operation:
+  id: "dns-zone-create"
+  name: "Create Private DNS Zones"
+  description: "Create private DNS zones for Azure services (if enabled)"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/privateDnsZones"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 240    # 4 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "service-endpoint-configure"  # Service endpoints should be configured first
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "dns_zones_config"
+        type: "array"
+        description: "Private DNS zones configuration array from config.yaml"
+        default: ".networking.private_dns.zones"
+      - name: "dns_enabled"
+        type: "boolean"
+        description: "Whether private DNS is enabled"
+        default: "{{NETWORKING_PRIVATE_DNS_ENABLED|false}}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_count"
+        resource_type: "Microsoft.Network/privateDnsZones"
+        min_count: 1
+        description: "At least one private DNS zone created"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "DNS zones provisioned successfully"
+
+  # Idempotency: Check for existing DNS zones
+  idempotency:
+    enabled: true
+    check_command: |
+      az network private-dns zone list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "length(@)" -o tsv
+    skip_if_exists: false  # Check count but continue with missing zones
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-dns-zone-create-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Private DNS zone creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Check if private DNS is enabled
+      $dnsEnabled = (yq e '.networking.private_dns.enabled' config.yaml)
+
+      if ($dnsEnabled -ne "true") {
+        Write-Host "[INFO] Private DNS disabled - skipping"
+        exit 0
+      }
+
+      $zoneCount = [int](yq e '.networking.private_dns.zones | length' config.yaml)
+      Write-Host "[PROGRESS] Creating $zoneCount private DNS zone(s)..."
+
+      for ($i = 0; $i -lt $zoneCount; $i++) {
+        $zoneName = (yq e ".networking.private_dns.zones[$i].name" config.yaml)
+
+        Write-Host "[PROGRESS] Processing zone: $zoneName"
+
+        az network private-dns zone show `
+          --resource-group $resourceGroup `
+          --name $zoneName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] Zone already exists: $zoneName"
+          continue
+        }
+
+        $safeZoneName = $zoneName -replace '\.', '-'
+        $outputFile = "artifacts/outputs/networking-dns-zone-$safeZoneName.json"
+
+        az network private-dns zone create `
+          --resource-group $resourceGroup `
+          --name $zoneName `
+          --output json > $outputFile
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create zone: $zoneName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Zone created: $zoneName"
+      }
+
+      Write-Host "[SUCCESS] All private DNS zones created"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-dns-zone-create-wrapper.ps1
+      rm -f /tmp/networking-dns-zone-create-wrapper.ps1
+
+  # Rollback: Delete created DNS zones
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Private DNS Zones"
+        description: "Remove created private DNS zones"
+        command: |
+          for zone in $(az network private-dns zone list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --query "[].name" -o tsv); do
+            az network private-dns zone delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --name "$zone" \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

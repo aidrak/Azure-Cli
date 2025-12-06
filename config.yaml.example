@@ -1,0 +1,526 @@
+# ==============================================================================
+# Azure VDI Deployment - Configuration Example
+# ==============================================================================
+#
+# This is an example configuration file template for the Azure VDI deployment engine.
+# Copy this file to config.yaml and replace all placeholder values with your actual
+# environment settings.
+#
+# Configuration is loaded via: source core/config-manager.sh && load_config
+#
+# Security Note:
+#   - NEVER commit your config.yaml file with real values
+#   - Always add config.yaml to .gitignore
+#   - Never commit passwords or secrets
+#   - Use environment variables for sensitive data (set via secrets.yaml or shell)
+#
+# ==============================================================================
+
+# ==============================================================================
+# Azure Global Settings
+# ==============================================================================
+# These are the primary Azure settings for your deployment
+azure:
+  # Your Azure subscription ID (found in Azure Portal > Subscriptions)
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+
+  # Your Azure tenant/directory ID (found in Azure Portal > Azure Active Directory > Properties)
+  tenant_id: "00000000-0000-0000-0000-000000000000"
+
+  # Azure region for resource deployment (e.g., centralus, eastus, westus2)
+  location: "centralus"
+
+  # Primary resource group name for all resources
+  resource_group: "RG-Azure-VDI-01"
+
+  # Environment designation: prod, dev, test
+  environment: "dev"
+
+# ==============================================================================
+# Networking Configuration (Module 01) - VNet, Subnets, DNS, Peering, VPN
+# ==============================================================================
+networking:
+  # Virtual Network
+  vnet:
+    name: "avd-vnet"
+    # Virtual network address space(s) - array for multiple ranges
+    address_space: ["10.0.0.0/16"]
+    # Use {{AZURE_LOCATION}} to inherit from global setting
+    location: "{{AZURE_LOCATION}}"
+    # Optional custom DNS servers (leave empty for Azure default: 168.63.129.16)
+    dns_servers: []
+
+  # Subnets - Define one or more subnets within the VNet
+  subnets:
+    # Session Hosts Subnet - for AVD session host VMs
+    - name: "subnet-session-hosts"
+      address_prefix: "10.0.1.0/24"
+      # Azure service endpoints for direct VNet access to PaaS services
+      service_endpoints:
+        - "Microsoft.Storage"       # For Azure Files/Blob access
+        - "Microsoft.KeyVault"      # For Key Vault access
+      # Subnet delegation for managed services (leave empty for AVD/general use)
+      delegation: ""
+      # Network policies for private endpoints
+      private_endpoint_network_policies: "Enabled"
+      private_link_service_network_policies: "Enabled"
+      # Network Security Group (NSG) configuration
+      nsg:
+        enabled: true
+        # NSG name (auto-generated if empty: nsg-{subnet-name})
+        name: ""
+        # Use intelligent defaults for AVD session hosts
+        use_defaults: true
+        # Additional custom rules beyond defaults
+        custom_rules:
+          - name: "Allow-RDP-From-Admin"
+            priority: 3900
+            direction: "Inbound"
+            access: "Allow"
+            protocol: "Tcp"
+            # Your admin workstation public IP
+            source_address_prefix: "203.0.113.50"
+            source_port_range: "*"
+            destination_address_prefix: "*"
+            destination_port_range: "3389"   # RDP port
+
+    # Private Endpoints Subnet - for Storage, Key Vault, and other PaaS services
+    - name: "subnet-private-endpoints"
+      address_prefix: "10.0.2.0/24"
+      service_endpoints: []
+      delegation: ""
+      # IMPORTANT: Set to "Disabled" for private endpoints to work
+      private_endpoint_network_policies: "Disabled"
+      private_link_service_network_policies: "Enabled"
+      nsg:
+        enabled: true
+        name: ""
+        use_defaults: true      # Smart defaults for private endpoint traffic
+        custom_rules: []
+
+    # Management Subnet (optional) - for monitoring VMs, bastion, or future services
+    - name: "subnet-management"
+      address_prefix: "10.0.3.0/27"  # Small subnet with 32 IPs
+      service_endpoints:
+        - "Microsoft.Storage"
+      delegation: ""
+      private_endpoint_network_policies: "Enabled"
+      private_link_service_network_policies: "Enabled"
+      nsg:
+        enabled: true
+        name: ""
+        use_defaults: true
+        custom_rules: []
+
+  # Private DNS Zones - for private endpoints to Azure PaaS services
+  private_dns:
+    enabled: false  # Set to true to create and manage private DNS zones
+    zones:
+      # Azure Storage private DNS zone
+      - name: "privatelink.file.core.windows.net"
+        link_to_vnet: true
+      # Azure Blob Storage private DNS zone
+      - name: "privatelink.blob.core.windows.net"
+        link_to_vnet: true
+      # Azure Key Vault private DNS zone
+      - name: "privatelink.vaultcore.azure.net"
+        link_to_vnet: true
+
+  # VNet Peering - for hub-spoke topology or multi-tenant scenarios
+  peering:
+    enabled: false  # Set to true to enable VNet peering
+    hub_vnet:
+      name: "hub-vnet"                 # Name of hub VNet to peer with
+      resource_group: "RG-Hub"         # Resource group of hub VNet
+      # Can reference hub in different subscription
+      subscription_id: "{{AZURE_SUBSCRIPTION_ID}}"
+    allow_virtual_network_access: true
+    allow_forwarded_traffic: true
+    # Set true if hub has VPN/ExpressRoute gateway you want to use
+    allow_gateway_transit: false
+    use_remote_gateways: false
+
+  # Route Tables - for custom routing, forced tunneling, or firewall
+  route_tables:
+    enabled: false  # Set to true to enable custom route tables
+    tables:
+      - name: "rt-session-hosts"
+        routes:
+          - name: "route-to-firewall"
+            # Default route pointing to firewall/NVA
+            address_prefix: "0.0.0.0/0"
+            # VirtualAppliance, VnetLocal, Internet, None, VirtualNetworkServiceEndpoint
+            next_hop_type: "VirtualAppliance"
+            # IP of firewall (if using VirtualAppliance)
+            next_hop_ip_address: "10.1.0.4"
+        # Subnets to associate with this route table
+        associated_subnets:
+          - "subnet-session-hosts"
+
+  # VPN Gateway - for site-to-site VPN to on-premises
+  vpn_gateway:
+    enabled: true   # Set to true to enable VPN gateway
+    name: "vpn-gw-ipsec"
+    # Vpn for VPN gateway, ExpressRoute for ExpressRoute gateway
+    type: "Vpn"
+    # VpnGw1, VpnGw2, VpnGw3, VpnGw4, VpnGw5 (larger = more throughput)
+    sku: "VpnGw1"
+    # Generation1 or Generation2
+    generation: "Generation1"
+    # Enable for active-active high availability
+    active_active: false
+
+  # Local Network Gateways - represent on-premises VPN endpoints
+  local_network_gateways:
+    enabled: true   # Set to true to enable local network gateways
+    gateways:
+      # Primary on-premises VPN gateway
+      - name: "lng-onprem-ipsec"
+        # Public IP of your on-premises VPN device
+        gateway_address: "203.0.113.50"
+        # On-premises network address space(s)
+        address_spaces:
+          - "192.168.0.0/16"
+        bgp_settings:
+          # Enable BGP for dynamic routing (requires eBGP capability on on-prem device)
+          enabled: false
+          # Your Autonomous System Number
+          asn: 65000
+      # Additional gateways for multiple on-premises locations
+      # - name: "lng-datacenter"
+      #   gateway_address: "203.0.113.51"
+      #   address_spaces:
+      #     - "172.16.0.0/12"
+      #   bgp_settings:
+      #     enabled: true
+      #     asn: 65001
+
+  # VPN Connections - link VPN gateway to local network gateways
+  vpn_connections:
+    enabled: true   # Set to true to enable VPN connections
+    connections:
+      # Connection to primary on-premises site
+      - name: "vpn-conn-ipsec"
+        # Name of local network gateway to connect to
+        local_network_gateway_name: "lng-onprem-ipsec"
+        # IPsec for site-to-site, Vnet2Vnet for VNet-to-VNet
+        connection_type: "IPsec"
+        # Pre-shared key for IPsec (RECOMMEND: set via environment variable)
+        shared_key: "YourPresharedKeyHere123!"
+        # Enable BGP for dynamic routing on this connection
+        enable_bgp: false
+
+# ==============================================================================
+# Storage Configuration (Module 02) - Azure Storage Account for FSLogix
+# ==============================================================================
+storage:
+  # Storage Account Settings
+  # Leave empty for auto-generated name pattern: fslogix<random5>
+  account_name: ""
+
+  # Storage SKU - Premium_LRS recommended for AVD FSLogix
+  # Premium_LRS (Locally Redundant), Premium_ZRS (Zone Redundant)
+  sku: "Premium_LRS"
+
+  # Storage kind - FileStorage for premium file shares
+  kind: "FileStorage"
+
+  # Storage tier - Premium or Standard (use Premium for AVD)
+  tier: "Premium"
+
+  # File Share Settings
+  # Name of the file share for FSLogix profiles
+  file_share_name: "fslogix-profiles"
+
+  # File share quota in GB
+  # Quota calculation: (Number of users × 50GB) + 20% buffer
+  # Examples:
+  #   - 20 users: 1024GB (1TB)
+  #   - 100 users: 6144GB (6TB)
+  #   - 400 users: 24576GB (24TB)
+  # Start with 1GB for testing, scale as needed
+  quota_gb: 1024
+
+  # Authentication Settings
+  # Enable Entra ID Kerberos for passwordless SMB access
+  enable_entra_kerberos: true
+
+  # Enable SMB Multichannel for better performance
+  enable_smb_multichannel: true
+
+  # Network Security
+  # "Disabled" = private endpoint only (recommended)
+  # "Enabled" = allows public internet access
+  public_network_access: "Disabled"
+
+  # Block public blob access (blobs accessed only via private endpoint)
+  allow_blob_public_access: false
+
+  # Require HTTPS for all storage account connections
+  https_only: true
+
+  # Minimum TLS version (TLS1_0, TLS1_1, TLS1_2)
+  min_tls_version: "TLS1_2"
+
+  # Private Endpoint Settings
+  private_endpoint:
+    enabled: true   # Create private endpoint for storage account
+    # Subnet where private endpoint will be created
+    subnet_name: "{{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME}}"
+    # Private DNS zone for file shares
+    dns_zone_name: "privatelink.file.core.windows.net"
+
+  # Private DNS Configuration
+  private_dns:
+    enabled: true   # Enable private DNS zone for storage
+    zone_name: "privatelink.file.core.windows.net"
+    link_to_vnet: true  # Link private DNS zone to VNet
+
+  # Advanced Settings
+  enable_large_file_share: true   # Support file shares larger than 5TB
+  enable_soft_delete: true         # Soft delete for accidental share deletion
+  soft_delete_retention_days: 7    # Retention period before permanent deletion
+
+# ==============================================================================
+# Entra ID Configuration (Module 03) - Groups for AVD Users and Devices
+# ==============================================================================
+entra_id:
+  # User groups - for access control to AVD resources
+  group_users_standard: "AVD-Users-Standard"
+  group_users_standard_description: "Standard users with access to AVD resources"
+
+  group_users_admins: "AVD-Users-Admins"
+  group_users_admins_description: "Administrative users with elevated AVD access"
+
+  # Device groups - for Intune policies, conditional access, configuration
+  group_devices_sso: "AVD-Devices-Pooled-SSO"
+  group_devices_sso_description: "Device group for SSO configuration policies"
+
+  group_devices_fslogix: "AVD-Devices-Pooled-FSLogix"
+  group_devices_fslogix_description: "Device group for FSLogix profile management"
+
+  group_devices_network: "AVD-Devices-Pooled-Network"
+  group_devices_network_description: "Device group for network configuration policies"
+
+  group_devices_security: "AVD-Devices-Pooled-Security"
+  group_devices_security_description: "Device group for security baseline policies"
+
+# ==============================================================================
+# Host Pool Configuration (Module 04) - AVD Host Pool Settings
+# ==============================================================================
+host_pool:
+  # Host pool display name
+  name: "Pool-Pooled-Prod"
+
+  # Pooled = shared VMs, Personal = dedicated VMs per user
+  type: "Pooled"
+
+  # Maximum concurrent sessions per VM
+  max_sessions: 10
+
+  # BreadthFirst = distribute to least loaded VMs
+  # DepthFirst = fill VMs sequentially
+  load_balancer: "BreadthFirst"
+
+# ==============================================================================
+# Workspace Configuration (Module 04) - AVD Workspace
+# ==============================================================================
+workspace:
+  # Workspace resource name
+  name: "AVD-Workspace-Prod"
+
+  # User-friendly workspace name (shown in RDP client)
+  friendly_name: "Azure Virtual Desktop"
+
+  # Workspace description
+  description: "Production AVD workspace"
+
+# ==============================================================================
+# Application Group Configuration (Module 04) - Desktop/RemoteApp Group
+# ==============================================================================
+app_group:
+  # Application group name
+  name: "Desktop-Prod"
+
+  # Desktop for full desktop, RemoteApp for individual applications
+  type: "Desktop"
+
+  # User-friendly application group name
+  friendly_name: "Desktop"
+
+# ==============================================================================
+# Golden Image Configuration (Module 05) - Image for Session Hosts
+# ==============================================================================
+golden_image:
+  # Temporary VM for image creation and customization
+  temp_vm_name: "gm-temp-vm"
+
+  # VM size for image creation (larger = faster builds)
+  vm_size: "Standard_D4s_v6"
+
+  # Windows base image configuration
+  # MicrosoftWindowsDesktop is the official AVD image publisher
+  image_publisher: "MicrosoftWindowsDesktop"
+
+  # windows-10 or windows-11
+  image_offer: "windows-11"
+
+  # Specific SKU (win11-25h2-avd for latest AVD optimized)
+  image_sku: "win11-25h2-avd"
+
+  # Image version (latest recommended)
+  image_version: "latest"
+
+  # VM admin credentials for image building
+  # User must be "entra-admin" or similar for Entra ID join
+  admin_username: "entra-admin"
+
+  # IMPORTANT: Set password via environment variable, NEVER commit here
+  admin_password: "set-via-environment-variable"
+
+  # Azure Compute Gallery (ACG) for storing/versioning golden images
+  # Gallery name must be globally unique, lowercase alphanumeric only
+  gallery_name: "avd_gallery"
+
+  # Image definition name within gallery
+  definition_name: "windows11-golden-image"
+
+  # SKU identifier within definition
+  image_sku_name: "Win11-Pooled-FSLogix"
+
+  # Publisher name (your organization)
+  image_publisher_name: "YourCompany"
+
+  # Offer name for the image
+  image_offer_name: "AVD"
+
+  # Applications to install (matches app_manifest.yaml entries)
+  applications:
+    - chrome
+    - adobereader
+    # Uncomment to add additional apps:
+    # - vscode
+    # - teams
+    # - notepad-plusplus
+
+  # Timezone for VMs (Windows timezone name)
+  timezone: "Central Standard Time"
+
+  # Enable timezone redirection from client
+  timezone_redirection_enabled: true
+
+  # FSLogix version to install
+  fslogix_version: "2.9.8653.48899"
+
+  # Virtual Desktop Optimization Tool version
+  vdot_version: "3.8"
+
+# ==============================================================================
+# Session Host Configuration (Module 06) - VM Deployment
+# ==============================================================================
+session_host:
+  # Number of session host VMs to deploy
+  vm_count: 1
+
+  # VM SKU (larger = more users per VM, higher cost)
+  # Recommended: Standard_D4s_v6, Standard_D8s_v6
+  vm_size: "Standard_D4s_v6"
+
+  # Naming prefix for session hosts (VMs named: {prefix}-1, {prefix}-2, etc.)
+  name_prefix: "avd-sh"
+
+  # Use golden image from module 05 instead of base OS
+  use_golden_image: true
+
+# ==============================================================================
+# Intune Configuration (Module 07) - Mobile Device Management
+# ==============================================================================
+intune:
+  # Enable Intune enrollment for session host VMs
+  enabled: true
+
+  # Require device compliance before AVD access
+  device_compliance_required: false
+
+# ==============================================================================
+# RBAC Configuration (Module 08) - Role Assignments
+# ==============================================================================
+rbac:
+  # Assign Desktop User role to standard user group
+  assign_desktop_users: true
+
+  # Assign Desktop Virtualization Admin role to admin group
+  assign_admin_users: true
+
+# ==============================================================================
+# SSO Configuration (Module 09) - Single Sign-On Setup
+# ==============================================================================
+sso:
+  # Enable SSO for AVD connections
+  enabled: true
+
+  # SSO method: "azuread" for Entra ID, "adfs" for Active Directory Federation Services
+  method: "azuread"
+
+# ==============================================================================
+# Autoscaling Configuration (Module 10) - VM Auto-Start/Stop
+# ==============================================================================
+autoscaling:
+  # Enable autoscaling based on schedule and capacity
+  enabled: true
+
+  schedule:
+    # Hour to start VMs on weekdays (24-hour format, e.g., 7 = 7 AM)
+    weekday_start_hour: 7
+
+    # Hour to stop VMs on weekdays (19 = 7 PM)
+    weekday_stop_hour: 19
+
+    # Enable autoscaling on weekends (requires separate start/stop times)
+    weekend_enabled: false
+
+  capacity:
+    # Minimum VMs running (always on)
+    min_vms: 1
+
+    # Maximum VMs to scale to during peak hours
+    max_vms: 10
+
+    # CPU percentage threshold to trigger scale-up
+    ramp_up_capacity_threshold: 60
+
+    # CPU percentage threshold to trigger scale-down
+    ramp_down_capacity_threshold: 30
+
+# ==============================================================================
+# Testing Configuration (Module 11) - Validation Tests
+# ==============================================================================
+testing:
+  # Validate network connectivity between components
+  validate_connectivity: true
+
+  # Validate FSLogix profile storage and access
+  validate_fslogix: true
+
+  # Validate SSO functionality
+  validate_sso: true
+
+  # Test user login (requires test credentials)
+  test_user_login: false
+
+# ==============================================================================
+# Tags - Applied to ALL Azure Resources
+# ==============================================================================
+# Tags help with cost tracking, resource organization, and automation
+tags:
+  # Environment: production, development, testing
+  environment: "development"
+
+  # Project identifier for cost center and resource grouping
+  project: "avd-deployment"
+
+  # Indicates this resource is managed by automation
+  managed_by: "azure-cli-automation"
+
+  # Cost center code for billing/accounting purposes
+  cost_center: "IT"

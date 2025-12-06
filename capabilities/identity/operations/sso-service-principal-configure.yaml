@@ -1,0 +1,260 @@
+# ==============================================================================
+# Capability Operation: Configure Windows Cloud Login Service Principal
+# Migrated from: modules/08-sso/operations/03-configure-service-principal.yaml
+# ==============================================================================
+
+operation:
+  id: "sso-service-principal-configure"
+  name: "Configure Windows Cloud Login Service Principal"
+  description: "Enable RDP protocol on Windows Cloud Login service principal and configure trusted device groups"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/servicePrincipals"
+
+  # Duration expectations
+  duration:
+    expected: 180   # 3 minutes
+    timeout: 600    # 10 minutes
+    type: "FAST"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "sso_enabled"
+        type: "boolean"
+        description: "Whether SSO is enabled in configuration"
+        default: "{{SSO_ENABLED}}"
+    optional:
+      - name: "device_group_name"
+        type: "string"
+        description: "Entra ID device group for trusted SSO devices"
+        default: "{{ENTRA_GROUP_DEVICES_SSO}}"
+
+  # Prerequisites
+  requires:
+    - operation: "sso-hostpool-configure"
+      status: "completed"
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "powershell_command"
+        command: |
+          if (Test-Path "artifacts/outputs/sso-configure-service-principal.txt") {
+            Write-Host "[VALIDATE] Service principal configuration completed"
+            exit 0
+          } else {
+            Write-Host "[ERROR] Service principal configuration file not found"
+            exit 1
+          }
+        description: "Verify service principal configuration completed"
+
+  # Idempotency: Check for existing RDP enablement
+  idempotency:
+    enabled: true
+    check_command: |
+      pwsh -NoProfile -NonInteractive -Command "
+        \$appId = '270efc09-cd0d-444b-a71f-39af4910ec45'
+        \$context = Get-MgContext -ErrorAction SilentlyContinue
+        if (\$null -eq \$context) { exit 1 }
+        \$sp = Get-MgServicePrincipal -Filter \"appId eq '\$appId'\" -ErrorAction SilentlyContinue
+        if (\$sp -and \$sp.RemoteDesktopSecurityConfiguration.IsRemoteDesktopProtocolEnabled) { exit 0 }
+        exit 1
+      " 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (executed via PowerShell)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/sso-sp-configure-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Windows Cloud Login Service Principal Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $ssoEnabled = "{{SSO_ENABLED}}"
+      $deviceGroupName = "{{ENTRA_GROUP_DEVICES_SSO}}"
+
+      # Check if SSO is enabled
+      if ($ssoEnabled -ne "true") {
+        Write-Host "[WARNING] SSO is disabled in configuration"
+        "Configuration skipped" | Out-File -FilePath "artifacts/outputs/sso-configure-service-principal.txt" -Encoding UTF8
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Configuring Windows Cloud Login service principal via Microsoft Graph..."
+
+      try {
+        # Step 1: Connect to Microsoft Graph
+        Write-Host "[PROGRESS] Step 1/5: Connecting to Microsoft Graph..."
+
+        # Check if already connected
+        $context = Get-MgContext -ErrorAction SilentlyContinue
+        if (-not $context) {
+          Write-Host "[PROGRESS] Connecting to Microsoft Graph (user authentication required)..."
+          Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
+        } else {
+          Write-Host "[SUCCESS] Already connected to Microsoft Graph"
+        }
+
+        # Verify connection
+        $context = Get-MgContext
+        Write-Host "[VALIDATE] Connected to tenant: $($context.TenantId)"
+
+        # Step 2: Get Windows Cloud Login Service Principal
+        Write-Host "[PROGRESS] Step 2/5: Finding Windows Cloud Login service principal..."
+
+        $appId = "270efc09-cd0d-444b-a71f-39af4910ec45"  # Windows Cloud Login
+        $servicePrincipal = Get-MgServicePrincipal -Filter "appId eq '$appId'" -ErrorAction Stop
+
+        if (-not $servicePrincipal) {
+          Write-Host "[ERROR] Windows Cloud Login service principal not found"
+          Write-Host "[ERROR] This service principal should exist in all Azure AD tenants"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] Found service principal: $($servicePrincipal.DisplayName)"
+        Write-Host "[VALIDATE] Service Principal ID: $($servicePrincipal.Id)"
+
+        # Step 3: Enable RDP Protocol
+        Write-Host "[PROGRESS] Step 3/5: Enabling RDP protocol..."
+
+        # Check current RDP enablement status
+        $remoteDesktopSecurityConfig = $servicePrincipal.RemoteDesktopSecurityConfiguration
+
+        if ($remoteDesktopSecurityConfig.IsRemoteDesktopProtocolEnabled) {
+          Write-Host "[SUCCESS] RDP protocol already enabled"
+        } else {
+          Write-Host "[PROGRESS] Enabling RDP protocol on service principal..."
+
+          # Enable RDP protocol
+          $body = @{
+            "@odata.type" = "#microsoft.graph.remoteDesktopSecurityConfiguration"
+            isRemoteDesktopProtocolEnabled = $true
+          }
+
+          Update-MgServicePrincipalRemoteDesktopSecurityConfiguration `
+            -ServicePrincipalId $servicePrincipal.Id `
+            -BodyParameter $body `
+            -ErrorAction Stop
+
+          Write-Host "[SUCCESS] RDP protocol enabled"
+        }
+
+        # Step 4: Configure Trusted Device Groups (Optional)
+        Write-Host "[PROGRESS] Step 4/5: Configuring trusted device groups..."
+
+        if ([string]::IsNullOrEmpty($deviceGroupName) -or $deviceGroupName -eq "{{ENTRA_GROUP_DEVICES_SSO}}") {
+          Write-Host "[WARNING] Device group name not configured, skipping trusted device group setup"
+        } else {
+          # Find the device group
+          Write-Host "[PROGRESS] Searching for device group: $deviceGroupName"
+          $deviceGroup = Get-MgGroup -Filter "displayName eq '$deviceGroupName'" -ErrorAction SilentlyContinue
+
+          if ($deviceGroup) {
+            Write-Host "[SUCCESS] Found device group: $($deviceGroup.DisplayName) ($($deviceGroup.Id))"
+
+            # Get current target device groups
+            $currentGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+              -ServicePrincipalId $servicePrincipal.Id `
+              -ErrorAction SilentlyContinue
+
+            # Check if group already added
+            $alreadyAdded = $currentGroups | Where-Object { $_.Id -eq $deviceGroup.Id }
+
+            if ($alreadyAdded) {
+              Write-Host "[SUCCESS] Device group already configured as trusted"
+            } else {
+              Write-Host "[PROGRESS] Adding device group to trusted list..."
+
+              # Add the device group
+              New-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+                -ServicePrincipalId $servicePrincipal.Id `
+                -BodyParameter @{ id = $deviceGroup.Id } `
+                -ErrorAction Stop
+
+              Write-Host "[SUCCESS] Device group added to trusted list"
+              Write-Host "[SUCCESS] Users connecting from devices in this group will not see consent prompts"
+            }
+          } else {
+            Write-Host "[WARNING] Device group not found: $deviceGroupName"
+            Write-Host "[WARNING] Users may see consent prompts when connecting"
+          }
+        }
+
+        # Step 5: Verify Configuration
+        Write-Host "[PROGRESS] Step 5/5: Verifying configuration..."
+
+        $finalConfig = Get-MgServicePrincipal -ServicePrincipalId $servicePrincipal.Id `
+          -Property "Id,DisplayName,RemoteDesktopSecurityConfiguration"
+
+        Write-Host "[VALIDATE] Configuration Summary:"
+        Write-Host "  Service Principal: $($finalConfig.DisplayName)"
+        Write-Host "  RDP Enabled: $($finalConfig.RemoteDesktopSecurityConfiguration.IsRemoteDesktopProtocolEnabled)"
+
+        $trustedGroups = Get-MgServicePrincipalRemoteDesktopSecurityConfigurationTargetDeviceGroup `
+          -ServicePrincipalId $servicePrincipal.Id `
+          -ErrorAction SilentlyContinue
+
+        if ($trustedGroups) {
+          Write-Host "  Trusted Device Groups: $($trustedGroups.Count)"
+          foreach ($group in $trustedGroups) {
+            $groupDetails = Get-MgGroup -GroupId $group.Id -ErrorAction SilentlyContinue
+            if ($groupDetails) {
+              Write-Host "    - $($groupDetails.DisplayName)"
+            }
+          }
+        } else {
+          Write-Host "  Trusted Device Groups: None configured"
+        }
+
+        Write-Host "[SUCCESS] Service principal configuration completed successfully"
+
+        # Disconnect
+        Disconnect-MgGraph | Out-Null
+
+        # Save details
+        $reportContent = "\n" + [Environment]::NewLine + "Windows Cloud Login Service Principal Configuration" + [Environment]::NewLine + "===================================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Configuration Completed:" + [Environment]::NewLine + "  - RDP protocol enabled on Windows Cloud Login SP" + [Environment]::NewLine + "  - Trusted device group configured (if available)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Service Principal:" + [Environment]::NewLine + "  App ID: 270efc09-cd0d-444b-a71f-39af4910ec45" + [Environment]::NewLine + "  Name: Windows Cloud Login" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "What This Enables:" + [Environment]::NewLine + "  - Passwordless SSO for AVD connections" + [Environment]::NewLine + "  - No consent prompts for trusted device groups" + [Environment]::NewLine + "  - Seamless authentication experience" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Configure Conditional Access policies" + [Environment]::NewLine + "  2. Test SSO with end users" + [Environment]::NewLine + "  3. Monitor authentication logs" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
+        $reportContent | Out-File -FilePath "artifacts/outputs/sso-configure-service-principal.txt" -Encoding UTF8
+
+        Write-Host "[SUCCESS] Windows Cloud Login service principal configured"
+        exit 0
+
+      } catch {
+        Write-Host "[ERROR] Failed to configure service principal: $($_.Exception.Message)"
+        Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+
+        # Try to disconnect on error
+        try { Disconnect-MgGraph | Out-Null } catch { }
+
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/sso-sp-configure-wrapper.ps1
+      rm -f /tmp/sso-sp-configure-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disable RDP on Windows Cloud Login Service Principal"
+        description: "Disable RDP protocol on the Windows Cloud Login service principal"
+        command: |
+          pwsh -NoProfile -NonInteractive -Command "
+            \$appId = '270efc09-cd0d-444b-a71f-39af4910ec45'
+            \$context = Get-MgContext -ErrorAction SilentlyContinue
+            if (\$null -eq \$context) {
+              Connect-MgGraph -Scopes 'Application.ReadWrite.All' -NoWelcome 2>/dev/null || exit 1
+            }
+            \$sp = Get-MgServicePrincipal -Filter \"appId eq '\$appId'\" -ErrorAction SilentlyContinue
+            if (\$sp) {
+              \$body = @{ '@odata.type' = '#microsoft.graph.remoteDesktopSecurityConfiguration'; isRemoteDesktopProtocolEnabled = \$false }
+              Update-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId \$sp.Id -BodyParameter \$body -ErrorAction SilentlyContinue
+            }
+            Disconnect-MgGraph 2>/dev/null
+          " 2>/dev/null || true
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

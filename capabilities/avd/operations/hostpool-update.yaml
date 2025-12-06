@@ -1,0 +1,154 @@
+# ==============================================================================
+# Capability Operation: Update AVD Host Pool
+# Operation ID: 31
+# ==============================================================================
+
+operation:
+  id: "hostpool-update"
+  name: "Update AVD Host Pool Settings"
+  description: "Update host pool settings such as max session limit, load balancer type, and friendly name"
+
+  capability: "avd"
+  operation_mode: "modify"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools"
+
+  # Duration expectations
+  duration:
+    expected: 60
+    timeout: 180
+    type: "WAIT"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool to update"
+        validation: "^[a-zA-Z0-9][a-zA-Z0-9-]{0,63}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+    optional:
+      - name: "max_sessions"
+        type: "integer"
+        description: "Maximum number of sessions per host"
+        default: "8"
+      - name: "load_balancer"
+        type: "string"
+        description: "Load balancer type (BreadthFirst, DepthFirst, Persistent)"
+        allowed_values: ["BreadthFirst", "DepthFirst", "Persistent"]
+        default: "BreadthFirst"
+      - name: "friendly_name"
+        type: "string"
+        description: "Friendly display name for the host pool"
+      - name: "personal_desktop_assignment_type"
+        type: "string"
+        description: "Personal desktop assignment type (Automatic or Direct)"
+        allowed_values: ["Automatic", "Direct"]
+
+  # Validation checks
+  validation:
+    pre_checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/hostPools"
+        resource_name: "{{host_pool_name}}"
+        error_message: "Host pool '{{host_pool_name}}' not found"
+
+    post_checks:
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        timeout: 180
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    detection_method: "azure_check"
+    check_command: |
+      az desktopvirtualization hostpool show \
+        --name "{{host_pool_name}}" \
+        --resource-group "{{resource_group}}" \
+        --query "provisioningState" \
+        --output tsv 2>/dev/null | grep -q "Succeeded"
+
+  # Template command
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-hostpool-update-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      $hostPoolName = "{{host_pool_name}}"
+      $resourceGroup = "{{resource_group}}"
+      $maxSessions = "{{max_sessions}}"
+      $loadBalancer = "{{load_balancer}}"
+      $friendlyName = "{{friendly_name}}"
+
+      Write-Host "[START] Starting 'Update AVD Host Pool' operation..."
+
+      Write-Host "[PROGRESS] Verifying host pool '$hostPoolName' exists..."
+      $poolCheck = az desktopvirtualization hostpool show `
+        --name $hostPoolName `
+        --resource-group $resourceGroup `
+        --output none 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Host pool '$hostPoolName' not found"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] Updating host pool settings..."
+
+      $updateParams = @(
+        "--name", $hostPoolName,
+        "--resource-group", $resourceGroup,
+        "--max-session-limit", $maxSessions,
+        "--load-balancer-type", $loadBalancer
+      )
+
+      if ($friendlyName) {
+        $updateParams += "--friendly-name"
+        $updateParams += $friendlyName
+      }
+
+      az desktopvirtualization hostpool update @updateParams --output none
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[PROGRESS] Verifying update completed..."
+        Start-Sleep -Seconds 10
+
+        $updatedPool = az desktopvirtualization hostpool show `
+          --name $hostPoolName `
+          --resource-group $resourceGroup `
+          --output json | ConvertFrom-Json
+
+        Write-Host "[SUCCESS] Successfully updated host pool '$hostPoolName'"
+        Write-Host "[SUCCESS] - Max sessions: $($updatedPool.maxSessionLimit)"
+        Write-Host "[SUCCESS] - Load balancer: $($updatedPool.loadBalancerType)"
+        if ($updatedPool.friendlyName) {
+          Write-Host "[SUCCESS] - Friendly name: $($updatedPool.friendlyName)"
+        }
+        exit 0
+      } else {
+        Write-Host "[ERROR] Failed to update host pool"
+        exit 1
+      }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-hostpool-update-wrapper.ps1
+      rm -f /tmp/avd-hostpool-update-wrapper.ps1
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Revert Host Pool Settings"
+        description: "Restore previous host pool configuration"
+        command: |
+          az desktopvirtualization hostpool update \
+            --name "{{host_pool_name}}" \
+            --resource-group "{{resource_group}}" \
+            --max-session-limit 8 \
+            --load-balancer-type "BreadthFirst"
+        continue_on_error: true
+
+  # Self-healing
+  fixes: []

@@ -1,0 +1,40 @@
+name: Capability System Validation
+
+on:
+  push:
+    paths:
+      - 'capabilities/**/*.yaml'
+      - 'core/**/*.sh'
+      - 'scripts/validate-operations.sh'
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod a+x /usr/local/bin/yq
+          
+      - name: Validate Operations Schema
+        run: |
+          chmod +x scripts/validate-operations.sh
+          ./scripts/validate-operations.sh
+          
+      - name: Run Integration Test (Dry-Run)
+        run: |
+          # Create dummy config if missing (for CI)
+          if [ ! -f config.yaml ]; then
+            cp config.yaml.example config.yaml || echo "azure:\n  subscription_id: '0000'" > config.yaml
+          fi
+          
+          chmod +x tests/integration-test-capabilities.sh
+          chmod +x core/engine.sh
+          
+          # Run tests
+          ./tests/integration-test-capabilities.sh

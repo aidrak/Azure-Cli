@@ -1,0 +1,161 @@
+# ==============================================================================
+# Capability Operation: Attach Network Security Groups to Subnets
+# Migrated from: modules/01-networking/operations/05-attach-nsgs.yaml
+# ==============================================================================
+
+operation:
+  id: "nsg-attach"
+  name: "Attach Network Security Groups to Subnets"
+  description: "Associate NSGs with their respective subnets"
+
+  capability: "networking"
+  operation_mode: "update"
+  resource_type: "Microsoft.Network/virtualNetworks/subnets"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 120    # 2 minutes
+    type: "FAST"
+
+  # Prerequisites
+  requires:
+    - "nsg-create"  # NSGs must be created first
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name containing subnets"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "subnets_config"
+        type: "array"
+        description: "Subnet configuration array from config.yaml"
+        default: ".networking.subnets"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks/subnets"
+        description: "Subnets exist with NSGs attached"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Subnet updates completed successfully"
+
+  # Idempotency: Check for existing NSG attachments
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet subnet list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vnet-name "{{NETWORKING_VNET_NAME}}" \
+        --query "[?networkSecurityGroup != null] | length(@)" -o tsv
+    skip_if_exists: false  # Check but continue with unattached subnets
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-nsg-attach-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] NSG attachment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      # Get subnet count
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $attachedCount = 0
+
+      Write-Host "[PROGRESS] Attaching NSGs to $subnetCount subnet(s)..."
+
+      # Iterate through subnets
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        # Check if NSG enabled
+        $nsgEnabled = (yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+
+        if ($nsgEnabled -ne "true") {
+          continue
+        }
+
+        # Get subnet and NSG names
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
+        $nsgName = (yq e ".networking.subnets[$i].nsg.name" config.yaml)
+
+        # Auto-generate NSG name if empty
+        if ([string]::IsNullOrEmpty($nsgName) -or $nsgName -eq "null") {
+          $nsgName = "nsg-$subnetName"
+        }
+
+        Write-Host "[PROGRESS] Attaching NSG to subnet: $subnetName"
+        Write-Host "[PROGRESS]   NSG: $nsgName"
+
+        # Check if NSG is already attached
+        $currentNsg = az network vnet subnet show `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --query "networkSecurityGroup.id" -o tsv 2>$null
+
+        if (-not [string]::IsNullOrEmpty($currentNsg)) {
+          Write-Host "[INFO] NSG already attached to subnet: $subnetName"
+          $attachedCount++
+          continue
+        }
+
+        # Attach NSG to subnet
+        az network vnet subnet update `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --network-security-group $nsgName `
+          --output none
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to attach NSG to subnet: $subnetName"
+          exit 1
+        }
+
+        Write-Host "[SUCCESS] NSG attached: $nsgName -> $subnetName"
+        $attachedCount++
+      }
+
+      Write-Host "[SUCCESS] All NSGs attached successfully"
+      Write-Host "[SUCCESS]   Total attachments: $attachedCount"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-nsg-attach-wrapper.ps1
+      rm -f /tmp/networking-nsg-attach-wrapper.ps1
+
+  # Rollback: Reverse of attachment
+  rollback:
+    enabled: true
+    steps:
+      - name: "Detach Network Security Groups"
+        description: "Remove NSG associations from subnets"
+        command: |
+          for subnet in $(az network vnet subnet list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[].name" -o tsv); do
+            az network vnet subnet update \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$subnet" \
+              --network-security-group null \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

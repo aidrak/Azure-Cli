@@ -679,7 +679,7 @@ update_operation_status "$operation_id" "completed"
 ### With Modules
 
 ```bash
-# In modules/compute/vm-create.sh
+# In capabilities/compute/operations/vm-create.yaml
 source core/state-manager.sh
 
 # Store created resource

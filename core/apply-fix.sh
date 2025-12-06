@@ -18,10 +18,10 @@
 #
 # Examples:
 #   # Set a numeric value
-#   ./core/apply-fix.sh modules/05-golden-image/op.yaml '.operation.duration.timeout' 600
+#   ./core/apply-fix.sh capabilities/compute/operations/golden-image-validate.yaml '.operation.duration.timeout' 600
 #
 #   # Set a string value (quotes are handled)
-#   ./core/apply-fix.sh modules/05-golden-image/op.yaml '.operation.name' "New Operation Name"
+#   ./core/apply-fix.sh capabilities/compute/operations/golden-image-install-apps.yaml '.operation.name' "New Operation Name"
 #
 # ==============================================================================
 

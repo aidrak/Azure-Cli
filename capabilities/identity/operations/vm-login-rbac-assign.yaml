@@ -1,0 +1,287 @@
+# ==============================================================================
+# Capability Operation: Assign VM Login RBAC Permissions
+# Migrated from: modules/07-rbac/operations/02-vm-login-permissions.yaml
+# ==============================================================================
+
+operation:
+  id: "vm-login-rbac-assign"
+  name: "Assign VM Login RBAC Permissions"
+  description: "Assign Virtual Machine login permissions to standard and admin user groups"
+
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Authorization/roleAssignments"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 300    # 5 minutes (fail-fast if exceeds)
+    type: "FAST"    # FAST (<5min) or WAIT (10+min)
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "subscription_id"
+        type: "string"
+        description: "Azure subscription ID"
+        default: "{{AZURE_SUBSCRIPTION_ID}}"
+    optional:
+      - name: "std_group_name"
+        type: "string"
+        description: "Standard users group name"
+        default: "{{ENTRA_GROUP_USERS_STANDARD}}"
+      - name: "admin_group_name"
+        type: "string"
+        description: "Admin users group name"
+        default: "{{ENTRA_GROUP_USERS_ADMINS}}"
+
+  # Prerequisites (check state.json)
+  requires:
+    - operation: "storage-rbac-assign"
+      status: "completed"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "powershell_command"
+        command: |
+          $rgId = "/subscriptions/{{AZURE_SUBSCRIPTION_ID}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}"
+
+          $stdGroup = Get-AzADGroup -DisplayName "{{ENTRA_GROUP_USERS_STANDARD}}"
+          if (-not $stdGroup) {
+            Write-Host "[ERROR] Standard users group not found"
+            exit 1
+          }
+
+          $assignment = Get-AzRoleAssignment -ObjectId $stdGroup.Id -Scope $rgId | Where-Object { $_.RoleDefinitionName -eq 'Virtual Machine User Login' }
+
+          if ($assignment) {
+            Write-Host "[VALIDATE] Standard users have VM login permissions"
+            exit 0
+          } else {
+            Write-Host "[ERROR] Standard users VM login permissions not found"
+            exit 1
+          }
+        description: "Verify VM login permissions are assigned"
+
+  # Idempotency: Check for existing role assignments
+  idempotency:
+    enabled: true
+    check_command: |
+      az role assignment list \
+        --role "Virtual Machine User Login" \
+        --output none 2>/dev/null
+    skip_if_exists: false  # Check but don't skip (may need to assign)
+
+  # Template command (executed via PowerShell)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/rbac-vm-login-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] VM Login Permissions Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $stdGroupName = "{{ENTRA_GROUP_USERS_STANDARD}}"
+      $adminGroupName = "{{ENTRA_GROUP_USERS_ADMINS}}"
+
+      # Step 1: Validate Azure authentication
+      Write-Host "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
+        exit 1
+      }
+
+      # Step 2: Validate resource group exists
+      Write-Host "[PROGRESS] Step 2/5: Validating resource group..."
+      $rgExists = az group exists --name $resourceGroup
+      if ($rgExists -ne "true") {
+        Write-Host "[ERROR] Resource group not found: $resourceGroup"
+        exit 1
+      }
+
+      # Get resource group ID
+      $rgId = az group show --name $resourceGroup --query id --output tsv
+      Write-Host "[VALIDATE] Resource group ID: $rgId"
+
+      # Step 3: Get user group IDs
+      Write-Host "[PROGRESS] Step 3/5: Getting user group IDs..."
+
+      $stdGroupId = az ad group list `
+        --filter "displayName eq '$stdGroupName'" `
+        --query "[0].id" `
+        --output tsv
+
+      if ([string]::IsNullOrEmpty($stdGroupId) -or $stdGroupId -eq "null") {
+        Write-Host "[ERROR] Standard users group not found: $stdGroupName"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Standard users group ID: $stdGroupId"
+
+      $adminGroupId = az ad group list `
+        --filter "displayName eq '$adminGroupName'" `
+        --query "[0].id" `
+        --output tsv
+
+      if ([string]::IsNullOrEmpty($adminGroupId) -or $adminGroupId -eq "null") {
+        Write-Host "[ERROR] Admin users group not found: $adminGroupName"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Admin users group ID: $adminGroupId"
+
+      # Step 4: Assign VM login permissions to standard users
+      Write-Host "[PROGRESS] Step 4/5: Assigning VM login permissions to standard users..."
+      Write-Host "[PROGRESS] Role: Virtual Machine User Login"
+      Write-Host "[PROGRESS] Group: $stdGroupName"
+      Write-Host "[PROGRESS] Scope: Resource Group ($resourceGroup)"
+
+      az role assignment create `
+        --assignee $stdGroupId `
+        --role "Virtual Machine User Login" `
+        --scope $rgId `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] VM login permissions assigned to standard users"
+      } else {
+        # Check if already exists
+        $existingAssignment = az role assignment list `
+          --assignee $stdGroupId `
+          --scope $rgId `
+          --query "[?roleDefinitionName=='Virtual Machine User Login']" `
+          --output tsv
+
+        if (-not [string]::IsNullOrEmpty($existingAssignment)) {
+          Write-Host "[SUCCESS] VM login permissions already assigned to standard users"
+        } else {
+          Write-Host "[ERROR] Failed to assign VM login permissions to standard users"
+          exit 1
+        }
+      }
+
+      # Step 5: Assign VM admin login permissions to admin users
+      Write-Host "[PROGRESS] Step 5/5: Assigning VM admin login permissions to admin users..."
+      Write-Host "[PROGRESS] Role: Virtual Machine Administrator Login"
+      Write-Host "[PROGRESS] Group: $adminGroupName"
+      Write-Host "[PROGRESS] Scope: Resource Group ($resourceGroup)"
+
+      az role assignment create `
+        --assignee $adminGroupId `
+        --role "Virtual Machine Administrator Login" `
+        --scope $rgId `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] VM admin login permissions assigned to admin users"
+      } else {
+        # Check if already exists
+        $existingAssignment = az role assignment list `
+          --assignee $adminGroupId `
+          --scope $rgId `
+          --query "[?roleDefinitionName=='Virtual Machine Administrator Login']" `
+          --output tsv
+
+        if (-not [string]::IsNullOrEmpty($existingAssignment)) {
+          Write-Host "[SUCCESS] VM admin login permissions already assigned to admin users"
+        } else {
+          Write-Host "[ERROR] Failed to assign VM admin login permissions to admin users"
+          exit 1
+        }
+      }
+
+      # Optional: Assign power management permissions to admin users
+      Write-Host "[PROGRESS] (Optional) Assigning power management permissions to admin users..."
+      Write-Host "[PROGRESS] Role: Desktop Virtualization Power On Off Contributor"
+
+      az role assignment create `
+        --assignee $adminGroupId `
+        --role "Desktop Virtualization Power On Off Contributor" `
+        --scope $rgId `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] Power management permissions assigned to admin users"
+      } else {
+        $existingAssignment = az role assignment list `
+          --assignee $adminGroupId `
+          --scope $rgId `
+          --query "[?roleDefinitionName=='Desktop Virtualization Power On Off Contributor']" `
+          --output tsv
+
+        if (-not [string]::IsNullOrEmpty($existingAssignment)) {
+          Write-Host "[SUCCESS] Power management permissions already assigned to admin users"
+        } else {
+          Write-Host "[WARNING] Failed to assign power management permissions (optional)"
+        }
+      }
+
+      # Verify assignments
+      Write-Host "[VALIDATE] Verifying VM login role assignments..."
+
+      $stdAssignments = az role assignment list `
+        --assignee $stdGroupId `
+        --scope $rgId `
+        --query "[?contains(roleDefinitionName, 'Virtual Machine')].roleDefinitionName" `
+        --output tsv
+
+      $adminAssignments = az role assignment list `
+        --assignee $adminGroupId `
+        --scope $rgId `
+        --query "[?contains(roleDefinitionName, 'Virtual Machine') || contains(roleDefinitionName, 'Desktop Virtualization')].roleDefinitionName" `
+        --output tsv
+
+      Write-Host "[VALIDATE] Standard users roles:"
+      foreach ($role in $stdAssignments) {
+        Write-Host "  - $role"
+      }
+
+      Write-Host "[VALIDATE] Admin users roles:"
+      foreach ($role in $adminAssignments) {
+        Write-Host "  - $role"
+      }
+
+      # Save assignment details
+      $reportContent = "\n" + [Environment]::NewLine + "VM Login RBAC Assignment Details" + [Environment]::NewLine + "=================================" + [Environment]::NewLine + "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Resource Group:" + [Environment]::NewLine + "  Name: $resourceGroup" + [Environment]::NewLine + "  ID: $rgId" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Standard Users ($stdGroupName):" + [Environment]::NewLine + "  Group ID: $stdGroupId" + [Environment]::NewLine + "  Role: Virtual Machine User Login" + [Environment]::NewLine + "  Scope: Resource Group" + [Environment]::NewLine + "  Permissions: Standard user login to session hosts (no admin rights)" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Admin Users ($adminGroupName):" + [Environment]::NewLine + "  Group ID: $adminGroupId" + [Environment]::NewLine + "  Roles:" + [Environment]::NewLine + "    - Virtual Machine Administrator Login" + [Environment]::NewLine + "    - Desktop Virtualization Power On Off Contributor (optional)" + [Environment]::NewLine + "  Scope: Resource Group" + [Environment]::NewLine + "  Permissions:" + [Environment]::NewLine + "    - Admin login to session hosts with local admin rights" + [Environment]::NewLine + "    - Manage session host power state" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "Next Steps:" + [Environment]::NewLine + "  1. Assign application group permissions (next operation)" + [Environment]::NewLine + "  2. Test user login to session hosts" + [Environment]::NewLine + "  3. Verify admin users have elevated access" + [Environment]::NewLine + "\n" + [Environment]::NewLine + "\n"
+      $reportContent | Out-File -FilePath "artifacts/outputs/vm-login-rbac-assign.txt" -Encoding UTF8
+
+      Write-Host "[SUCCESS] VM login permissions assignment completed"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/rbac-vm-login-wrapper.ps1
+      rm -f /tmp/rbac-vm-login-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove VM Login RBAC Assignments"
+        description: "Revoke VM login role assignments from user groups"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
+
+          # Get and remove standard users assignment
+          STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
+          if [ -n "$STD_GROUP_ID" ]; then
+            az role assignment delete --assignee "$STD_GROUP_ID" --role "Virtual Machine User Login" --scope "$RG_ID" 2>/dev/null || true
+          fi
+
+          # Get and remove admin users assignments
+          ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
+          if [ -n "$ADMIN_GROUP_ID" ]; then
+            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Virtual Machine Administrator Login" --scope "$RG_ID" 2>/dev/null || true
+            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Desktop Virtualization Power On Off Contributor" --scope "$RG_ID" 2>/dev/null || true
+          fi
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

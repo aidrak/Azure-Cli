@@ -1,0 +1,305 @@
+# ==============================================================================
+# Capability Operation: Create Load Balancer
+# ==============================================================================
+
+operation:
+  id: "load-balancer-create"
+  name: "Create Load Balancer"
+  description: "Create Azure Load Balancer (internal or public) with configurable SKU, frontend IP configuration, and backend pool setup"
+
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/loadBalancers"
+
+  # Duration expectations
+  duration:
+    expected: 60    # 1 minute
+    timeout: 180    # 3 minutes
+    type: "FAST"
+
+  # Parameters for load balancer creation
+  parameters:
+    required:
+      - name: "lb_name"
+        type: "string"
+        description: "Name for the load balancer"
+        default: "{{NETWORKING_LB_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the resource"
+        default: "{{AZURE_LOCATION}}"
+      - name: "lb_type"
+        type: "string"
+        description: "Load balancer type"
+        allowed_values: ["public", "internal"]
+        default: "public"
+    optional:
+      - name: "sku"
+        type: "string"
+        description: "Load Balancer SKU"
+        allowed_values: ["Basic", "Standard"]
+        default: "Standard"
+      - name: "public_ip_id"
+        type: "string"
+        description: "Public IP resource ID (required if lb_type is public)"
+        default: ""
+      - name: "subnet_id"
+        type: "string"
+        description: "Subnet resource ID (required if lb_type is internal)"
+        default: ""
+      - name: "frontend_ip_name"
+        type: "string"
+        description: "Frontend IP configuration name"
+        default: "LoadBalancerFrontEnd"
+      - name: "backend_pool_name"
+        type: "string"
+        description: "Backend address pool name"
+        default: "LoadBalancerBackEnd"
+      - name: "enable_floating_ip"
+        type: "boolean"
+        description: "Enable floating IP for Direct Server Return"
+        default: false
+      - name: "tags"
+        type: "object"
+        description: "Azure resource tags"
+        default: "{}"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/loadBalancers"
+        resource_name: "{{NETWORKING_LB_NAME}}"
+        description: "Load balancer created successfully"
+
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Load balancer provisioned successfully"
+
+  # Idempotency: Check for existing load balancer
+  idempotency:
+    enabled: true
+    check_command: |
+      az network lb show \
+        --name "{{NETWORKING_LB_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --query "id" -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/networking-lb-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating load balancer: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $lbName = "{{NETWORKING_LB_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $lbType = "{{NETWORKING_LB_TYPE:-public}}"
+      $sku = "{{NETWORKING_LB_SKU:-Standard}}"
+      $publicIpId = "{{NETWORKING_LB_PUBLIC_IP_ID}}"
+      $subnetId = "{{NETWORKING_LB_SUBNET_ID}}"
+      $frontendName = "{{NETWORKING_LB_FRONTEND_IP_NAME:-LoadBalancerFrontEnd}}"
+      $backendName = "{{NETWORKING_LB_BACKEND_POOL_NAME:-LoadBalancerBackEnd}}"
+      $floatingIp = [System.Convert]::ToBoolean("{{NETWORKING_LB_ENABLE_FLOATING_IP:-false}}")
+
+      # Check if load balancer already exists (idempotent)
+      Write-Host "[PROGRESS] Checking if load balancer exists: $lbName"
+
+      $existingLb = az network lb show `
+        --name $lbName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -ne $existingLb -and ![string]::IsNullOrEmpty($existingLb.id)) {
+        Write-Host "[INFO] Load balancer already exists"
+        Write-Host "[INFO]   Resource ID: $($existingLb.id)"
+        Write-Host "[INFO]   Type: $($existingLb.loadBalancingRules.Count) rules, $($existingLb.backendAddressPools.Count) backend pools"
+        Write-Host "[SUCCESS] Load balancer creation complete (already exists)"
+
+        $existingLb | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/load-balancer-create.json"
+        exit 0
+      }
+
+      # Validate type-specific requirements
+      if ($lbType -eq "public") {
+        if ([string]::IsNullOrEmpty($publicIpId)) {
+          Write-Host "[ERROR] Public load balancer requires public_ip_id parameter"
+          exit 1
+        }
+        Write-Host "[PROGRESS] Load Balancer Type: Public"
+        Write-Host "[PROGRESS] Public IP ID: $publicIpId"
+      } elseif ($lbType -eq "internal") {
+        if ([string]::IsNullOrEmpty($subnetId)) {
+          Write-Host "[ERROR] Internal load balancer requires subnet_id parameter"
+          exit 1
+        }
+        Write-Host "[PROGRESS] Load Balancer Type: Internal"
+        Write-Host "[PROGRESS] Subnet ID: $subnetId"
+      } else {
+        Write-Host "[ERROR] Invalid load balancer type: $lbType (must be 'public' or 'internal')"
+        exit 1
+      }
+
+      # Create load balancer
+      Write-Host "[PROGRESS] Creating load balancer..."
+      Write-Host "[PROGRESS]   Name: $lbName"
+      Write-Host "[PROGRESS]   Resource Group: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
+      Write-Host "[PROGRESS]   SKU: $sku"
+      Write-Host "[PROGRESS]   Frontend Name: $frontendName"
+      Write-Host "[PROGRESS]   Backend Pool Name: $backendName"
+
+      $createParams = @(
+        "--name", $lbName,
+        "--resource-group", $resourceGroup,
+        "--location", $location,
+        "--sku", $sku,
+        "--frontend-ip-name", $frontendName,
+        "--backend-pool-name", $backendName,
+        "--output", "json"
+      )
+
+      # Add type-specific parameters
+      if ($lbType -eq "public") {
+        $createParams += @("--public-ip-address", $publicIpId)
+      } else {
+        $createParams += @("--private-ip-address-version", "IPv4")
+        $createParams += @("--subnet", $subnetId)
+      }
+
+      # Create the load balancer
+      $lb = az network lb create @createParams 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create load balancer"
+        Write-Host $lb
+        exit 1
+      }
+
+      $lb = $lb | ConvertFrom-Json
+
+      if ($null -eq $lb -or [string]::IsNullOrEmpty($lb.loadBalancer.id)) {
+        Write-Host "[ERROR] Load balancer creation returned invalid response"
+        exit 1
+      }
+
+      $lbObj = $lb.loadBalancer
+      Write-Host "[PROGRESS] Load balancer created: $($lbObj.id)"
+
+      # Validate creation
+      Write-Host "[VALIDATE] Verifying load balancer creation..."
+
+      $verify = az network lb show `
+        --name $lbName `
+        --resource-group $resourceGroup `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($null -eq $verify -or [string]::IsNullOrEmpty($verify.id)) {
+        Write-Host "[ERROR] Load balancer verification failed"
+        exit 1
+      }
+
+      # Get frontend IP details
+      Write-Host "[PROGRESS] Frontend IP Configurations:"
+      if ($verify.frontendIpConfigurations.Count -gt 0) {
+        foreach ($frontend in $verify.frontendIpConfigurations) {
+          Write-Host "[PROGRESS]   - $($frontend.name): $($frontend.privateIpAddress ?? 'N/A')"
+        }
+      }
+
+      # Get backend pool details
+      Write-Host "[PROGRESS] Backend Address Pools:"
+      if ($verify.backendAddressPools.Count -gt 0) {
+        foreach ($backend in $verify.backendAddressPools) {
+          Write-Host "[PROGRESS]   - $($backend.name): $($backend.backendIpConfigurations.Count) members"
+        }
+      }
+
+      # Apply tags if provided
+      Write-Host "[PROGRESS] Applying resource tags..."
+
+      $tagsJson = '{{RESOURCE_TAGS:-{}}}'
+
+      if ($tagsJson -ne '{}' -and ![string]::IsNullOrEmpty($tagsJson)) {
+        $tags = $tagsJson | ConvertFrom-Json
+        $tagString = ""
+        foreach ($tag in $tags.PSObject.Properties) {
+          if (![string]::IsNullOrEmpty($tagString)) {
+            $tagString += " "
+          }
+          $tagString += "$($tag.Name)=$($tag.Value)"
+        }
+
+        if (![string]::IsNullOrEmpty($tagString)) {
+          az resource tag `
+            --ids $verify.id `
+            --tags $tagString `
+            --output none 2>&1 | Out-Null
+
+          Write-Host "[PROGRESS] Tags applied: $tagString"
+        }
+      }
+
+      # Prepare output
+      $output = @{
+        id = $verify.id
+        name = $verify.name
+        resourceGroup = $verify.resourceGroup
+        location = $verify.location
+        provisioningState = $verify.provisioningState
+        loadBalancerType = $lbType
+        sku = $verify.sku
+        frontendIpConfigurations = $verify.frontendIpConfigurations
+        backendAddressPools = $verify.backendAddressPools | Select-Object -Property name, id
+        probes = $verify.probes
+        loadBalancingRules = $verify.loadBalancingRules | Select-Object -Property name, id
+        tags = $verify.tags
+        createdAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      }
+
+      # Save to artifacts
+      $output | ConvertTo-Json -Depth 3 | Out-File -FilePath "artifacts/outputs/load-balancer-create.json"
+
+      Write-Host "[SUCCESS] Load balancer created successfully"
+      Write-Host "[SUCCESS]   Name: $lbName"
+      Write-Host "[SUCCESS]   Resource ID: $($verify.id)"
+      Write-Host "[SUCCESS]   Type: $lbType"
+      Write-Host "[SUCCESS]   SKU: $($verify.sku.name)"
+      Write-Host "[SUCCESS]   Frontend IPs: $($verify.frontendIpConfigurations.Count)"
+      Write-Host "[SUCCESS]   Backend Pools: $($verify.backendAddressPools.Count)"
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   - Create health probe: az network lb probe create --lb-name $lbName --name '<probe-name>' --port 80 --path '/'"
+      Write-Host "[INFO]   - Create load rule: az network lb rule create --lb-name $lbName --name '<rule-name>' --protocol tcp --frontend-port 80 --backend-port 80"
+      Write-Host "[INFO]   - Add backend VMs: az network nic ip-config address-pool add --nic-name '<nic-name>' --ip-config-name '<ip-config>' --lb-name $lbName --address-pool $backendName"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-lb-create-wrapper.ps1
+      rm -f /tmp/networking-lb-create-wrapper.ps1
+
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Load Balancer"
+        description: "Remove the load balancer resource"
+        command: |
+          az network lb delete \
+            --name "{{NETWORKING_LB_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

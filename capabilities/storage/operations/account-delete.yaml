@@ -1,0 +1,168 @@
+# ==============================================================================
+# Capability Operation: Delete Storage Account
+# ==============================================================================
+
+operation:
+  id: "account-delete"
+  name: "Delete Storage Account"
+  description: "Delete Azure storage account and all associated data permanently"
+
+  capability: "storage"
+  operation_mode: "delete"
+  resource_type: "Microsoft.Storage/storageAccounts"
+
+  # Duration expectations
+  duration:
+    expected: 120       # 2 minutes
+    timeout: 300        # 5 minutes
+    type: "WAIT"
+
+  # Parameters for deletion
+  parameters:
+    required:
+      - name: "storage_account_name"
+        type: "string"
+        description: "Name of the storage account to delete"
+        validation: "^[a-z0-9]{3,24}$"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group containing the storage account"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "force_delete"
+        type: "boolean"
+        description: "Force deletion without dependency checking"
+        default: false
+      - name: "dry_run"
+        type: "boolean"
+        description: "Perform validation without actual deletion"
+        default: false
+
+  # Validation checks (pre-checks for delete operations)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Storage/storageAccounts"
+        resource_name: "{{storage_account_name}}"
+        description: "Storage account exists and is accessible"
+
+  # Idempotency: Check if already deleted
+  idempotency:
+    enabled: true
+    check_command: |
+      az storage account show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{storage_account_name}}" \
+        --output none 2>/dev/null
+    skip_if_exists: false
+
+  # Template command (delete storage account)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/storage-account-delete-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Storage account deletion: {{storage_account_name}} at $(Get-Date -Format 'HH:mm:ss')"
+
+      $storageAccountName = "{{storage_account_name}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $forceDelete = [System.Convert]::ToBoolean("{{force_delete}}")
+      $dryRun = [System.Convert]::ToBoolean("{{dry_run}}")
+
+      # Check if storage account exists
+      $accountInfo = az storage account show `
+        --resource-group $resourceGroup `
+        --name $storageAccountName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[INFO] Storage account not found: $storageAccountName"
+        exit 0
+      }
+
+      $account = $accountInfo | ConvertFrom-Json
+      $accountId = $account.id
+      $accountType = $account.kind
+
+      Write-Host "[WARNING] This operation is IRREVERSIBLE"
+      Write-Host "[INFO] Storage Account: $storageAccountName"
+      Write-Host "[INFO] Account Type: $accountType"
+      Write-Host "[INFO] Resource Group: $resourceGroup"
+      Write-Host "[INFO] Resource ID: $accountId"
+
+      # Check for dependencies if not force deleting
+      if (-not $forceDelete) {
+        Write-Host "[PROGRESS] Checking for dependent resources..."
+
+        # Check for active file shares
+        $fileShares = az storage share list `
+          --account-name $storageAccountName `
+          --auth-mode login `
+          --query "length([*])" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0 -and [int]$fileShares -gt 0) {
+          Write-Host "[WARNING] Storage account contains $fileShares active file share(s)"
+          Write-Host "[WARNING] Deletion will remove all data in these shares"
+        }
+
+        # Check for blobs
+        $blobs = az storage blob list `
+          --account-name $storageAccountName `
+          --container-name "*" `
+          --auth-mode login `
+          --query "length([*])" `
+          --output tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0 -and [int]$blobs -gt 0) {
+          Write-Host "[WARNING] Storage account contains $blobs blob(s)"
+        }
+      }
+
+      # Dry run mode
+      if ($dryRun) {
+        Write-Host "[DRY-RUN] Validation only - no deletion performed"
+        Write-Host "[SUCCESS] Dry run completed successfully"
+        exit 0
+      }
+
+      # Perform deletion
+      Write-Host "[PROGRESS] Deleting storage account..."
+
+      az storage account delete `
+        --resource-group $resourceGroup `
+        --name $storageAccountName `
+        --yes `
+        --output none 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to delete storage account"
+        exit 1
+      }
+
+      # Verify deletion
+      Write-Host "[VALIDATE] Verifying deletion..."
+      $verifyDelete = az storage account show `
+        --resource-group $resourceGroup `
+        --name $storageAccountName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[ERROR] Storage account still exists after deletion attempt"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] Storage account deleted successfully"
+      Write-Host "[WARNING] All data in this storage account has been permanently removed"
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/storage-account-delete-wrapper.ps1
+      rm -f /tmp/storage-account-delete-wrapper.ps1
+
+  # Rollback: Not possible for delete operations
+  rollback:
+    enabled: false
+    note: "Storage account deletion is irreversible. Data cannot be recovered after deletion."
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

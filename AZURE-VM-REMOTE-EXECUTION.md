@@ -85,7 +85,7 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
         --command-id RunPowerShellScript \
-        --scripts "@modules/05-golden-image/operations/install-fslogix.ps1" \
+        --scripts "@capabilities/compute/operations/golden-image-install-fslogix.ps1" \
         --output json > artifacts/outputs/golden-image-install-fslogix.json
 ```
 
