@@ -25,82 +25,84 @@ operation:
         description: "At least one NSG created"
 
   # Template command
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      # ==============================================================================
-      # Create Network Security Groups
-      # ==============================================================================
-
-      set -euo pipefail
-
-      echo "[START] NSG creation: $(date '+%Y-%m-%d %H:%M:%S')"
+      cat > /tmp/networking-03-create-nsgs-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] NSG creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-      LOCATION="{{AZURE_LOCATION}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
 
       # Get subnet count
-      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
-      NSG_COUNT=0
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $nsgCount = 0
 
-      echo "[PROGRESS] Processing $SUBNET_COUNT subnet(s) for NSG creation..."
+      Write-Host "[PROGRESS] Processing $subnetCount subnet(s) for NSG creation..."
 
       # Iterate through subnets
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
+      for ($i = 0; $i -lt $subnetCount; $i++) {
         # Check if NSG enabled for this subnet
-        NSG_ENABLED=$(yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
+        $nsgEnabled = (yq e ".networking.subnets[$i].nsg.enabled" config.yaml)
 
-        if [[ "$NSG_ENABLED" != "true" ]]; then
+        if ($nsgEnabled -ne "true") {
           continue
-        fi
+        }
 
         # Get subnet name
-        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
 
         # Get or auto-generate NSG name
-        NSG_NAME=$(yq e ".networking.subnets[$i].nsg.name" config.yaml)
+        $nsgName = (yq e ".networking.subnets[$i].nsg.name" config.yaml)
 
         # Auto-generate if empty
-        if [[ -z "$NSG_NAME" || "$NSG_NAME" == "null" || "$NSG_NAME" == "" ]]; then
-          NSG_NAME="nsg-${SUBNET_NAME}"
-        fi
+        if ([string]::IsNullOrEmpty($nsgName) -or $nsgName -eq "null") {
+          $nsgName = "nsg-$subnetName"
+        }
 
-        echo "[PROGRESS] Processing NSG for subnet: $SUBNET_NAME"
-        echo "[PROGRESS]   NSG name: $NSG_NAME"
+        Write-Host "[PROGRESS] Processing NSG for subnet: $subnetName"
+        Write-Host "[PROGRESS]   NSG name: $nsgName"
 
         # Check if NSG already exists (idempotent)
-        if az network nsg show \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$NSG_NAME" &>/dev/null; then
+        az network nsg show `
+          --resource-group $resourceGroup `
+          --name $nsgName `
+          --output none 2>$null
 
-          echo "[INFO] NSG already exists: $NSG_NAME"
-          ((NSG_COUNT++)) || true
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "[INFO] NSG already exists: $nsgName"
+          $nsgCount++
           continue
-        fi
+        }
 
         # Create NSG
-        echo "[PROGRESS] Creating NSG: $NSG_NAME"
+        Write-Host "[PROGRESS] Creating NSG: $nsgName"
 
-        if ! az network nsg create \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$NSG_NAME" \
-          --location "$LOCATION" \
-          --output json > "artifacts/outputs/networking-create-nsg-${NSG_NAME}.json"; then
+        $outputFile = "artifacts/outputs/networking-create-nsg-$nsgName.json"
+        az network nsg create `
+          --resource-group $resourceGroup `
+          --name $nsgName `
+          --location $location `
+          --output json > $outputFile
 
-          echo "[ERROR] Failed to create NSG: $NSG_NAME"
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to create NSG: $nsgName"
           exit 1
-        fi
+        }
 
-        echo "[SUCCESS] NSG created: $NSG_NAME"
-        ((NSG_COUNT++)) || true
-      done
+        Write-Host "[SUCCESS] NSG created: $nsgName"
+        $nsgCount++
+      }
 
-      echo "[SUCCESS] All NSGs created successfully"
-      echo "[SUCCESS]   Total NSGs: $NSG_COUNT"
+      Write-Host "[SUCCESS] All NSGs created successfully"
+      Write-Host "[SUCCESS]   Total NSGs: $nsgCount"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-03-create-nsgs-wrapper.ps1
+      rm -f /tmp/networking-03-create-nsgs-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:

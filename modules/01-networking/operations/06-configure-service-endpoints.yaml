@@ -24,72 +24,71 @@ operation:
         description: "Service endpoints configured"
 
   # Template command
+  # NOTE: Uses bash heredoc to pass PowerShell script safely to pwsh
   template:
-    type: "azure-cli-bash"
+    type: "powershell-local"
     command: |
-      #!/bin/bash
-      # ==============================================================================
-      # Configure Service Endpoints
-      # ==============================================================================
-
-      set -euo pipefail
-
-      echo "[START] Service endpoint configuration: $(date '+%Y-%m-%d %H:%M:%S')"
+      cat > /tmp/networking-06-configure-service-endpoints-wrapper.ps1 << 'PSWRAPPER'
+      Write-Host "[START] Service endpoint configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration
-      VNET_NAME="{{NETWORKING_VNET_NAME}}"
-      RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
       # Get subnet count
-      SUBNET_COUNT=$(yq e '.networking.subnets | length' config.yaml)
-      CONFIGURED_COUNT=0
+      $subnetCount = [int](yq e '.networking.subnets | length' config.yaml)
+      $configuredCount = 0
 
-      echo "[PROGRESS] Configuring service endpoints for $SUBNET_COUNT subnet(s)..."
+      Write-Host "[PROGRESS] Configuring service endpoints for $subnetCount subnet(s)..."
 
       # Iterate through subnets
-      for i in $(seq 0 $((SUBNET_COUNT - 1))); do
-        SUBNET_NAME=$(yq e ".networking.subnets[$i].name" config.yaml)
+      for ($i = 0; $i -lt $subnetCount; $i++) {
+        $subnetName = (yq e ".networking.subnets[$i].name" config.yaml)
 
         # Get service endpoints count for this subnet
-        ENDPOINT_COUNT=$(yq e ".networking.subnets[$i].service_endpoints | length" config.yaml)
+        $endpointCount = [int](yq e ".networking.subnets[$i].service_endpoints | length" config.yaml)
 
         # Skip if no service endpoints configured
-        if [[ "$ENDPOINT_COUNT" -eq 0 ]]; then
-          echo "[INFO] No service endpoints for subnet: $SUBNET_NAME"
+        if ($endpointCount -eq 0) {
+          Write-Host "[INFO] No service endpoints for subnet: $subnetName"
           continue
-        fi
+        }
 
-        echo "[PROGRESS] Configuring $ENDPOINT_COUNT endpoint(s) for subnet: $SUBNET_NAME"
+        Write-Host "[PROGRESS] Configuring $endpointCount endpoint(s) for subnet: $subnetName"
 
         # Build service endpoint list
-        ENDPOINTS=""
-        for j in $(seq 0 $((ENDPOINT_COUNT - 1))); do
-          ENDPOINT=$(yq e ".networking.subnets[$i].service_endpoints[$j]" config.yaml)
-          ENDPOINTS="$ENDPOINTS $ENDPOINT"
-        done
+        $endpoints = @()
+        for ($j = 0; $j -lt $endpointCount; $j++) {
+          $endpoint = (yq e ".networking.subnets[$i].service_endpoints[$j]" config.yaml)
+          $endpoints += $endpoint
+        }
 
-        echo "[PROGRESS]   Endpoints: $ENDPOINTS"
+        Write-Host "[PROGRESS]   Endpoints: $($endpoints -join ' ')"
 
         # Update subnet with service endpoints
-        if ! az network vnet subnet update \
-          --resource-group "$RESOURCE_GROUP" \
-          --vnet-name "$VNET_NAME" \
-          --name "$SUBNET_NAME" \
-          --service-endpoints $ENDPOINTS \
-          --output none; then
+        az network vnet subnet update `
+          --resource-group $resourceGroup `
+          --vnet-name $vnetName `
+          --name $subnetName `
+          --service-endpoints @endpoints `
+          --output none
 
-          echo "[ERROR] Failed to configure service endpoints for subnet: $SUBNET_NAME"
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[ERROR] Failed to configure service endpoints for subnet: $subnetName"
           exit 1
-        fi
+        }
 
-        echo "[SUCCESS] Service endpoints configured: $SUBNET_NAME"
-        ((CONFIGURED_COUNT++)) || true
-      done
+        Write-Host "[SUCCESS] Service endpoints configured: $subnetName"
+        $configuredCount++
+      }
 
-      echo "[SUCCESS] All service endpoints configured successfully"
-      echo "[SUCCESS]   Subnets configured: $CONFIGURED_COUNT"
+      Write-Host "[SUCCESS] All service endpoints configured successfully"
+      Write-Host "[SUCCESS]   Subnets configured: $configuredCount"
 
       exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/networking-06-configure-service-endpoints-wrapper.ps1
+      rm -f /tmp/networking-06-configure-service-endpoints-wrapper.ps1
 
   # Self-healing: Previous fixes applied to this template
   fixes:
