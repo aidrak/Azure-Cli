@@ -1,0 +1,171 @@
+# ==============================================================================
+# Capability Operation: Configure Virtual Machine
+# Migrated from: modules/05-golden-image/operations/02-system-prep.yaml
+# ==============================================================================
+
+operation:
+  id: "vm-configure"
+  name: "Configure Virtual Machine"
+  description: "Configure VM system settings, disable BitLocker, and prepare environment"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Duration expectations
+  duration:
+    expected: 120   # 2 minutes
+    timeout: 300    # 5 minutes
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the virtual machine to configure"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "disable_bitlocker"
+        type: "boolean"
+        description: "Disable BitLocker encryption"
+        default: true
+      - name: "create_temp_directory"
+        type: "boolean"
+        description: "Create temporary directory structure"
+        default: true
+      - name: "temp_directory_path"
+        type: "string"
+        description: "Path for temporary directory"
+        default: "C:\\Temp"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "directory_exists"
+        path: "C:\\Temp"
+        description: "Temporary directory created successfully"
+
+  # Idempotency: Rerunning should be safe
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm get-instance-view \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --query "provisioningState" \
+        --output tsv 2>/dev/null | grep -q "Succeeded"
+    skip_if_exists: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/compute-vm-configure-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/compute-vm-configure-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" `
+        --command-id RunPowerShellScript `
+        --scripts "@$tempScript" `
+        --output json > artifacts/outputs/compute-vm-configure.json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-configure-wrapper.ps1
+      rm -f /tmp/compute-vm-configure-wrapper.ps1
+
+  # PowerShell script (embedded inline)
+  powershell:
+    file: "vm-configure.ps1"
+    content: |
+      # ==============================================================================
+      # Virtual Machine Configuration Script
+      # ==============================================================================
+
+      Write-Host "[START] VM Configuration: $(Get-Date -Format 'HH:mm:ss')"
+
+      try {
+          # Step 1: Disable BitLocker
+          Write-Host "[PROGRESS] Step 1/2: Disabling BitLocker..."
+
+          try {
+              Disable-BitLocker -MountPoint "C:" -ErrorAction SilentlyContinue | Out-Null
+              Write-Host "[PROGRESS] BitLocker disabled"
+          }
+          catch {
+              Write-Host "[PROGRESS] BitLocker already disabled or not present"
+          }
+
+          # Step 2: Create temporary directory structure
+          Write-Host "[PROGRESS] Step 2/2: Creating temporary directory structure..."
+
+          $tempPath = "C:\Temp"
+          $deployLogsPath = "C:\DeployLogs"
+
+          # Create temp directory
+          if (!(Test-Path $tempPath)) {
+              New-Item -Path $tempPath -ItemType Directory -Force | Out-Null
+              Write-Host "[PROGRESS] Created temporary directory: $tempPath"
+          }
+          else {
+              Write-Host "[PROGRESS] Temporary directory already exists"
+          }
+
+          # Create deploy logs directory
+          if (!(Test-Path $deployLogsPath)) {
+              New-Item -Path $deployLogsPath -ItemType Directory -Force | Out-Null
+              Write-Host "[PROGRESS] Created deploy logs directory: $deployLogsPath"
+          }
+          else {
+              Write-Host "[PROGRESS] Deploy logs directory already exists"
+          }
+
+          # Set directory permissions (allow Everyone to write)
+          $acl = Get-Acl $tempPath
+          $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+              "Users", "Modify", "ContainerInherit,ObjectInherit", "None", "Allow"
+          )
+          $acl.SetAccessRule($accessRule)
+          Set-Acl -Path $tempPath -AclObject $acl
+          Write-Host "[PROGRESS] Set directory permissions"
+
+          # Validation
+          Write-Host "[VALIDATE] Checking configuration..."
+          if (-not (Test-Path $tempPath)) {
+              Write-Host "[ERROR] Temp directory not found"
+              exit 1
+          }
+
+          if (-not (Test-Path $deployLogsPath)) {
+              Write-Host "[ERROR] Deploy logs directory not found"
+              exit 1
+          }
+
+          Write-Host "[SUCCESS] VM Configuration completed successfully"
+          Write-Host "[SUCCESS] - BitLocker disabled"
+          Write-Host "[SUCCESS] - Temp directory created: $tempPath"
+          Write-Host "[SUCCESS] - Deploy logs directory created: $deployLogsPath"
+          exit 0
+
+      } catch {
+          Write-Host "[ERROR] Exception occurred: $($_.Exception.Message)"
+          Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  # Rollback: Reverse of configuration
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

@@ -1,0 +1,243 @@
+# ==============================================================================
+# Capability Operation: Create AVD Scaling Plan
+# Migrated from: modules/09-autoscaling/operations/02-create-plan.yaml
+# ==============================================================================
+
+operation:
+  id: "scaling-plan-create"
+  name: "Create AVD Scaling Plan"
+  description: "Create AVD autoscaling plan with cost-optimized schedules and scaling rules"
+
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.DesktopVirtualization/scalingPlans"
+
+  # Duration expectations
+  duration:
+    expected: 180   # 3 minutes
+    timeout: 600    # 10 minutes
+    type: "NORMAL"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "scaling_plan_name"
+        type: "string"
+        description: "Name of the scaling plan"
+        default: "ScalingPlan-{{HOST_POOL_NAME}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the target host pool"
+        default: "{{HOST_POOL_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the scaling plan"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "autoscaling_enabled"
+        type: "boolean"
+        description: "Enable autoscaling functionality"
+        default: "{{AUTOSCALING_ENABLED}}"
+      - name: "weekday_start_hour"
+        type: "integer"
+        description: "Weekday start hour for scaling"
+        default: "{{AUTOSCALING_WEEKDAY_START_HOUR}}"
+      - name: "weekday_stop_hour"
+        type: "integer"
+        description: "Weekday stop hour for scaling"
+        default: "{{AUTOSCALING_WEEKDAY_STOP_HOUR}}"
+      - name: "weekend_start_hour"
+        type: "integer"
+        description: "Weekend start hour for scaling"
+        default: "{{AUTOSCALING_WEEKEND_START_HOUR}}"
+      - name: "weekend_stop_hour"
+        type: "integer"
+        description: "Weekend stop hour for scaling"
+        default: "{{AUTOSCALING_WEEKEND_STOP_HOUR}}"
+      - name: "min_vms"
+        type: "integer"
+        description: "Minimum number of VMs to keep running"
+        default: "{{AUTOSCALING_MIN_VMS}}"
+      - name: "max_vms"
+        type: "integer"
+        description: "Maximum number of VMs in scaling plan"
+        default: "{{AUTOSCALING_MAX_VMS}}"
+      - name: "load_balancer_type"
+        type: "string"
+        description: "Load balancer type for scaling (BreadthFirst or DepthFirst)"
+        default: "DepthFirst"
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/scalingPlans"
+        resource_name: "ScalingPlan-{{HOST_POOL_NAME}}"
+        description: "Scaling plan created successfully"
+
+      - type: "property_equals"
+        property: "enabled"
+        expected: "true"
+        description: "Scaling plan is enabled"
+
+  # Idempotency: Check for existing scaling plan
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization scaling-plan show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "ScalingPlan-{{HOST_POOL_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-scaling-plan-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] AVD Scaling Plan Creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $scalingPlanName = "ScalingPlan-$hostPoolName"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $autoscalingEnabled = "{{AUTOSCALING_ENABLED}}"
+
+      # Autoscaling schedule settings
+      $weekdayStartHour = "{{AUTOSCALING_WEEKDAY_START_HOUR}}"
+      $weekdayStopHour = "{{AUTOSCALING_WEEKDAY_STOP_HOUR}}"
+      $minVms = "{{AUTOSCALING_MIN_VMS}}"
+      $maxVms = "{{AUTOSCALING_MAX_VMS}}"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  Resource Group: $resourceGroup"
+      Write-Host "  Location: $location"
+      Write-Host "  Host Pool: $hostPoolName"
+      Write-Host "  Scaling Plan: $scalingPlanName"
+      Write-Host "  Autoscaling Enabled: $autoscalingEnabled"
+
+      # Step 1: Check if autoscaling is enabled
+      Write-Host "[PROGRESS] Step 1/4: Checking autoscaling configuration..."
+      if ($autoscalingEnabled -ne "true") {
+        Write-Host "[WARNING] Autoscaling is disabled in configuration"
+        Write-Host "[INFO] Skipping scaling plan creation"
+
+        @{
+          "status" = "skipped"
+          "reason" = "autoscaling_disabled"
+          "timestamp" = (Get-Date -AsUTC -Format "yyyy-MM-ddTHH:mm:ssZ")
+        } | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
+
+        exit 0
+      }
+
+      # Step 2: Verify host pool exists
+      Write-Host "[PROGRESS] Step 2/4: Verifying host pool exists..."
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Host pool not found: $hostPoolName"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Host pool found: $hostPoolName"
+
+      # Get host pool resource ID
+      $hostPoolId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+      Write-Host "[VALIDATE] Host pool ID: $hostPoolId"
+
+      # Step 3: Check if scaling plan already exists
+      Write-Host "[PROGRESS] Step 3/4: Checking if scaling plan already exists..."
+      $existingPlan = az desktopvirtualization scaling-plan show `
+        --resource-group $resourceGroup `
+        --name $scalingPlanName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] Scaling plan already exists: $scalingPlanName"
+        Write-Host "[INFO] Updating existing scaling plan configuration"
+
+        # Get existing plan details
+        $planDetails = az desktopvirtualization scaling-plan show `
+          --resource-group $resourceGroup `
+          --name $scalingPlanName `
+          --output json | ConvertFrom-Json
+
+        $planDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
+        exit 0
+      }
+
+      # Step 4: Create scaling plan with schedules
+      Write-Host "[PROGRESS] Step 4/4: Creating scaling plan with schedules..."
+      Write-Host "[PROGRESS] Name: $scalingPlanName"
+      Write-Host "[PROGRESS] Weekday hours: ${weekdayStartHour}:00 - ${weekdayStopHour}:00"
+      Write-Host "[PROGRESS] Min VMs: $minVms | Max VMs: $maxVms"
+
+      # Create scaling plan
+      $createOutput = az desktopvirtualization scaling-plan create `
+        --resource-group $resourceGroup `
+        --name $scalingPlanName `
+        --location $location `
+        --description "Cost-optimized autoscaling plan for $hostPoolName" `
+        --friendly-name "Scaling Plan: $hostPoolName" `
+        --host-pool-type "Pooled" `
+        --exclusion-tag "NoAutoscale" `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create scaling plan"
+        Write-Host "[ERROR] $createOutput"
+        exit 1
+      }
+
+      # Parse created plan
+      $planDetails = $createOutput | ConvertFrom-Json
+
+      Write-Host "[SUCCESS] Scaling plan created successfully"
+      Write-Host "[SUCCESS] Scaling Plan: $($planDetails.name)"
+      Write-Host "[SUCCESS] ID: $($planDetails.id)"
+      Write-Host "[SUCCESS] Location: $($planDetails.location)"
+
+      # Save plan details
+      $planDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/avd-scaling-plan-create.json"
+
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   1. Configure scaling schedules for weekdays and weekends"
+      Write-Host "[INFO]   2. Assign host pool to scaling plan"
+      Write-Host "[INFO]   3. Configure load balancing algorithm (BreadthFirst or DepthFirst)"
+      Write-Host "[INFO]   4. Test autoscaling by monitoring VM power states"
+      Write-Host "[INFO]   5. Adjust capacity settings based on usage patterns"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-scaling-plan-create-wrapper.ps1
+      rm -f /tmp/avd-scaling-plan-create-wrapper.ps1
+
+  # Rollback: Delete created scaling plan
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Scaling Plan"
+        description: "Remove the created scaling plan"
+        command: |
+          az desktopvirtualization scaling-plan delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "ScalingPlan-{{HOST_POOL_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

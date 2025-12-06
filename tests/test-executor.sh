@@ -81,6 +81,7 @@ EOF
     export AZURE_RESOURCE_GROUP="test-rg"
     export NETWORKING_VNET_NAME="test-vnet"
     export STORAGE_ACCOUNT_NAME="teststorage"
+    export TEST_DIR
 
     # Source executor
     source "${PROJECT_ROOT}/core/executor.sh"
@@ -166,7 +167,7 @@ run_test() {
     local test_name="$1"
     local test_function="$2"
 
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
 
     echo ""
     echo "=========================================================================="
@@ -174,11 +175,11 @@ run_test() {
     echo "=========================================================================="
 
     if $test_function; then
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
         echo -e "${GREEN}[PASS]${NC} $test_name"
         return 0
     else
-        ((TESTS_FAILED++))
+        ((++TESTS_FAILED))
         echo -e "${RED}[FAIL]${NC} $test_name"
         return 1
     fi

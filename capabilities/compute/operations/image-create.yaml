@@ -1,0 +1,226 @@
+# ==============================================================================
+# Capability Operation: Create Virtual Machine Image
+# Migrated from: modules/05-golden-image/operations/10-validate-all.yaml
+# ==============================================================================
+
+operation:
+  id: "image-create"
+  name: "Create Virtual Machine Image"
+  description: "Capture golden image from configured VM and store in Azure"
+
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/images"
+
+  # Duration expectations
+  duration:
+    expected: 300   # 5 minutes
+    timeout: 900    # 15 minutes (image capture can take time)
+    type: "WAIT"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the source VM to capture"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "image_name"
+        type: "string"
+        description: "Name for the captured image"
+        default: "{{GOLDEN_IMAGE_NAME}}"
+    optional:
+      - name: "location"
+        type: "string"
+        description: "Azure region for the image"
+        default: "{{AZURE_LOCATION}}"
+      - name: "image_description"
+        type: "string"
+        description: "Description of the golden image"
+        default: "Golden image for AVD session hosts"
+      - name: "hyper_v_generation"
+        type: "string"
+        description: "Hyper-V generation (V1 or V2)"
+        default: "V2"
+      - name: "disk_encryption_set"
+        type: "string"
+        description: "Optional disk encryption set ID"
+        default: ""
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/images"
+        resource_name: "{{GOLDEN_IMAGE_NAME}}"
+        description: "Image created successfully"
+
+      - type: "property_equals"
+        property: "hyperVGeneration"
+        expected: "V2"
+        description: "Hyper-V generation V2 configured"
+
+  # Idempotency: Check for existing image
+  idempotency:
+    enabled: true
+    check_command: |
+      az image show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/compute-image-create-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Golden Image Creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $vmName = "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      $imageName = "{{GOLDEN_IMAGE_NAME}}"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  Source VM: $vmName"
+      Write-Host "  Resource Group: $resourceGroup"
+      Write-Host "  Location: $location"
+      Write-Host "  Image Name: $imageName"
+
+      # Step 1: Check if image already exists
+      Write-Host "[PROGRESS] Step 1/4: Checking if image already exists..."
+      $existingImage = az image show `
+        --resource-group $resourceGroup `
+        --name $imageName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] Image already exists: $imageName"
+        Write-Host "[INFO] Skipping image creation"
+
+        # Get image details
+        $imageDetails = az image show `
+          --resource-group $resourceGroup `
+          --name $imageName `
+          --output json | ConvertFrom-Json
+
+        $imageDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/compute-image-create.json"
+        exit 0
+      }
+
+      # Step 2: Prepare VM for capture (deallocate)
+      Write-Host "[PROGRESS] Step 2/4: Preparing VM for image capture..."
+      Write-Host "[PROGRESS] Deallocating VM: $vmName"
+
+      az vm deallocate `
+        --resource-group $resourceGroup `
+        --name $vmName `
+        --no-wait=false `
+        2>&1 | Out-Null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARNING] VM deallocate returned exit code: $LASTEXITCODE"
+      }
+
+      # Verify deallocated
+      Write-Host "[PROGRESS] Verifying VM is deallocated..."
+      $maxRetries = 10
+      $retryCount = 0
+
+      do {
+        $vmState = az vm get-instance-view `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" `
+          -o tsv 2>$null
+
+        if ($vmState -eq "VM deallocated") {
+          Write-Host "[PROGRESS] VM is deallocated"
+          break
+        }
+
+        $retryCount++
+        Write-Host "[PROGRESS] Waiting for VM to deallocate ($retryCount/$maxRetries)..."
+        Start-Sleep -Seconds 30
+      } while ($retryCount -lt $maxRetries)
+
+      if ($vmState -ne "VM deallocated") {
+        Write-Host "[WARNING] VM did not deallocate within timeout, proceeding anyway..."
+      }
+
+      # Step 3: Generalize the VM
+      Write-Host "[PROGRESS] Step 3/4: Generalizing the VM..."
+      az vm generalize `
+        --resource-group $resourceGroup `
+        --name $vmName `
+        2>&1 | Out-Null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to generalize VM"
+        exit 1
+      }
+
+      Write-Host "[PROGRESS] VM generalized successfully"
+
+      # Step 4: Create image from generalized VM
+      Write-Host "[PROGRESS] Step 4/4: Creating image from VM..."
+
+      $createOutput = az image create `
+        --resource-group $resourceGroup `
+        --name $imageName `
+        --source $vmName `
+        --location $location `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create image"
+        Write-Host "[ERROR] $createOutput"
+        exit 1
+      }
+
+      # Parse output
+      $imageDetails = $createOutput | ConvertFrom-Json
+
+      Write-Host "[SUCCESS] Golden image created successfully"
+      Write-Host "[SUCCESS] Image Name: $($imageDetails.name)"
+      Write-Host "[SUCCESS] Image ID: $($imageDetails.id)"
+      Write-Host "[SUCCESS] Location: $($imageDetails.location)"
+      Write-Host "[SUCCESS] OS Type: $($imageDetails.storageProfile.osDisk.osType)"
+
+      # Save image details
+      $imageDetails | ConvertTo-Json | Out-File -FilePath "artifacts/outputs/compute-image-create.json"
+
+      Write-Host ""
+      Write-Host "[INFO] Next steps:"
+      Write-Host "[INFO]   1. Delete temporary VM: $vmName"
+      Write-Host "[INFO]   2. Use image ID for future session host deployments"
+      Write-Host "[INFO]   3. Consider creating image versions for versioning"
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/compute-image-create-wrapper.ps1
+      rm -f /tmp/compute-image-create-wrapper.ps1
+
+  # Rollback: Delete created image
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Created Image"
+        description: "Remove the created golden image"
+        command: |
+          az image delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{GOLDEN_IMAGE_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []

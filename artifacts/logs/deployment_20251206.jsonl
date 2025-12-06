@@ -974,3 +974,187 @@
 {"timestamp":"2025-12-06T18:40:21.261Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T18:40:37.815Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
 {"timestamp":"2025-12-06T18:40:37.846Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:40:52.329Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:40:52.358Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.512Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.546Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.655Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.661Z","level":"INFO","message":"DRY RUN MODE - No changes will be made","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.666Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.687Z","level":"INFO","message":"Parsed operation: Test Dry Run (ID: test-dryrun)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.761Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.767Z","level":"INFO","message":"Dry run completed - ready for execution","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.771Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:33.777Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/tests/test-data/executor/test-state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.137Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.159Z","level":"INFO","message":"Parsed operation: Test Execute (ID: test-execute)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.192Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.225Z","level":"INFO","message":"Created operation: test-execute_20251206_184134_4Fa9","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.248Z","level":"INFO","message":"Updated operation test-execute_20251206_184134_4Fa9: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.255Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.275Z","level":"INFO","message":"Executing 2 steps...","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.311Z","level":"INFO","message":"1/2: Step 1","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.316Z","level":"INFO","message":"Step 1/2: Step 1","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.325Z","level":"INFO","message":"Executing: echo 'Step 1 executed' > /step1.txt","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.374Z","level":"WARN","message":"Initiating rollback for operation: test-execute_20251206_184134_4Fa9","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.394Z","level":"INFO","message":"Executing 1 rollback steps in reverse order...","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.409Z","level":"INFO","message":"Rollback step 1/1: Cleanup","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.420Z","level":"SUCCESS","message":"Rollback step completed: Cleanup","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.425Z","level":"INFO","message":"Rollback completed","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.431Z","level":"INFO","message":"Saving rollback script to: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-execute_20251206_184134_4Fa9.sh","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.475Z","level":"SUCCESS","message":"Rollback script saved: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-execute_20251206_184134_4Fa9.sh","operation_id":"test-execute_20251206_184134_4Fa9","metadata":{}}
+{"timestamp":"2025-12-06T18:41:34.509Z","level":"INFO","message":"Updated operation test-execute_20251206_184134_4Fa9: failed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.465Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.496Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.579Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.584Z","level":"INFO","message":"DRY RUN MODE - No changes will be made","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.589Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.608Z","level":"INFO","message":"Parsed operation: Test Dry Run (ID: test-dryrun)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.686Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.691Z","level":"INFO","message":"Dry run completed - ready for execution","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.696Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:14.703Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/tests/test-data/executor/test-state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.032Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.054Z","level":"INFO","message":"Parsed operation: Test Execute (ID: test-execute)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.090Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.121Z","level":"INFO","message":"Created operation: test-execute_20251206_184215_Pz87","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.144Z","level":"INFO","message":"Updated operation test-execute_20251206_184215_Pz87: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.151Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.169Z","level":"INFO","message":"Executing 2 steps...","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.205Z","level":"INFO","message":"1/2: Step 1","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.210Z","level":"INFO","message":"Step 1/2: Step 1","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.219Z","level":"INFO","message":"Executing: echo 'Step 1 executed' > /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step1.txt","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.230Z","level":"SUCCESS","message":"Step completed successfully: Step 1","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.236Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-execute_20251206_184215_Pz87_0.log","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.300Z","level":"INFO","message":"2/2: Step 2","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.307Z","level":"INFO","message":"Step 2/2: Step 2","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.316Z","level":"INFO","message":"Executing: echo 'Step 2 executed' > /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step2.txt","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.326Z","level":"SUCCESS","message":"Step completed successfully: Step 2","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.331Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-execute_20251206_184215_Pz87_1.log","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.385Z","level":"INFO","message":"Updated operation test-execute_20251206_184215_Pz87: completed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.398Z","level":"SUCCESS","message":"Operation completed successfully: Test Execute","operation_id":"test-execute_20251206_184215_Pz87","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.403Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.426Z","level":"INFO","message":"Parsed operation: Test Rollback Execution (ID: test-rollback-exec)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.464Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.503Z","level":"INFO","message":"Created operation: test-rollback-exec_20251206_184215_k2TN","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.528Z","level":"INFO","message":"Updated operation test-rollback-exec_20251206_184215_k2TN: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.537Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.563Z","level":"INFO","message":"Executing 3 steps...","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.596Z","level":"INFO","message":"1/3: Create marker","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.602Z","level":"INFO","message":"Step 1/3: Create marker","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.610Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/marker.txt","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.622Z","level":"SUCCESS","message":"Step completed successfully: Create marker","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.628Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-rollback-exec_20251206_184215_k2TN_0.log","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.685Z","level":"INFO","message":"2/3: Fail intentionally","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.692Z","level":"INFO","message":"Step 2/3: Fail intentionally","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.700Z","level":"INFO","message":"Executing: exit 1","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.757Z","level":"WARN","message":"Initiating rollback for operation: test-rollback-exec_20251206_184215_k2TN","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.778Z","level":"INFO","message":"Executing 1 rollback steps in reverse order...","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.794Z","level":"INFO","message":"Rollback step 1/1: Remove marker","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.806Z","level":"SUCCESS","message":"Rollback step completed: Remove marker","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.813Z","level":"INFO","message":"Rollback completed","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.818Z","level":"INFO","message":"Saving rollback script to: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-rollback-exec_20251206_184215_k2TN.sh","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.868Z","level":"SUCCESS","message":"Rollback script saved: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-rollback-exec_20251206_184215_k2TN.sh","operation_id":"test-rollback-exec_20251206_184215_k2TN","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.899Z","level":"INFO","message":"Updated operation test-rollback-exec_20251206_184215_k2TN: failed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.917Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.939Z","level":"INFO","message":"Parsed operation: Test Continue On Error (ID: test-continue)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:15.975Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.008Z","level":"INFO","message":"Created operation: test-continue_20251206_184215_Zk5a","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.031Z","level":"INFO","message":"Updated operation test-continue_20251206_184215_Zk5a: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.039Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.057Z","level":"INFO","message":"Executing 3 steps...","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.090Z","level":"INFO","message":"1/3: Step 1","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.095Z","level":"INFO","message":"Step 1/3: Step 1","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.103Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step1.txt","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.116Z","level":"SUCCESS","message":"Step completed successfully: Step 1","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.121Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-continue_20251206_184215_Zk5a_0.log","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.193Z","level":"INFO","message":"2/3: Failing step","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.199Z","level":"INFO","message":"Step 2/3: Failing step","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.207Z","level":"INFO","message":"Executing: exit 1","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.250Z","level":"WARN","message":"Step failed but continuing due to continue_on_error flag","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.286Z","level":"INFO","message":"3/3: Step 3","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.292Z","level":"INFO","message":"Step 3/3: Step 3","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.299Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step3.txt","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.311Z","level":"SUCCESS","message":"Step completed successfully: Step 3","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.316Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-continue_20251206_184215_Zk5a_2.log","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.391Z","level":"INFO","message":"Updated operation test-continue_20251206_184215_Zk5a: completed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.405Z","level":"SUCCESS","message":"Operation completed successfully: Test Continue On Error","operation_id":"test-continue_20251206_184215_Zk5a","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.413Z","level":"INFO","message":"Saving rollback script to: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test_save_rollback_123.sh","operation_id":"test_save_rollback_123","metadata":{}}
+{"timestamp":"2025-12-06T18:42:16.473Z","level":"SUCCESS","message":"Rollback script saved: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test_save_rollback_123.sh","operation_id":"test_save_rollback_123","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.286Z","level":"INFO","message":"State Manager loaded","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.319Z","level":"INFO","message":"Parsed operation: Test Operation (ID: test-op)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.401Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.406Z","level":"INFO","message":"DRY RUN MODE - No changes will be made","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.411Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.432Z","level":"INFO","message":"Parsed operation: Test Dry Run (ID: test-dryrun)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.512Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.517Z","level":"INFO","message":"Dry run completed - ready for execution","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.522Z","level":"INFO","message":"===================================================================","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.528Z","level":"INFO","message":"Initializing state database at /mnt/cache_pool/development/azure-cli/tests/test-data/executor/test-state.db","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.872Z","level":"SUCCESS","message":"State database initialized successfully","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.896Z","level":"INFO","message":"Parsed operation: Test Execute (ID: test-execute)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.937Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.970Z","level":"INFO","message":"Created operation: test-execute_20251206_184226_iX7J","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:26.993Z","level":"INFO","message":"Updated operation test-execute_20251206_184226_iX7J: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.001Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.022Z","level":"INFO","message":"Executing 2 steps...","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.058Z","level":"INFO","message":"1/2: Step 1","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.064Z","level":"INFO","message":"Step 1/2: Step 1","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.073Z","level":"INFO","message":"Executing: echo 'Step 1 executed' > /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step1.txt","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.083Z","level":"SUCCESS","message":"Step completed successfully: Step 1","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.088Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-execute_20251206_184226_iX7J_0.log","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.148Z","level":"INFO","message":"2/2: Step 2","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.154Z","level":"INFO","message":"Step 2/2: Step 2","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.162Z","level":"INFO","message":"Executing: echo 'Step 2 executed' > /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step2.txt","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.172Z","level":"SUCCESS","message":"Step completed successfully: Step 2","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.178Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-execute_20251206_184226_iX7J_1.log","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.229Z","level":"INFO","message":"Updated operation test-execute_20251206_184226_iX7J: completed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.243Z","level":"SUCCESS","message":"Operation completed successfully: Test Execute","operation_id":"test-execute_20251206_184226_iX7J","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.248Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.270Z","level":"INFO","message":"Parsed operation: Test Rollback Execution (ID: test-rollback-exec)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.307Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.338Z","level":"INFO","message":"Created operation: test-rollback-exec_20251206_184227_LPcV","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.362Z","level":"INFO","message":"Updated operation test-rollback-exec_20251206_184227_LPcV: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.369Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.389Z","level":"INFO","message":"Executing 3 steps...","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.425Z","level":"INFO","message":"1/3: Create marker","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.431Z","level":"INFO","message":"Step 1/3: Create marker","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.441Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/marker.txt","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.453Z","level":"SUCCESS","message":"Step completed successfully: Create marker","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.460Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-rollback-exec_20251206_184227_LPcV_0.log","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.520Z","level":"INFO","message":"2/3: Fail intentionally","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.526Z","level":"INFO","message":"Step 2/3: Fail intentionally","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.534Z","level":"INFO","message":"Executing: exit 1","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.583Z","level":"WARN","message":"Initiating rollback for operation: test-rollback-exec_20251206_184227_LPcV","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.602Z","level":"INFO","message":"Executing 1 rollback steps in reverse order...","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.619Z","level":"INFO","message":"Rollback step 1/1: Remove marker","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.630Z","level":"SUCCESS","message":"Rollback step completed: Remove marker","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.636Z","level":"INFO","message":"Rollback completed","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.643Z","level":"INFO","message":"Saving rollback script to: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-rollback-exec_20251206_184227_LPcV.sh","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.692Z","level":"SUCCESS","message":"Rollback script saved: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test-rollback-exec_20251206_184227_LPcV.sh","operation_id":"test-rollback-exec_20251206_184227_LPcV","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.720Z","level":"INFO","message":"Updated operation test-rollback-exec_20251206_184227_LPcV: failed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.739Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.762Z","level":"INFO","message":"Parsed operation: Test Continue On Error (ID: test-continue)","operation_id":"","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.796Z","level":"INFO","message":"State database already exists","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.829Z","level":"INFO","message":"Created operation: test-continue_20251206_184227_yW5b","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.854Z","level":"INFO","message":"Updated operation test-continue_20251206_184227_yW5b: running","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.862Z","level":"WARN","message":"Force mode enabled - skipping prerequisite validation","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.885Z","level":"INFO","message":"Executing 3 steps...","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.924Z","level":"INFO","message":"1/3: Step 1","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.930Z","level":"INFO","message":"Step 1/3: Step 1","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.940Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step1.txt","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.952Z","level":"SUCCESS","message":"Step completed successfully: Step 1","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:27.958Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-continue_20251206_184227_yW5b_0.log","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.017Z","level":"INFO","message":"2/3: Failing step","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.022Z","level":"INFO","message":"Step 2/3: Failing step","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.030Z","level":"INFO","message":"Executing: exit 1","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.082Z","level":"WARN","message":"Step failed but continuing due to continue_on_error flag","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.123Z","level":"INFO","message":"3/3: Step 3","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.129Z","level":"INFO","message":"Step 3/3: Step 3","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.138Z","level":"INFO","message":"Executing: touch /mnt/cache_pool/development/azure-cli/tests/test-data/executor/step3.txt","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.150Z","level":"SUCCESS","message":"Step completed successfully: Step 3","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.155Z","level":"INFO","message":"Output saved to: /mnt/cache_pool/development/azure-cli/artifacts/logs/step_test-continue_20251206_184227_yW5b_2.log","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.210Z","level":"INFO","message":"Updated operation test-continue_20251206_184227_yW5b: completed","operation_id":"state-manager","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.222Z","level":"SUCCESS","message":"Operation completed successfully: Test Continue On Error","operation_id":"test-continue_20251206_184227_yW5b","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.230Z","level":"INFO","message":"Saving rollback script to: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test_save_rollback_123.sh","operation_id":"test_save_rollback_123","metadata":{}}
+{"timestamp":"2025-12-06T18:42:28.292Z","level":"SUCCESS","message":"Rollback script saved: /mnt/cache_pool/development/azure-cli/artifacts/rollback/rollback_test_save_rollback_123.sh","operation_id":"test_save_rollback_123","metadata":{}}

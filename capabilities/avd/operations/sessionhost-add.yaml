@@ -1,0 +1,274 @@
+# ==============================================================================
+# Capability Operation: Add Session Host to Host Pool
+# Migrated from: modules/06-session-host-deployment/operations/02-register-host-pool.yaml
+# ==============================================================================
+
+operation:
+  id: "sessionhost-add"
+  name: "Add Session Host to Host Pool"
+  description: "Register and add session hosts to AVD host pool with configuration token"
+
+  capability: "avd"
+  operation_mode: "configure"
+  resource_type: "Microsoft.DesktopVirtualization/sessionHosts"
+
+  # Duration expectations
+  duration:
+    expected: 600   # 10 minutes
+    timeout: 1200   # 20 minutes
+    type: "WAIT"
+
+  # Parameters extracted from old operation
+  parameters:
+    required:
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the target host pool"
+        default: "{{HOST_POOL_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "vm_count"
+        type: "integer"
+        description: "Number of session host VMs"
+        default: "{{SESSION_HOST_VM_COUNT}}"
+    optional:
+      - name: "vm_name_prefix"
+        type: "string"
+        description: "Prefix for session host VM names"
+        default: "{{SESSION_HOST_NAME_PREFIX}}"
+      - name: "registration_token_expiration_hours"
+        type: "integer"
+        description: "Registration token expiration in hours"
+        default: 24
+
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.DesktopVirtualization/hostPools"
+        resource_name: "{{HOST_POOL_NAME}}"
+        description: "Host pool exists"
+
+      - type: "file_exists"
+        path: "artifacts/outputs/session-host-registration-token.txt"
+        description: "Registration token generated and saved"
+
+  # Idempotency: Token generation is safe to rerun
+  idempotency:
+    enabled: true
+    check_command: |
+      az desktopvirtualization hostpool show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{HOST_POOL_NAME}}" \
+        --query "registrationInfo.token" \
+        --output tsv 2>/dev/null | grep -q "."
+    skip_if_exists: false
+
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-local"
+    command: |
+      cat > /tmp/avd-sessionhost-add-wrapper.ps1 << 'PSWRAPPER'
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Session Host Registration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+
+      # Configuration from config.yaml
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $vmPrefix = "{{SESSION_HOST_NAME_PREFIX}}"
+      $vmCount = {{SESSION_HOST_VM_COUNT}}
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  Host Pool: $hostPoolName"
+      Write-Host "  Resource Group: $resourceGroup"
+      Write-Host "  VM Prefix: $vmPrefix"
+      Write-Host "  VM Count: $vmCount"
+
+      # Step 1: Validate Azure authentication
+      Write-Host "[PROGRESS] Step 1/5: Validating Azure authentication..."
+      az account show --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Not authenticated to Azure"
+        exit 1
+      }
+
+      # Step 2: Validate host pool exists
+      Write-Host "[PROGRESS] Step 2/5: Validating host pool exists..."
+      az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Host pool not found: $hostPoolName"
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Host pool found: $hostPoolName"
+
+      # Get host pool resource ID
+      $hpId = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --query id -o tsv 2>$null
+
+      Write-Host "[VALIDATE] Host pool ID: $hpId"
+
+      # Step 3: Generate registration token
+      Write-Host "[PROGRESS] Step 3/5: Generating host pool registration token..."
+
+      # Calculate expiration time (24 hours from now)
+      $expiration = (Get-Date).ToUniversalTime().AddHours(24).ToString('yyyy-MM-ddTHH:mm:ss.000Z')
+
+      $tokenOutput = az desktopvirtualization hostpool update `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --registration-info "expiration-time=$expiration" "registration-token-operation=Update" `
+        --output json 2>&1
+
+      # Retrieve the registration token
+      $registrationToken = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --query "registrationInfo.token" -o tsv 2>$null
+
+      if ([string]::IsNullOrEmpty($registrationToken) -or $registrationToken -eq "null") {
+        Write-Host "[ERROR] Failed to generate registration token"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] Registration token generated (valid for 24 hours)"
+
+      # Step 4: Save token securely
+      Write-Host "[PROGRESS] Step 4/5: Saving registration token..."
+      $tokenFile = "artifacts/outputs/session-host-registration-token.txt"
+      $registrationToken | Out-File -FilePath $tokenFile -Encoding UTF8 -Force
+
+      # Restrict file permissions (Windows)
+      if ($PSVersionTable.Platform -eq "Win32NT") {
+        icacls $tokenFile /inheritance:r /grant:r "$($env:USERNAME):(F)" | Out-Null
+      } else {
+        chmod 600 $tokenFile
+      }
+
+      Write-Host "[VALIDATE] Token saved to: $tokenFile"
+      Write-Host "[WARNING] Token is sensitive - keep it secure and rotate after use"
+
+      # Step 5: Verify VMs are ready for registration
+      Write-Host "[PROGRESS] Step 5/5: Verifying session host VMs..."
+
+      $readyCount = 0
+      $runningCount = 0
+      $vmStatus = @()
+
+      for ($i = 1; $i -le $vmCount; $i++) {
+        $vmName = "$vmPrefix-{0:D2}" -f $i
+
+        az vm show `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --output none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[WARNING] VM not found: $vmName"
+          continue
+        }
+
+        $readyCount++
+
+        # Check VM state
+        $vmState = az vm get-instance-view `
+          --resource-group $resourceGroup `
+          --name $vmName `
+          --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" `
+          -o tsv 2>$null
+
+        Write-Host "[PROGRESS] $vmName`: $vmState"
+
+        if ($vmState -eq "VM running") {
+          $runningCount++
+        }
+
+        $vmStatus += @{
+          "name" = $vmName
+          "state" = $vmState
+        }
+      }
+
+      Write-Host "[VALIDATE] VMs found: $readyCount/$vmCount"
+      Write-Host "[VALIDATE] VMs running: $runningCount/$vmCount"
+
+      if ($readyCount -eq 0) {
+        Write-Host "[ERROR] No VMs found - deployment may have failed"
+        exit 1
+      }
+
+      # Generate registration report
+      $reportLines = @(
+        "Host Pool Session Host Registration",
+        "====================================",
+        "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
+        "",
+        "Host Pool Details",
+        "  Name: $hostPoolName",
+        "  Resource Group: $resourceGroup",
+        "  ID: $hpId",
+        "",
+        "Registration Token",
+        "  Status: Generated",
+        "  Expiration: 24 hours from generation",
+        "  File: $tokenFile",
+        "",
+        "Session Host VMs",
+        "  Total: $vmCount",
+        "  Found: $readyCount",
+        "  Running: $runningCount",
+        "",
+        "Next Steps",
+        "  1. If VMs have AVD agent pre-installed:",
+        "     - They should auto-register within 30 minutes",
+        "     - Check host pool for registered session hosts",
+        "",
+        "  2. If manual registration is needed:",
+        "     - RDP into each session host VM",
+        "     - Download AVD agent from https://aka.ms/avdagent",
+        "     - Install with registration token from $tokenFile",
+        "     - Complete Entra ID join process",
+        "",
+        "  3. Verify Registration:",
+        "     az desktopvirtualization sessionhost list --resource-group $resourceGroup --host-pool-name $hostPoolName",
+        "",
+        "Token Security",
+        "  - Keep token secure, especially if long-lived",
+        "  - Regenerate after use for better security",
+        "  - Token expires 24 hours after generation",
+        "  - Current expiration $expiration"
+      )
+      $reportContent = $reportLines -join [Environment]::NewLine
+
+      $reportContent | Out-File -FilePath "artifacts/outputs/session-host-registration-details.txt" -Encoding UTF8 -Force
+
+      Write-Host "[SUCCESS] Session host registration preparation completed"
+      Write-Host ""
+      Write-Host "IMPORTANT: Session hosts are ready for registration"
+      Write-Host "======================================================"
+      Write-Host "Registration token is valid for 24 hours"
+      Write-Host "Token location: $tokenFile"
+      Write-Host ""
+
+      exit 0
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/avd-sessionhost-add-wrapper.ps1
+      rm -f /tmp/avd-sessionhost-add-wrapper.ps1
+
+  # Rollback: Not applicable for token generation
+  rollback:
+    enabled: false
+    steps: []
+
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
