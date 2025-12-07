@@ -295,7 +295,7 @@ avd_scaling_plan:
 # ==============================================================================
 golden_image:
   # Temporary VM for image creation
-  temp_vm_name: "gm-temp-vm"
+  temp_vm_name: "vm-golden-img"
   vm_size: "Standard_D4s_v6"
   # Windows base image
   image_publisher: "MicrosoftWindowsDesktop"

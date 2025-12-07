@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-config.sh",
+            "blocking": false
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/fix-errors.py",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write(capabilities/**/*.yaml)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-yaml.sh \"$FILE_PATH\"",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(capabilities/**/*.yaml)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-yaml.sh \"$FILE_PATH\"",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

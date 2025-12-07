@@ -41,3 +41,10 @@ teams:
   install_command: "msiexec.exe"
   install_args: '/i "{outfile}" /quiet /norestart ALLUSERS=1'
   success_codes: [0, 3010]
+
+office365:
+  name: "Microsoft 365 Apps (includes Access)"
+  source_type: "Script"
+  install_command: "powershell.exe"
+  install_args: '-ExecutionPolicy Bypass -Command "& { $tempDir = \"C:\\Temp\"; $configXml = \"$tempDir\\office365-config.xml\"; $xmlContent = @\"\n<Configuration>\n  <Add OfficeClientEdition=\"64\" Channel=\"Current\">\n    <Product ID=\"O365ProPlusRetail\">\n      <Language ID=\"en-us\" />\n    </Product>\n  </Add>\n  <Display Level=\"None\" AcceptEULA=\"TRUE\" />\n  <Property Name=\"AUTOACTIVATE\" Value=\"1\" />\n</Configuration>\n\"@; New-Item -ItemType Directory -Path $tempDir -Force | Out-Null; $xmlContent | Out-File -FilePath $configXml -Encoding UTF8; $odtPath = \"$tempDir\\setup.exe\"; Invoke-WebRequest -Uri \"https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_17830-20162.exe\" -OutFile \"$tempDir\\ODT.exe\" -UseBasicParsing; Start-Process -FilePath \"$tempDir\\ODT.exe\" -ArgumentList \"/quiet\",\"/extract:$tempDir\" -Wait; Start-Process -FilePath $odtPath -ArgumentList \"/configure\",$configXml -Wait -NoNewWindow; Remove-Item \"$tempDir\\ODT.exe\",\"$tempDir\\setup.exe\",$configXml -Force -ErrorAction SilentlyContinue }"'
+  success_codes: [0]
