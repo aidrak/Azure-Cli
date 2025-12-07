@@ -1,0 +1,149 @@
+# ==============================================================================
+# Capability Operation: Enable SSH on Golden Image VM
+# ==============================================================================
+# This operation enables SSH access to the golden image VM by:
+# 1. Installing the WindowsOpenSSH Azure extension
+# 2. Creating NSG rules to allow SSH from the admin IP
+# 3. Resetting the admin password (to ensure credentials work)
+#
+# Prerequisites: VM must exist (vm-create must have completed)
+# ==============================================================================
+
+operation:
+  id: "golden-image-enable-ssh"
+  name: "Enable SSH on Golden Image VM"
+  description: "Install OpenSSH extension and configure NSG rules for SSH access"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  duration:
+    expected: 180
+    timeout: 300
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "admin_public_ip"
+        type: "string"
+        description: "Admin public IP for SSH access"
+        default: "{{ADMIN_PUBLIC_IP}}"
+    optional: []
+
+  requires:
+    - operation: "vm-create"
+      status: "completed"
+      description: "VM must be created first"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm extension show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vm-name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --name "WindowsOpenSSH" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  validation:
+    enabled: true
+    checks:
+      - type: "extension_installed"
+        extension_name: "WindowsOpenSSH"
+        description: "OpenSSH extension installed on VM"
+
+  template:
+    type: "bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Enabling SSH on Golden Image VM: $(date)"
+
+      # Step 1: Install OpenSSH extension
+      echo "[*] Installing WindowsOpenSSH extension..."
+      az vm extension set \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vm-name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --name WindowsOpenSSH \
+        --publisher Microsoft.Azure.OpenSSH \
+        --version 3.0 \
+        --output json
+
+      if [[ $? -ne 0 ]]; then
+        echo "[x] Failed to install OpenSSH extension"
+        exit 1
+      fi
+      echo "[v] OpenSSH extension installed"
+
+      # Step 2: Get the NSG name for the management subnet
+      echo "[*] Finding NSG for management subnet..."
+      NSG_NAME="nsg-snet-management"
+
+      # Step 3: Create SSH rule (allow from admin IP)
+      echo "[*] Creating SSH NSG rule for admin IP: {{ADMIN_PUBLIC_IP}}..."
+      az network nsg rule create \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --nsg-name "$NSG_NAME" \
+        --name "Allow-SSH-From-Admin" \
+        --priority 105 \
+        --direction Inbound \
+        --access Allow \
+        --protocol Tcp \
+        --destination-port-ranges 22 \
+        --source-address-prefixes "{{ADMIN_PUBLIC_IP}}" \
+        --description "Allow SSH from admin IP for golden image management" \
+        --output none 2>/dev/null || echo "[i] SSH rule may already exist"
+
+      echo "[v] SSH NSG rule configured"
+
+      # Step 4: Reset admin password to ensure credentials work
+      echo "[*] Resetting admin password..."
+      az vm user update \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --username "{{GOLDEN_IMAGE_ADMIN_USERNAME}}" \
+        --password "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" \
+        --output none
+
+      echo "[v] Admin password reset"
+
+      # Step 5: Get VM public IP for output
+      echo "[*] Getting VM public IP..."
+      VM_PUBLIC_IP=$(az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --show-details \
+        --query "publicIps" \
+        --output tsv)
+
+      echo ""
+      echo "[SUCCESS] SSH enabled on Golden Image VM"
+      echo "[INFO] SSH Connection: ssh {{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}"
+      echo "[INFO] Use sshpass for automation: sshpass -p '<password>' ssh {{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}"
+      exit 0
+
+  powershell:
+    content: ""
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove SSH NSG Rule"
+        command: |
+          az network nsg rule delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --nsg-name "nsg-snet-management" \
+            --name "Allow-SSH-From-Admin" \
+            --output none 2>/dev/null || true
+
+  fixes: []

@@ -1,0 +1,187 @@
+# ==============================================================================
+# Application Operation: Google Chrome Enterprise
+# ==============================================================================
+# Installs Chrome via SSH (requires golden-image-enable-ssh to run first)
+# ==============================================================================
+
+operation:
+  id: "app-chrome"
+  name: "Install Google Chrome Enterprise"
+  description: "Download and install Google Chrome browser with enterprise settings via SSH"
+
+  capability: "applications"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  duration:
+    expected: 300  # 5 minutes (download + install)
+    timeout: 600   # 10 minutes max
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional: []
+
+  requires:
+    - operation: "golden-image-enable-ssh"
+      status: "completed"
+      description: "SSH must be enabled on the VM first"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      # Check if Chrome is installed via SSH
+      VM_PUBLIC_IP=$(az vm show --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --show-details --query "publicIps" -o tsv)
+      sshpass -p "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "{{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}" 'powershell -Command "Test-Path \"C:\Program Files\Google\Chrome\Application\chrome.exe\""' 2>/dev/null | grep -q "True"
+    skip_if_exists: true
+
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        description: "Chrome executable installed"
+
+  template:
+    type: "ssh-powershell"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Installing Google Chrome Enterprise via SSH: $(date)"
+
+      # Get VM public IP
+      echo "[*] Getting VM public IP..."
+      VM_PUBLIC_IP=$(az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --show-details \
+        --query "publicIps" \
+        --output tsv)
+
+      if [[ -z "$VM_PUBLIC_IP" ]]; then
+        echo "[x] Failed to get VM public IP"
+        exit 1
+      fi
+      echo "[v] VM Public IP: $VM_PUBLIC_IP"
+
+      # Create local PowerShell script
+      SCRIPT_NAME="install-chrome-$(date +%s).ps1"
+      LOCAL_SCRIPT="/tmp/${SCRIPT_NAME}"
+      REMOTE_SCRIPT="C:/Temp/${SCRIPT_NAME}"
+
+      cat > "$LOCAL_SCRIPT" << 'PSEOF'
+      {{POWERSHELL_CONTENT}}
+      PSEOF
+
+      # Copy script to VM via SCP
+      echo "[*] Copying script to VM..."
+      sshpass -p "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" scp \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        "$LOCAL_SCRIPT" \
+        "{{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}:${REMOTE_SCRIPT}" 2>/dev/null
+
+      if [[ $? -ne 0 ]]; then
+        echo "[x] Failed to copy script to VM"
+        rm -f "$LOCAL_SCRIPT"
+        exit 1
+      fi
+      echo "[v] Script copied to VM"
+
+      # Execute script via SSH
+      echo "[*] Executing installation script..."
+      sshpass -p "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        "{{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}" \
+        "powershell -ExecutionPolicy Bypass -File ${REMOTE_SCRIPT}"
+
+      EXIT_CODE=$?
+
+      # Cleanup local script
+      rm -f "$LOCAL_SCRIPT"
+
+      if [[ $EXIT_CODE -eq 0 ]]; then
+        echo "[SUCCESS] Google Chrome installed successfully"
+      else
+        echo "[x] Installation failed with exit code: $EXIT_CODE"
+      fi
+
+      exit $EXIT_CODE
+
+  powershell:
+    file: "app-chrome.ps1"
+    content: |
+      # ==============================================================================
+      # Install Google Chrome Enterprise
+      # ==============================================================================
+
+      Write-Host "[START] Installing Google Chrome Enterprise: $(Get-Date -Format 'HH:mm:ss')"
+
+      $tempDir = "C:\Temp"
+      $installer = "$tempDir\Chrome.msi"
+      $url = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
+
+      try {
+          # Ensure temp directory exists
+          if (-not (Test-Path $tempDir)) {
+              New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
+          }
+
+          # Download
+          Write-Host "[i] Downloading Chrome from $url..."
+          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -TimeoutSec 300
+
+          if (-not (Test-Path $installer)) {
+              throw "Download failed: installer not found"
+          }
+
+          $fileSize = [math]::Round((Get-Item $installer).Length / 1MB, 2)
+          Write-Host "[i] Download complete: $fileSize MB"
+
+          # Install
+          Write-Host "[i] Installing Chrome..."
+          $proc = Start-Process -FilePath "msiexec.exe" `
+              -ArgumentList "/i `"$installer`" /quiet /norestart ALLUSERS=1" `
+              -Wait -PassThru
+
+          if ($proc.ExitCode -notin @(0, 3010)) {
+              throw "Installation failed with exit code $($proc.ExitCode)"
+          }
+
+          # Validate
+          Write-Host "[i] Validating installation..."
+          $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          if (-not (Test-Path $chromePath)) {
+              throw "Validation failed: Chrome executable not found"
+          }
+
+          # Cleanup
+          Remove-Item $installer -Force -ErrorAction SilentlyContinue
+
+          Write-Host "[v] Google Chrome installed successfully"
+          exit 0
+
+      } catch {
+          Write-Host "[x] Error: $($_.Exception.Message)"
+          exit 1
+      }
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Uninstall Chrome via SSH"
+        command: |
+          VM_PUBLIC_IP=$(az vm show --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --show-details --query "publicIps" -o tsv)
+          sshpass -p "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "{{GOLDEN_IMAGE_ADMIN_USERNAME}}@${VM_PUBLIC_IP}" 'powershell -Command "Get-Package -Name *Chrome* | Uninstall-Package -Force -ErrorAction SilentlyContinue"' 2>/dev/null || true
+
+  fixes: []

@@ -265,9 +265,31 @@ render_command() {
 
     # Handle powershell-vm-command template type
     if [[ "$TEMPLATE_TYPE" == "powershell-vm-command" ]]; then
+        # Extract PowerShell script first (if exists)
+        local ps_script
+        ps_script=$(extract_powershell_script "$yaml_file" 2>/dev/null) || true
+        local ps_script_status=$?
+
         # Substitute variables in template command
         local command
         command=$(substitute_variables "$TEMPLATE_COMMAND")
+
+        # Replace @script.ps1 patterns with actual extracted path
+        if [[ -n "$ps_script" && -f "$ps_script" ]]; then
+            # Replace @${PS_FILE} or @"${PS_FILE}" with extracted path
+            # Also replace any @path/to/file.ps1 patterns
+            if [[ -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
+                # Replace patterns like @${PS_FILE} or @"${PS_FILE}"
+                command="${command//\@\$\{PS_FILE\}/@${ps_script}}"
+                command="${command//\@\"\$\{PS_FILE\}\"/@${ps_script}}"
+                # Also replace direct filename references
+                if [[ "$command" =~ @[^[:space:]]*${POWERSHELL_FILE} ]]; then
+                    local full_match="${BASH_REMATCH[0]}"
+                    command="${command//${full_match}/@${ps_script}}"
+                fi
+            fi
+        fi
+
         echo "$command"
         return 0
     fi

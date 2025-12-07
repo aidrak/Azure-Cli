@@ -158,15 +158,21 @@ get_steps() {
         return 0
     fi
 
-    # Try template command (Capability Schema)
-    local template_command=$(yq eval '.operation.template.command' "$yaml_file")
+    # Try template command (Capability Schema) - use render_command for full processing
+    local template_command
 
-    if [[ -n "$template_command" ]] && [[ "$template_command" != "null" ]]; then
-        # Construct a synthetic step
-        # escape double quotes for JSON
-        local escaped_command=$(echo "$template_command" | jq -Rs .)
-        echo "[{\"name\": \"Execute Operation Template\", \"command\": $escaped_command}]"
-        return 0
+    # First check if template exists in YAML
+    local raw_template=$(yq eval '.operation.template.command' "$yaml_file")
+    if [[ -n "$raw_template" ]] && [[ "$raw_template" != "null" ]]; then
+        # Use render_command to properly process the template (substitutes {{POWERSHELL_CONTENT}}, etc.)
+        template_command=$(render_command "$yaml_file" 2>/dev/null)
+
+        if [[ -n "$template_command" ]]; then
+            # Construct a synthetic step with the fully rendered command
+            local escaped_command=$(echo "$template_command" | jq -Rs .)
+            echo "[{\"name\": \"Execute Operation Template\", \"command\": $escaped_command}]"
+            return 0
+        fi
     fi
 
     log_error "No steps or template defined in operation"

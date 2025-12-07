@@ -291,6 +291,19 @@ avd_scaling_plan:
   enabled: true
 
 # ==============================================================================
+# Admin/Management Settings
+# ==============================================================================
+admin:
+  # Your public IP for SSH/RDP access to golden image VMs
+  # Used to create NSG rules that allow management access
+  # Get your IP: curl -s ifconfig.me
+  public_ip: "67.3.179.193"
+  # Allow SSH access to golden image VMs (via OpenSSH extension)
+  enable_ssh: true
+  # Allow RDP access to golden image VMs
+  enable_rdp: true
+
+# ==============================================================================
 # Golden Image Configuration (Module 05)
 # ==============================================================================
 golden_image:
@@ -305,6 +318,11 @@ golden_image:
   # VM credentials (password should be set via environment variable)
   admin_username: "entra-admin"
   admin_password: "" # Set in secrets.yaml (NEVER commit passwords here!)
+  # SSH settings for remote PowerShell execution
+  ssh:
+    enabled: true
+    # OpenSSH extension is installed automatically during VM creation
+    # NSG rules are created to allow SSH from admin.public_ip
   # Azure Compute Gallery
   gallery_name: "avd_gallery"
   definition_name: "windows11-golden-image"
