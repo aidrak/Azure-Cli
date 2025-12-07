@@ -7,17 +7,14 @@ operation:
   id: "storage-rbac-assign"
   name: "Assign Storage RBAC Permissions"
   description: "Assign FSLogix file share permissions to standard and admin user groups"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Authorization/roleAssignments"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 300    # 5 minutes (fail-fast if exceeds)
-    type: "FAST"    # FAST (<5min) or WAIT (10+min)
-
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes (fail-fast if exceeds)
+    type: "FAST" # FAST (<5min) or WAIT (10+min)
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,16 +39,13 @@ operation:
         type: "string"
         description: "Admin users group name"
         default: "{{ENTRA_GROUP_USERS_ADMINS}}"
-
   # Prerequisites (check state.json)
   requires:
     - operation: "account-create"
       status: "completed"
-      optional: true  # Storage may have been created previously (operation in storage capability)
-
-    # Note: Removed 'entra-create-groups' dependency as it doesn't exist.
-    # This operation will fail if required groups don't exist, which is sufficient validation.
-
+      optional: true # Storage may have been created previously (operation in storage capability)
+      # Note: Removed 'entra-create-groups' dependency as it doesn't exist.
+      # This operation will fail if required groups don't exist, which is sufficient validation.
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -82,7 +76,6 @@ operation:
             exit 1
           }
         description: "Verify storage permissions are assigned"
-
   # Idempotency: Check for existing role assignments
   idempotency:
     enabled: true
@@ -90,13 +83,41 @@ operation:
       az role assignment list \
         --role "Storage File Data SMB Share Contributor" \
         --output none 2>/dev/null
-    skip_if_exists: false  # Check but don't skip (may need to assign)
-
+    skip_if_exists: false # Check but don't skip (may need to assign)
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rbac-storage-assign-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Storage RBAC Assignments"
+        description: "Revoke storage file share role assignments from user groups"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[?starts_with(name, 'fslogix')].name" -o tsv | head -1)
+
+          if [ -n "$STORAGE_ACCOUNT" ]; then
+            STORAGE_ID=$(az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" --query id -o tsv)
+            FILE_SHARE_ID="$STORAGE_ID/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
+
+            # Get and remove standard users assignment
+            STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
+            if [ -n "$STD_GROUP_ID" ]; then
+              az role assignment delete --assignee "$STD_GROUP_ID" --role "Storage File Data SMB Share Contributor" --scope "$FILE_SHARE_ID" 2>/dev/null || true
+            fi
+
+            # Get and remove admin users assignment
+            ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
+            if [ -n "$ADMIN_GROUP_ID" ]; then
+              az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Storage File Data SMB Share Elevated Contributor" --scope "$FILE_SHARE_ID" 2>/dev/null || true
+            fi
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Storage Permissions Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
@@ -224,37 +245,3 @@ operation:
         Write-Host "[ERROR] Stack trace: $($_.ScriptStackTrace)"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rbac-storage-assign-wrapper.ps1
-      rm -f /tmp/rbac-storage-assign-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove Storage RBAC Assignments"
-        description: "Revoke storage file share role assignments from user groups"
-        command: |
-          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-          STORAGE_ACCOUNT=$(az storage account list --resource-group "$RESOURCE_GROUP" --query "[?starts_with(name, 'fslogix')].name" -o tsv | head -1)
-
-          if [ -n "$STORAGE_ACCOUNT" ]; then
-            STORAGE_ID=$(az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT" --query id -o tsv)
-            FILE_SHARE_ID="$STORAGE_ID/fileServices/default/fileshares/{{STORAGE_FILE_SHARE_NAME}}"
-
-            # Get and remove standard users assignment
-            STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
-            if [ -n "$STD_GROUP_ID" ]; then
-              az role assignment delete --assignee "$STD_GROUP_ID" --role "Storage File Data SMB Share Contributor" --scope "$FILE_SHARE_ID" 2>/dev/null || true
-            fi
-
-            # Get and remove admin users assignment
-            ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
-            if [ -n "$ADMIN_GROUP_ID" ]; then
-              az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Storage File Data SMB Share Elevated Contributor" --scope "$FILE_SHARE_ID" 2>/dev/null || true
-            fi
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

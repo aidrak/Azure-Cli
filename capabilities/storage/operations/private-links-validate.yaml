@@ -7,21 +7,17 @@ operation:
   id: "private-links-validate"
   name: "Validate Private Links Configuration"
   description: "Comprehensive validation of private endpoint, DNS zone, and VNet integration"
-
   capability: "storage"
   operation_mode: "validate"
   resource_type: "Microsoft.Network/privateEndpoints"
-
   # Duration expectations
   duration:
-    expected: 60       # 60 seconds (1 minute)
-    timeout: 120       # 2 minutes
+    expected: 60 # 60 seconds (1 minute)
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Dependencies
   requires:
     - "private-endpoint-create"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -46,7 +42,6 @@ operation:
         type: "string"
         description: "Private DNS zone name"
         default: "privatelink.file.core.windows.net"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -55,26 +50,28 @@ operation:
         resource_type: "Microsoft.Network/privateEndpoints"
         resource_name: "{{STORAGE_ACCOUNT_NAME}}-file-pe"
         description: "Private endpoint exists"
-
       - type: "resource_exists"
         resource_type: "Microsoft.Network/privateDnsZones"
         resource_name: "privatelink.file.core.windows.net"
         description: "Private DNS zone exists"
-
       - type: "vnet_link_exists"
         zone_name: "privatelink.file.core.windows.net"
         vnet_name: "{{NETWORKING_VNET_NAME}}"
         description: "VNet link exists"
-
   # No idempotency check - validation operations are always run
   idempotency:
     enabled: false
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-private-links-validate-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Not applicable for validation operations
+  rollback:
+    enabled: false
+    steps: []
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Validating Private Links Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -256,14 +253,3 @@ operation:
         Write-Host "[WARN] Some validation checks failed - please review above"
         exit 0  # Exit 0 to allow deployment to continue
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-private-links-validate-wrapper.ps1
-      rm -f /tmp/storage-private-links-validate-wrapper.ps1
-
-  # Rollback: Not applicable for validation operations
-  rollback:
-    enabled: false
-    steps: []
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

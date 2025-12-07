@@ -7,17 +7,14 @@ operation:
   id: "availability-set-create"
   name: "Create Availability Set"
   description: "Create Azure availability set for high availability VM deployments"
-
   capability: "compute"
   operation_mode: "create"
   resource_type: "Microsoft.Compute/availabilitySets"
-
   # Duration expectations
   duration:
     expected: 60
     timeout: 180
     type: "NORMAL"
-
   # Parameters extracted from configuration
   parameters:
     required:
@@ -50,7 +47,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -59,11 +55,9 @@ operation:
         resource_type: "Microsoft.Compute/availabilitySets"
         resource_name: "{{COMPUTE_AVAILABILITY_SET_NAME}}"
         description: "Availability set exists"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Availability set provisioned successfully"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -73,12 +67,25 @@ operation:
         --name "{{COMPUTE_AVAILABILITY_SET_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-availability-set-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Availability Set"
+        description: "Remove the availability set"
+        command: |
+          az vm availability-set delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{COMPUTE_AVAILABILITY_SET_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Availability set creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $availabilitySetName = "{{COMPUTE_AVAILABILITY_SET_NAME}}"
@@ -158,22 +165,3 @@ operation:
       Write-Host "[SUCCESS]   Location: $location"
       Write-Host "[SUCCESS]   State: $provisioningState"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-availability-set-create-wrapper.ps1
-      rm -f /tmp/compute-availability-set-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Availability Set"
-        description: "Remove the availability set"
-        command: |
-          az vm availability-set delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{COMPUTE_AVAILABILITY_SET_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

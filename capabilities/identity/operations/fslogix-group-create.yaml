@@ -7,17 +7,14 @@ operation:
   id: "fslogix-group-create"
   name: "Create FSLogix Device Security Group"
   description: "Create Entra ID security group for FSLogix configuration policies"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Graph/groups"
-
   # Duration expectations
   duration:
-    expected: 30    # 30 seconds
-    timeout: 60     # 1 minute
+    expected: 30 # 30 seconds
+    timeout: 60 # 1 minute
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -34,7 +31,6 @@ operation:
         type: "string"
         description: "Mail nickname for the group (auto-derived from name if not provided)"
         default: ""
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -42,11 +38,9 @@ operation:
       - type: "group_exists"
         group_name: "{{ENTRA_GROUP_DEVICES_FSLOGIX}}"
         description: "FSLogix device group exists in Entra ID"
-
       - type: "group_type"
         expected: "Security"
         description: "Group is a security group"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -55,12 +49,24 @@ operation:
         --filter "displayName eq '{{ENTRA_GROUP_DEVICES_FSLOGIX}}'" \
         --query "[0].id" -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/fslogix-group-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete FSLogix Device Group"
+        description: "Remove the Entra ID security group for FSLogix devices"
+        command: |
+          az ad group delete \
+            --group "{{ENTRA_GROUP_DEVICES_FSLOGIX}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Creating FSLogix device security group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -107,21 +113,3 @@ operation:
       Write-Host "[INFO] Use this group for FSLogix profile management policies"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/fslogix-group-create-wrapper.ps1
-      rm -f /tmp/fslogix-group-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete FSLogix Device Group"
-        description: "Remove the Entra ID security group for FSLogix devices"
-        command: |
-          az ad group delete \
-            --group "{{ENTRA_GROUP_DEVICES_FSLOGIX}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

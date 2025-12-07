@@ -6,17 +6,14 @@ operation:
   id: "account-delete"
   name: "Delete Storage Account"
   description: "Delete Azure storage account and all associated data permanently"
-
   capability: "storage"
   operation_mode: "delete"
   resource_type: "Microsoft.Storage/storageAccounts"
-
   # Duration expectations
   duration:
-    expected: 120       # 2 minutes
-    timeout: 300        # 5 minutes
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes
     type: "WAIT"
-
   # Parameters for deletion
   parameters:
     required:
@@ -37,7 +34,6 @@ operation:
         type: "boolean"
         description: "Perform validation without actual deletion"
         default: false
-
   # Validation checks (pre-checks for delete operations)
   validation:
     enabled: true
@@ -46,7 +42,6 @@ operation:
         resource_type: "Microsoft.Storage/storageAccounts"
         resource_name: "{{storage_account_name}}"
         description: "Storage account exists and is accessible"
-
   # Idempotency: Check if already deleted
   idempotency:
     enabled: true
@@ -56,12 +51,17 @@ operation:
         --name "{{storage_account_name}}" \
         --output none 2>/dev/null
     skip_if_exists: false
-
   # Template command (delete storage account)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-account-delete-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Not possible for delete operations
+  rollback:
+    enabled: false
+    note: "Storage account deletion is irreversible. Data cannot be recovered after deletion."
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Storage account deletion: {{storage_account_name}} at $(Get-Date -Format 'HH:mm:ss')"
 
       $storageAccountName = "{{storage_account_name}}"
@@ -155,14 +155,3 @@ operation:
       Write-Host "[SUCCESS] Storage account deleted successfully"
       Write-Host "[WARNING] All data in this storage account has been permanently removed"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-account-delete-wrapper.ps1
-      rm -f /tmp/storage-account-delete-wrapper.ps1
-
-  # Rollback: Not possible for delete operations
-  rollback:
-    enabled: false
-    note: "Storage account deletion is irreversible. Data cannot be recovered after deletion."
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

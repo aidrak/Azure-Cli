@@ -7,17 +7,14 @@ operation:
   id: "subnet-create"
   name: "Create Subnets"
   description: "Create all configured subnets from array in config.yaml"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/virtualNetworks/subnets"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes (for 3-5 subnets)
-    timeout: 240    # 4 minutes
+    expected: 120 # 2 minutes (for 3-5 subnets)
+    timeout: 240 # 4 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -34,7 +31,6 @@ operation:
         type: "array"
         description: "Subnet configuration array from config.yaml"
         default: ".networking.subnets"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -43,11 +39,9 @@ operation:
         resource_type: "Microsoft.Network/virtualNetworks/subnets"
         min_count: 1
         description: "At least one subnet created"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Subnets provisioned successfully"
-
   # Idempotency: Check for existing subnets
   idempotency:
     enabled: true
@@ -56,13 +50,32 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --vnet-name "{{NETWORKING_VNET_NAME}}" \
         --query "length(@)" -o tsv
-    skip_if_exists: false  # Check count but continue with missing subnets
-
+    skip_if_exists: false # Check count but continue with missing subnets
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-subnet-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Subnets"
+        description: "Remove created subnets"
+        command: |
+          for subnet in $(az network vnet subnet list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[].name" -o tsv); do
+            az network vnet subnet delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$subnet" \
+              --yes
+          done
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration
@@ -152,28 +165,3 @@ operation:
       Write-Host "[SUCCESS]   Created: $createdCount"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-subnet-create-wrapper.ps1
-      rm -f /tmp/networking-subnet-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Subnets"
-        description: "Remove created subnets"
-        command: |
-          for subnet in $(az network vnet subnet list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --vnet-name "{{NETWORKING_VNET_NAME}}" \
-            --query "[].name" -o tsv); do
-            az network vnet subnet delete \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --vnet-name "{{NETWORKING_VNET_NAME}}" \
-              --name "$subnet" \
-              --yes
-          done
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

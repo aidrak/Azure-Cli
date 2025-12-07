@@ -104,74 +104,90 @@ Located in `queries/` directory:
 4. Pipe through JQ filter: `| jq -f queries/<type>.jq`
 5. Report findings to user in clear format
 
+## CRITICAL: Command Formatting Rules
+
+**ALWAYS use hardcoded resource group name "RG-Azure-VDI-01" in az commands, NOT variables!**
+
+The issue: When using `source && load_config && az vm list -g "$AZURE_RESOURCE_GROUP"`, the variable doesn't persist in the same command chain, causing Azure API errors.
+
+**WRONG - Variable gets lost:**
+```bash
+source core/config-manager.sh && load_config && az vm list -g "$AZURE_RESOURCE_GROUP" -o json
+```
+
+**RIGHT - Use hardcoded value:**
+```bash
+source core/config-manager.sh && load_config && az vm list -g "RG-Azure-VDI-01" -o json | jq -f queries/compute.jq
+```
+
+**Or separate the commands (but wastes tokens):**
+```bash
+# Load config first
+source core/config-manager.sh && load_config
+
+# Then run az command in separate Bash call
+az vm list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/compute.jq
+```
+
+**Best practice: Use hardcoded "RG-Azure-VDI-01" for all az commands in this skill!**
+
 ## Common Queries
 
 ### What VMs exist?
 ```bash
-source core/config-manager.sh && load_config
-az vm list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/compute.jq
+source core/config-manager.sh && load_config && az vm list -g "RG-Azure-VDI-01" -o json | jq -f queries/compute.jq
 ```
 
 ### What's deployed in my resource group?
 ```bash
-source core/config-manager.sh && load_config
-az resource list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/summary.jq
+source core/config-manager.sh && load_config && az resource list -g "RG-Azure-VDI-01" -o json | jq -f queries/summary.jq
 ```
 
 ### Show all storage accounts
 ```bash
-source core/config-manager.sh && load_config
-az storage account list -o json | jq -f queries/storage.jq
+source core/config-manager.sh && load_config && az storage account list -g "RG-Azure-VDI-01" -o json | jq -f queries/storage.jq
 ```
 
 ### Show networking configuration
 ```bash
-source core/config-manager.sh && load_config
-az network vnet list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/networking.jq
+source core/config-manager.sh && load_config && az network vnet list -g "RG-Azure-VDI-01" -o json | jq -f queries/networking.jq
 ```
 
 ### Show AVD host pools
 ```bash
-source core/config-manager.sh && load_config
-az desktopvirtualization hostpool list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/avd.jq
+source core/config-manager.sh && load_config && az desktopvirtualization hostpool list -g "RG-Azure-VDI-01" -o json | jq -f queries/avd.jq
 ```
 
 ### Check Entra ID groups
 ```bash
-source core/config-manager.sh && load_config
-az ad group list --filter "startswith(displayName, 'AVD-')" -o json | jq -f queries/identity.jq
+source core/config-manager.sh && load_config && az ad group list --filter "startswith(displayName, 'AVD-')" -o json | jq -f queries/identity.jq
 ```
 
 ## Examples
 
 ### Example 1: User asks "What VMs exist?"
 ```bash
-source core/config-manager.sh && load_config
-az vm list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/compute.jq
+source core/config-manager.sh && load_config && az vm list -g "RG-Azure-VDI-01" -o json | jq -f queries/compute.jq
 ```
 
 **Expected output**: Clean JSON with VM name, size, OS, power state, IPs
 
 ### Example 2: User asks "Show current Azure state"
 ```bash
-source core/config-manager.sh && load_config
+source core/config-manager.sh && load_config && az resource list -g "RG-Azure-VDI-01" -o json | jq -f queries/summary.jq
+```
 
-# Get summary of all resources
-az resource list -g "$AZURE_RESOURCE_GROUP" -o json | jq -f queries/summary.jq
-
-# Count by type
-az resource list -g "$AZURE_RESOURCE_GROUP" -o json | jq -r '.[].type' | sort | uniq -c
+```bash
+source core/config-manager.sh && load_config && az resource list -g "RG-Azure-VDI-01" -o json | jq -r '.[].type' | sort | uniq -c
 ```
 
 ### Example 3: User asks "Is the golden image VM ready?"
 ```bash
-source core/config-manager.sh && load_config
+source core/config-manager.sh && load_config && az vm show -g "RG-Azure-VDI-01" -n "vm-golden-img" -o json | jq -f queries/compute.jq
+```
 
-# Check if VM exists and get status
-az vm show -g "$AZURE_RESOURCE_GROUP" -n "vm-golden-image" -o json | jq -f queries/compute.jq
-
-# Check power state specifically
-az vm get-instance-view -g "$AZURE_RESOURCE_GROUP" -n "vm-golden-image" -o json | jq -r '.statuses[] | select(.code | startswith("PowerState/")) | .displayStatus'
+```bash
+source core/config-manager.sh && load_config && az vm get-instance-view -g "RG-Azure-VDI-01" -n "vm-golden-img" -o json | jq -r '.statuses[] | select(.code | startswith("PowerState/")) | .displayStatus'
 ```
 
 ## Testing JQ Filters Manually

@@ -7,17 +7,14 @@ operation:
   id: "disk-create"
   name: "Create Managed Disk"
   description: "Create an Azure managed disk for VM data storage"
-
   capability: "compute"
   operation_mode: "create"
   resource_type: "Microsoft.Compute/disks"
-
   # Duration expectations
   duration:
     expected: 60
     timeout: 120
     type: "NORMAL"
-
   # Parameters extracted from standard disk creation
   parameters:
     required:
@@ -58,7 +55,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -67,16 +63,13 @@ operation:
         resource_type: "Microsoft.Compute/disks"
         resource_name: "{{DISK_NAME}}"
         description: "Disk created successfully"
-
       - type: "property_equals"
         property: "diskSizeGB"
         expected: "{{DISK_SIZE_GB}}"
         description: "Disk size matches configuration"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Disk provisioning completed successfully"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -86,12 +79,25 @@ operation:
         --name "{{DISK_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-disk-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Managed Disk"
+        description: "Remove the managed disk"
+        command: |
+          az disk delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{DISK_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -149,22 +155,3 @@ operation:
       Write-Host "  State: $($diskInfo.provisioningState)"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-disk-create-wrapper.ps1
-      rm -f /tmp/compute-disk-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Managed Disk"
-        description: "Remove the managed disk"
-        command: |
-          az disk delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{DISK_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

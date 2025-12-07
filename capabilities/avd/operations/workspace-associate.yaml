@@ -7,17 +7,14 @@ operation:
   id: "workspace-associate"
   name: "Associate Application Group to Workspace"
   description: "Associate an application group to an existing workspace"
-
   capability: "avd"
   operation_mode: "update"
   resource_type: "Microsoft.DesktopVirtualization/workspaces"
-
   # Duration expectations
   duration:
     expected: 60
     timeout: 120
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -38,7 +35,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -47,12 +43,10 @@ operation:
         resource_type: "Microsoft.DesktopVirtualization/workspaces"
         resource_name: "{{WORKSPACE_NAME}}"
         description: "Workspace exists"
-
       - type: "property_contains"
         property: "applicationGroupReferences"
         expected: "{{APP_GROUP_NAME}}"
         description: "Application group is associated with workspace"
-
   # Idempotency: Check for association
   idempotency:
     enabled: true
@@ -63,12 +57,26 @@ operation:
         --query "applicationGroupReferences" \
         --output json 2>/dev/null | grep -q "{{APP_GROUP_NAME}}"
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/avd-workspace-associate-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse association by removing app group reference
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disassociate Application Group from Workspace"
+        description: "Remove the application group reference from workspace"
+        command: |
+          az desktopvirtualization workspace update \
+            --name "{{WORKSPACE_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --application-group-references "" \
+            --output none
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -113,23 +121,3 @@ operation:
 
       Write-Host "[SUCCESS] Application group '$appGroupName' is now associated with workspace '$workspaceName'."
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/avd-workspace-associate-wrapper.ps1
-      rm -f /tmp/avd-workspace-associate-wrapper.ps1
-
-  # Rollback: Reverse association by removing app group reference
-  rollback:
-    enabled: true
-    steps:
-      - name: "Disassociate Application Group from Workspace"
-        description: "Remove the application group reference from workspace"
-        command: |
-          az desktopvirtualization workspace update \
-            --name "{{WORKSPACE_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --application-group-references "" \
-            --output none
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

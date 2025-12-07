@@ -7,17 +7,14 @@ operation:
   id: "groups-validate"
   name: "Validate All Entra ID Security Groups"
   description: "Comprehensive validation of all Entra ID security groups created for AVD"
-
   capability: "identity"
   operation_mode: "validate"
   resource_type: "Microsoft.Graph/groups"
-
   # Duration expectations
   duration:
-    expected: 30    # 30 seconds
-    timeout: 60     # 1 minute
+    expected: 30 # 30 seconds
+    timeout: 60 # 1 minute
     type: "FAST"
-
   # Dependencies on group creation operations
   # Note: users, admins, and sso groups are typically created via the generic
   # group-create operation with different parameters. Dependencies removed as
@@ -26,7 +23,6 @@ operation:
     - "fslogix-group-create"
     - "network-group-create"
     - "security-group-create"
-
   # Parameters
   parameters:
     optional:
@@ -34,23 +30,25 @@ operation:
         type: "boolean"
         description: "Fail if any expected group is missing"
         default: true
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
     checks:
       - type: "all_groups_exist"
         description: "All configured groups exist in Entra ID"
-
   # Idempotency: Validation is always executed
   idempotency:
     enabled: false
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/groups-validate-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Validation has no rollback
+  rollback:
+    enabled: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Validating all Entra ID security groups: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -153,13 +151,3 @@ operation:
 
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/groups-validate-wrapper.ps1
-      rm -f /tmp/groups-validate-wrapper.ps1
-
-  # Rollback: Validation has no rollback
-  rollback:
-    enabled: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

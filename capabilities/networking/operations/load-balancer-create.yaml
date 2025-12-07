@@ -6,17 +6,14 @@ operation:
   id: "load-balancer-create"
   name: "Create Load Balancer"
   description: "Create Azure Load Balancer (internal or public) with configurable SKU, frontend IP configuration, and backend pool setup"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/loadBalancers"
-
   # Duration expectations
   duration:
-    expected: 60    # 1 minute
-    timeout: 180    # 3 minutes
+    expected: 60 # 1 minute
+    timeout: 180 # 3 minutes
     type: "FAST"
-
   # Parameters for load balancer creation
   parameters:
     required:
@@ -67,7 +64,6 @@ operation:
         type: "object"
         description: "Azure resource tags"
         default: "{}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -76,11 +72,9 @@ operation:
         resource_type: "Microsoft.Network/loadBalancers"
         resource_name: "{{NETWORKING_LB_NAME}}"
         description: "Load balancer created successfully"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Load balancer provisioned successfully"
-
   # Idempotency: Check for existing load balancer
   idempotency:
     enabled: true
@@ -90,12 +84,25 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --query "id" -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-lb-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Load Balancer"
+        description: "Remove the load balancer resource"
+        command: |
+          az network lb delete \
+            --name "{{NETWORKING_LB_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Creating load balancer: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -284,22 +291,3 @@ operation:
       Write-Host "[INFO]   - Add backend VMs: az network nic ip-config address-pool add --nic-name '<nic-name>' --ip-config-name '<ip-config>' --lb-name $lbName --address-pool $backendName"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-lb-create-wrapper.ps1
-      rm -f /tmp/networking-lb-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Load Balancer"
-        description: "Remove the load balancer resource"
-        command: |
-          az network lb delete \
-            --name "{{NETWORKING_LB_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --yes
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

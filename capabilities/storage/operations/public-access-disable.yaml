@@ -7,17 +7,14 @@ operation:
   id: "public-access-disable"
   name: "Disable Public Network Access"
   description: "Disable public network access to force all traffic through private endpoint"
-
   capability: "storage"
   operation_mode: "configure"
   resource_type: "Microsoft.Storage/storageAccounts"
-
   # Duration expectations
   duration:
-    expected: 30       # 30 seconds
-    timeout: 60        # 1 minute
+    expected: 30 # 30 seconds
+    timeout: 60 # 1 minute
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -30,7 +27,6 @@ operation:
         description: "Azure resource group name"
         default: "{{AZURE_RESOURCE_GROUP}}"
     optional: []
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -39,7 +35,6 @@ operation:
         property: "publicNetworkAccess"
         expected: "Disabled"
         description: "Public network access is disabled"
-
   # Idempotency: Check if already disabled
   idempotency:
     enabled: true
@@ -49,12 +44,25 @@ operation:
         --name "{{STORAGE_ACCOUNT_NAME}}" \
         --query "publicNetworkAccess" -o tsv 2>/dev/null | grep -q "Disabled"
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-public-access-disable-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Re-enable public network access if needed
+  rollback:
+    enabled: true
+    steps:
+      - name: "Re-enable Public Network Access"
+        description: "Restore public network access to the storage account"
+        command: |
+          az storage account update \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{STORAGE_ACCOUNT_NAME}}" \
+            --public-network-access Enabled
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       # Get storage account name (from previous operation or config)
       if (Test-Path /tmp/storage-account-name.txt) {
         $storageName = Get-Content /tmp/storage-account-name.txt
@@ -123,22 +131,3 @@ operation:
         Write-Host "  Got: $newAccess"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-public-access-disable-wrapper.ps1
-      rm -f /tmp/storage-public-access-disable-wrapper.ps1
-
-  # Rollback: Re-enable public network access if needed
-  rollback:
-    enabled: true
-    steps:
-      - name: "Re-enable Public Network Access"
-        description: "Restore public network access to the storage account"
-        command: |
-          az storage account update \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{STORAGE_ACCOUNT_NAME}}" \
-            --public-network-access Enabled
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

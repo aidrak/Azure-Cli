@@ -243,7 +243,36 @@ render_command() {
     # Parse operation
     parse_operation_yaml "$yaml_file" || return 1
 
-    # Extract PowerShell script (if exists)
+    # Handle powershell-direct template type
+    if [[ "$TEMPLATE_TYPE" == "powershell-direct" ]]; then
+        # Create temp file with PowerShell content
+        local temp_ps_file="/tmp/powershell-direct-${OPERATION_ID}-$(date +%s).ps1"
+
+        # Extract and substitute variables in PowerShell content
+        if [[ -n "$POWERSHELL_CONTENT" && "$POWERSHELL_CONTENT" != "null" ]]; then
+            local ps_content
+            ps_content=$(substitute_variables "$POWERSHELL_CONTENT")
+            echo "$ps_content" > "$temp_ps_file"
+        else
+            echo "[x] ERROR: powershell-direct requires powershell.content" >&2
+            return 1
+        fi
+
+        # Return command to execute PowerShell and cleanup
+        echo "pwsh -NoProfile -NonInteractive -File \"$temp_ps_file\"; _exit_code=\$?; rm -f \"$temp_ps_file\"; exit \$_exit_code"
+        return 0
+    fi
+
+    # Handle powershell-vm-command template type
+    if [[ "$TEMPLATE_TYPE" == "powershell-vm-command" ]]; then
+        # Substitute variables in template command
+        local command
+        command=$(substitute_variables "$TEMPLATE_COMMAND")
+        echo "$command"
+        return 0
+    fi
+
+    # Extract PowerShell script (if exists) for other template types
     local ps_script
     ps_script=$(extract_powershell_script "$yaml_file")  # Don't fail if no PowerShell
     local ps_script_status=$?

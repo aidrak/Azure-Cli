@@ -7,17 +7,14 @@ operation:
   id: "vm-login-rbac-assign"
   name: "Assign VM Login RBAC Permissions"
   description: "Assign Virtual Machine login permissions to standard and admin user groups"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Authorization/roleAssignments"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 300    # 5 minutes (fail-fast if exceeds)
-    type: "FAST"    # FAST (<5min) or WAIT (10+min)
-
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes (fail-fast if exceeds)
+    type: "FAST" # FAST (<5min) or WAIT (10+min)
   # Parameters extracted from old operation
   parameters:
     required:
@@ -38,12 +35,10 @@ operation:
         type: "string"
         description: "Admin users group name"
         default: "{{ENTRA_GROUP_USERS_ADMINS}}"
-
   # Prerequisites (check state.json)
   requires:
     - operation: "storage-rbac-assign"
       status: "completed"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -68,7 +63,6 @@ operation:
             exit 1
           }
         description: "Verify VM login permissions are assigned"
-
   # Idempotency: Check for existing role assignments
   idempotency:
     enabled: true
@@ -76,13 +70,37 @@ operation:
       az role assignment list \
         --role "Virtual Machine User Login" \
         --output none 2>/dev/null
-    skip_if_exists: false  # Check but don't skip (may need to assign)
-
+    skip_if_exists: false # Check but don't skip (may need to assign)
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rbac-vm-login-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove VM Login RBAC Assignments"
+        description: "Revoke VM login role assignments from user groups"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
+
+          # Get and remove standard users assignment
+          STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
+          if [ -n "$STD_GROUP_ID" ]; then
+            az role assignment delete --assignee "$STD_GROUP_ID" --role "Virtual Machine User Login" --scope "$RG_ID" 2>/dev/null || true
+          fi
+
+          # Get and remove admin users assignments
+          ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
+          if [ -n "$ADMIN_GROUP_ID" ]; then
+            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Virtual Machine Administrator Login" --scope "$RG_ID" 2>/dev/null || true
+            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Desktop Virtualization Power On Off Contributor" --scope "$RG_ID" 2>/dev/null || true
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] VM Login Permissions Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -253,33 +271,3 @@ operation:
 
       Write-Host "[SUCCESS] VM login permissions assignment completed"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rbac-vm-login-wrapper.ps1
-      rm -f /tmp/rbac-vm-login-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove VM Login RBAC Assignments"
-        description: "Revoke VM login role assignments from user groups"
-        command: |
-          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-          RG_ID=$(az group show --name "$RESOURCE_GROUP" --query id -o tsv)
-
-          # Get and remove standard users assignment
-          STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
-          if [ -n "$STD_GROUP_ID" ]; then
-            az role assignment delete --assignee "$STD_GROUP_ID" --role "Virtual Machine User Login" --scope "$RG_ID" 2>/dev/null || true
-          fi
-
-          # Get and remove admin users assignments
-          ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
-          if [ -n "$ADMIN_GROUP_ID" ]; then
-            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Virtual Machine Administrator Login" --scope "$RG_ID" 2>/dev/null || true
-            az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Desktop Virtualization Power On Off Contributor" --scope "$RG_ID" 2>/dev/null || true
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

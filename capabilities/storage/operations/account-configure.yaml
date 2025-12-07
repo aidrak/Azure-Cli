@@ -7,17 +7,14 @@ operation:
   id: "account-configure"
   name: "Configure Storage Account Settings"
   description: "Update storage account settings including access tier, HTTPS enforcement, and blob storage properties"
-
   capability: "storage"
   operation_mode: "modify"
   resource_type: "Microsoft.Storage/storageAccounts"
-
   # Duration expectations
   duration:
     expected: 45
     timeout: 180
     type: "WAIT"
-
   # Parameters
   parameters:
     required:
@@ -51,7 +48,6 @@ operation:
         type: "boolean"
         description: "Enable soft delete for blobs"
         default: "true"
-
   # Validation checks
   validation:
     pre_checks:
@@ -59,12 +55,10 @@ operation:
         resource_type: "Microsoft.Storage/storageAccounts"
         resource_name: "{{storage_account_name}}"
         error_message: "Storage account '{{storage_account_name}}' not found"
-
     post_checks:
       - type: "provisioning_state"
         expected: "Succeeded"
         timeout: 180
-
   # Idempotency
   idempotency:
     enabled: true
@@ -75,12 +69,26 @@ operation:
         --resource-group "{{resource_group}}" \
         --query "provisioningState" \
         --output tsv 2>/dev/null | grep -q "Succeeded"
-
   # Template command
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-account-configure-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Revert Storage Account Settings"
+        description: "Restore previous storage account configuration"
+        command: |
+          az storage account update \
+            --name "{{storage_account_name}}" \
+            --resource-group "{{resource_group}}" \
+            --https-only true \
+            --min-tls-version TLS1_2
+        continue_on_error: true
+  # Self-healing
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $storageAccountName = "{{storage_account_name}}"
@@ -163,23 +171,3 @@ operation:
         Write-Host "[SUCCESS] - Access Tier: $($updatedAccount.accessTier)"
       }
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-account-configure-wrapper.ps1
-      rm -f /tmp/storage-account-configure-wrapper.ps1
-
-  # Rollback
-  rollback:
-    enabled: true
-    steps:
-      - name: "Revert Storage Account Settings"
-        description: "Restore previous storage account configuration"
-        command: |
-          az storage account update \
-            --name "{{storage_account_name}}" \
-            --resource-group "{{resource_group}}" \
-            --https-only true \
-            --min-tls-version TLS1_2
-        continue_on_error: true
-
-  # Self-healing
-  fixes: []

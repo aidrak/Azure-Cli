@@ -7,17 +7,14 @@ operation:
   id: "resource-group-create"
   name: "Create Resource Group"
   description: "Create Azure resource group if it doesn't exist (idempotent)"
-
   capability: "management"
   operation_mode: "create"
   resource_type: "Microsoft.Resources/resourceGroups"
-
   # Duration expectations
   duration:
     expected: 30
     timeout: 60
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -29,7 +26,6 @@ operation:
         type: "string"
         description: "Azure region for the resource group"
         default: "{{AZURE_LOCATION}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -38,24 +34,35 @@ operation:
         resource_type: "Microsoft.Resources/resourceGroups"
         resource_name: "{{AZURE_RESOURCE_GROUP}}"
         description: "Resource group created successfully"
-
       - type: "property_equals"
         property: "properties.provisioningState"
         expected: "Succeeded"
         description: "Resource group provisioning completed"
-
   # Idempotency: Check for existing resource group
   idempotency:
     enabled: true
     check_command: |
       az group show --name "{{AZURE_RESOURCE_GROUP}}" --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rg-01-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Delete created resource group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Resource Group"
+        description: "Remove the created resource group"
+        command: |
+          az group delete \
+            --name "{{AZURE_RESOURCE_GROUP}}" \
+            --yes \
+            --no-wait
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Resource group creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -111,22 +118,3 @@ operation:
         Write-Host "[ERROR] Unexpected provisioning state: $provisioningState"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rg-01-wrapper.ps1
-      rm -f /tmp/rg-01-wrapper.ps1
-
-  # Rollback: Delete created resource group
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Resource Group"
-        description: "Remove the created resource group"
-        command: |
-          az group delete \
-            --name "{{AZURE_RESOURCE_GROUP}}" \
-            --yes \
-            --no-wait
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

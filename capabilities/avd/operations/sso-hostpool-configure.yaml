@@ -7,17 +7,14 @@ operation:
   id: "sso-hostpool-configure"
   name: "Configure Host Pool RDP Properties for SSO"
   description: "Enable Entra ID authentication (SSO) in host pool RDP properties"
-
   capability: "avd"
   operation_mode: "update"
   resource_type: "Microsoft.DesktopVirtualization/hostPools"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 300    # 5 minutes (fail-fast if exceeds)
-    type: "FAST"    # FAST (<5min) or WAIT (10+min)
-
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes (fail-fast if exceeds)
+    type: "FAST" # FAST (<5min) or WAIT (10+min)
   # Parameters extracted from old operation
   parameters:
     required:
@@ -34,13 +31,11 @@ operation:
         type: "boolean"
         description: "Whether SSO is enabled in configuration"
         default: "{{SSO_ENABLED}}"
-
   # Prerequisites (check state.json)
   requires:
     - operation: "hostpool-create"
       status: "completed"
-      optional: true  # Host pool may have been created previously
-
+      optional: true # Host pool may have been created previously
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -60,7 +55,6 @@ operation:
             exit 1
           }
         description: "Verify SSO enabled in host pool"
-
   # Idempotency: Check for existing SSO configuration
   idempotency:
     enabled: true
@@ -70,12 +64,39 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --query "customRdpProperty" -o tsv 2>/dev/null | grep -q "enablerdsaadauth:i:1"
     skip_if_exists: true
-
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/sso-hostpool-configure-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disable SSO in Host Pool RDP Properties"
+        description: "Remove the SSO property from host pool RDP configuration"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          HOST_POOL_NAME="{{HOST_POOL_NAME}}"
+
+          CURRENT_RDP=$(az desktopvirtualization hostpool show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$HOST_POOL_NAME" \
+            --query "customRdpProperty" -o tsv 2>/dev/null)
+
+          if [ -n "$CURRENT_RDP" ] && echo "$CURRENT_RDP" | grep -q "enablerdsaadauth:i:1"; then
+            # Remove the SSO property
+            NEW_RDP=$(echo "$CURRENT_RDP" | sed 's/enablerdsaadauth:i:1//g' | sed 's/;;/;/g' | sed 's/^;//g' | sed 's/;$//g')
+
+            az desktopvirtualization hostpool update \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$HOST_POOL_NAME" \
+              --custom-rdp-property "$NEW_RDP" \
+              --output none 2>/dev/null || true
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] SSO Host Pool Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -188,36 +209,3 @@ operation:
       Write-Host ""
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/sso-hostpool-configure-wrapper.ps1
-      rm -f /tmp/sso-hostpool-configure-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Disable SSO in Host Pool RDP Properties"
-        description: "Remove the SSO property from host pool RDP configuration"
-        command: |
-          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-          HOST_POOL_NAME="{{HOST_POOL_NAME}}"
-
-          CURRENT_RDP=$(az desktopvirtualization hostpool show \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$HOST_POOL_NAME" \
-            --query "customRdpProperty" -o tsv 2>/dev/null)
-
-          if [ -n "$CURRENT_RDP" ] && echo "$CURRENT_RDP" | grep -q "enablerdsaadauth:i:1"; then
-            # Remove the SSO property
-            NEW_RDP=$(echo "$CURRENT_RDP" | sed 's/enablerdsaadauth:i:1//g' | sed 's/;;/;/g' | sed 's/^;//g' | sed 's/;$//g')
-
-            az desktopvirtualization hostpool update \
-              --resource-group "$RESOURCE_GROUP" \
-              --name "$HOST_POOL_NAME" \
-              --custom-rdp-property "$NEW_RDP" \
-              --output none 2>/dev/null || true
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

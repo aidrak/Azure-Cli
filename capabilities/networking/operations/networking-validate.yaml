@@ -7,21 +7,17 @@ operation:
   id: "networking-validate"
   name: "Validate Network Configuration"
   description: "Comprehensive validation of all networking components"
-
   capability: "networking"
   operation_mode: "validate"
   resource_type: "Microsoft.Network/*"
-
   # Duration expectations
   duration:
-    expected: 120     # 2 minutes
-    timeout: 240      # 4 minutes
+    expected: 120 # 2 minutes
+    timeout: 240 # 4 minutes
     type: "FAST"
-
   # Dependencies
   requires:
     - "route-table-create"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -33,7 +29,6 @@ operation:
         type: "string"
         description: "Azure resource group name"
         default: "{{AZURE_RESOURCE_GROUP}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -41,18 +36,22 @@ operation:
       - type: "output_file_exists"
         file_path: "artifacts/outputs/networking-validation-report.txt"
         description: "Validation report generated"
-
   # Idempotency: This is a read-only validation operation
   idempotency:
     enabled: false
     check_command: ""
     skip_if_exists: false
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-validate-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: No rollback for validation operation
+  rollback:
+    enabled: false
+    steps: []
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Network validation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $vnetName = "{{NETWORKING_VNET_NAME}}"
@@ -182,14 +181,3 @@ operation:
         Write-Host "[ERROR] Validation failed ($failed errors)"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-validate-wrapper.ps1
-      rm -f /tmp/networking-validate-wrapper.ps1
-
-  # Rollback: No rollback for validation operation
-  rollback:
-    enabled: false
-    steps: []
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

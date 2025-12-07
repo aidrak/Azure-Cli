@@ -6,17 +6,14 @@ operation:
   id: "sessionhost-remove"
   name: "Remove Session Host from Host Pool"
   description: "Remove session host VM from AVD host pool and optionally delete the VM"
-
   capability: "avd"
   operation_mode: "delete"
   resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
-
   # Duration expectations
   duration:
-    expected: 150       # 2.5 minutes
-    timeout: 300        # 5 minutes
+    expected: 150 # 2.5 minutes
+    timeout: 300 # 5 minutes
     type: "WAIT"
-
   # Parameters for removal
   parameters:
     required:
@@ -41,7 +38,6 @@ operation:
         type: "boolean"
         description: "Drain active sessions before removal"
         default: true
-
   # Validation checks (pre-checks for delete operations)
   validation:
     enabled: true
@@ -50,7 +46,6 @@ operation:
         resource_type: "Microsoft.DesktopVirtualization/hostPools"
         resource_name: "{{hostpool_name}}"
         description: "Host pool exists"
-
   # Idempotency: Check if session host already removed
   idempotency:
     enabled: true
@@ -61,12 +56,24 @@ operation:
         --query "sessionHosts[?name=='{{sessionhost_name}}']" \
         --output json 2>/dev/null | grep -q "{{sessionhost_name}}" || exit 0
     skip_if_exists: false
-
   # Template command (remove session host)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/avd-sessionhost-remove-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Re-add session host if possible
+  rollback:
+    enabled: true
+    steps:
+      - name: "Warning About Irreversibility"
+        description: "Session host removal may be partially irreversible"
+        command: |
+          echo "[WARNING] Session host removal has been reversed in state tracking"
+          echo "[WARNING] However, the session host VM must be re-added to the host pool manually"
+          echo "[WARNING] Use 'sessionhost-add' operation to re-register the VM"
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Session host removal: {{sessionhost_name}} at $(Get-Date -Format 'HH:mm:ss')"
 
       $sessionhostName = "{{sessionhost_name}}"
@@ -196,21 +203,3 @@ operation:
       Write-Host "[INFO] Session host: $sessionhostName"
       Write-Host "[INFO] VM deletion: $(if ($deleteVm) { 'Initiated' } else { 'Skipped' })"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/avd-sessionhost-remove-wrapper.ps1
-      rm -f /tmp/avd-sessionhost-remove-wrapper.ps1
-
-  # Rollback: Re-add session host if possible
-  rollback:
-    enabled: true
-    steps:
-      - name: "Warning About Irreversibility"
-        description: "Session host removal may be partially irreversible"
-        command: |
-          echo "[WARNING] Session host removal has been reversed in state tracking"
-          echo "[WARNING] However, the session host VM must be re-added to the host pool manually"
-          echo "[WARNING] Use 'sessionhost-add' operation to re-register the VM"
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

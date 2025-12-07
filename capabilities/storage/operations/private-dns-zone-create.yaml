@@ -7,17 +7,14 @@ operation:
   id: "private-dns-zone-create"
   name: "Create Private DNS Zone for Azure Files"
   description: "Create and configure private DNS zone for Azure Files private endpoint resolution"
-
   capability: "storage"
   operation_mode: "create"
   resource_type: "Microsoft.Network/privateDnsZones"
-
   # Duration expectations
   duration:
-    expected: 60       # 60 seconds (1 minute)
-    timeout: 120       # 2 minutes
+    expected: 60 # 60 seconds (1 minute)
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -34,7 +31,6 @@ operation:
         type: "string"
         description: "DNS zone name (privatelink.file.core.windows.net)"
         default: "privatelink.file.core.windows.net"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -43,12 +39,10 @@ operation:
         resource_type: "Microsoft.Network/privateDnsZones"
         resource_name: "privatelink.file.core.windows.net"
         description: "Private DNS zone exists"
-
       - type: "vnet_link_exists"
         zone_name: "privatelink.file.core.windows.net"
         vnet_name: "{{NETWORKING_VNET_NAME}}"
         description: "VNet link exists and is completed"
-
   # Idempotency: Check if DNS zone already exists
   idempotency:
     enabled: true
@@ -58,12 +52,34 @@ operation:
         --name "privatelink.file.core.windows.net" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-private-dns-zone-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Delete DNS zone and VNet link
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete VNet Link"
+        description: "Remove the VNet link from the private DNS zone"
+        command: |
+          az network private-dns link vnet delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --zone-name "privatelink.file.core.windows.net" \
+            --name "{{NETWORKING_VNET_NAME}}-link" \
+            --yes
+        continue_on_error: true
+      - name: "Delete Private DNS Zone"
+        description: "Remove the private DNS zone"
+        command: |
+          az network private-dns zone delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "privatelink.file.core.windows.net" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $dnsZoneName = "privatelink.file.core.windows.net"
       $vnetName = "{{NETWORKING_VNET_NAME}}"
 
@@ -173,32 +189,3 @@ operation:
         Write-Host "[ERROR] VNet link state is not 'Completed': $linkState"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-private-dns-zone-create-wrapper.ps1
-      rm -f /tmp/storage-private-dns-zone-create-wrapper.ps1
-
-  # Rollback: Delete DNS zone and VNet link
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete VNet Link"
-        description: "Remove the VNet link from the private DNS zone"
-        command: |
-          az network private-dns link vnet delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --zone-name "privatelink.file.core.windows.net" \
-            --name "{{NETWORKING_VNET_NAME}}-link" \
-            --yes
-        continue_on_error: true
-
-      - name: "Delete Private DNS Zone"
-        description: "Remove the private DNS zone"
-        command: |
-          az network private-dns zone delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "privatelink.file.core.windows.net" \
-            --yes
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

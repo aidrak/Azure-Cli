@@ -7,22 +7,18 @@ operation:
   id: "resource-group-validate"
   name: "Validate Resource Group"
   description: "Verify resource group is accessible and properly configured"
-
   capability: "management"
   operation_mode: "validate"
   resource_type: "Microsoft.Resources/resourceGroups"
-
   # Duration expectations
   duration:
     expected: 15
     timeout: 30
     type: "FAST"
-
   # Prerequisites
   prerequisites:
     operations:
       - "resource-group-create"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -34,7 +30,6 @@ operation:
         type: "string"
         description: "Expected Azure region for the resource group"
         default: "{{AZURE_LOCATION}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -43,24 +38,27 @@ operation:
         resource_type: "Microsoft.Resources/resourceGroups"
         resource_name: "{{AZURE_RESOURCE_GROUP}}"
         description: "Resource group exists"
-
       - type: "property_equals"
         property: "properties.provisioningState"
         expected: "Succeeded"
         description: "Resource group is in Succeeded provisioning state"
-
   # Idempotency: Validation is idempotent
   idempotency:
     enabled: true
     check_command: |
       az group show --name "{{AZURE_RESOURCE_GROUP}}" --output none 2>/dev/null
     skip_if_exists: false
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rg-02-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: No action needed for validation operation
+  rollback:
+    enabled: false
+    steps: []
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Resource group validation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -113,14 +111,3 @@ operation:
 
       Write-Host "[SUCCESS] Resource group validation complete"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rg-02-wrapper.ps1
-      rm -f /tmp/rg-02-wrapper.ps1
-
-  # Rollback: No action needed for validation operation
-  rollback:
-    enabled: false
-    steps: []
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

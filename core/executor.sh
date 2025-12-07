@@ -458,7 +458,13 @@ execute_step() {
         return 0
     fi
 
-    output=$(eval "$command" 2>&1) || exit_code=$?
+    # Write command to temp script using printf to preserve all characters including braces
+    local temp_script=$(mktemp)
+    printf '%s\n' "$command" > "$temp_script"
+    chmod +x "$temp_script"
+
+    output=$(bash "$temp_script" 2>&1) || exit_code=$?
+    rm -f "$temp_script"
 
     # Save output to log file
     echo "$output" > "$step_log"
@@ -541,7 +547,11 @@ execute_rollback() {
         # Execute rollback step (best effort - don't fail rollback on error)
         local exit_code=0
         local output=""
-        output=$(eval "$resolved_command" 2>&1) || exit_code=$?
+        local temp_script=$(mktemp)
+        printf '%s\n' "$resolved_command" > "$temp_script"
+        chmod +x "$temp_script"
+        output=$(bash "$temp_script" 2>&1) || exit_code=$?
+        rm -f "$temp_script"
 
         if [[ $exit_code -eq 0 ]]; then
             log_success "Rollback step completed: $step_name" "$operation_exec_id"

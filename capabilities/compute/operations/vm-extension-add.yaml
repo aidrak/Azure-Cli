@@ -6,17 +6,14 @@ operation:
   id: "vm-extension-add"
   name: "Add Extension to Virtual Machine"
   description: "Add extensions to Azure VM for configuration management (DSC, Custom Script), monitoring (Azure Monitor), or other functionality"
-
   capability: "compute"
   operation_mode: "create"
   resource_type: "Microsoft.Compute/virtualMachines/extensions"
-
   # Duration expectations
   duration:
-    expected: 180   # 3 minutes
-    timeout: 600    # 10 minutes (extension installation can take time)
-    type: "WAIT"    # Some extensions take considerable time
-
+    expected: 180 # 3 minutes
+    timeout: 600 # 10 minutes (extension installation can take time)
+    type: "WAIT" # Some extensions take considerable time
   # Parameters for VM extension creation
   parameters:
     required:
@@ -80,7 +77,6 @@ operation:
         type: "object"
         description: "Protected settings (passwords, tokens) in JSON format"
         default: "{}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -89,11 +85,9 @@ operation:
         resource_type: "Microsoft.Compute/virtualMachines/extensions"
         resource_name: "{{COMPUTE_EXTENSION_NAME}}"
         description: "Extension installed on VM"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Extension provisioned successfully"
-
   # Idempotency: Check for existing extension
   idempotency:
     enabled: true
@@ -104,12 +98,26 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --query "id" -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-extension-add-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove VM Extension"
+        description: "Uninstall the extension from the VM"
+        command: |
+          az vm extension delete \
+            --vm-name "{{COMPUTE_VM_NAME}}" \
+            --name "{{COMPUTE_EXTENSION_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Adding VM extension: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -359,23 +367,3 @@ operation:
       Write-Host "[INFO]   - Remove extension: az vm extension delete --vm-name $vmName --name $extensionName --resource-group $resourceGroup"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-extension-add-wrapper.ps1
-      rm -f /tmp/compute-extension-add-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove VM Extension"
-        description: "Uninstall the extension from the VM"
-        command: |
-          az vm extension delete \
-            --vm-name "{{COMPUTE_VM_NAME}}" \
-            --name "{{COMPUTE_EXTENSION_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --yes
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

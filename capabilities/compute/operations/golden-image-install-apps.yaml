@@ -54,17 +54,17 @@ operation:
   template:
     type: "powershell-vm-command"
     command: |
-      cat > /tmp/golden-image-install-apps-wrapper.ps1 << 'PSWRAPPER'
-      $scriptContent = @'
-      {{POWERSHELL_CONTENT}}
-      '@
-      $tempScript = "/tmp/golden-image-install-apps-$([guid]::NewGuid()).ps1"
-      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
-      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestB64='{{APP_MANIFEST_B64}}' --output json
-      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/golden-image-install-apps-wrapper.ps1
-      rm -f /tmp/golden-image-install-apps-wrapper.ps1
+      # Template engine extracts PowerShell to artifacts/scripts/{{OPERATION_ID}}.ps1
+      # and exports the path as POWERSHELL_FILE variable
+      PS_FILE="artifacts/scripts/{{OPERATION_ID}}.ps1"
+
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "@${PS_FILE}" \
+        --parameters AppNames='{{GOLDEN_IMAGE_APPLICATIONS_CSV}}' ManifestB64='{{APP_MANIFEST_B64}}' \
+        --output json
 
   # PowerShell script (embedded inline - preserved from legacy)
   powershell:
