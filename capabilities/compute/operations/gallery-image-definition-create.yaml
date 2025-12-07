@@ -1,0 +1,203 @@
+# ==============================================================================
+# Capability Operation: Create Gallery Image Definition
+# ==============================================================================
+
+operation:
+  id: "gallery-image-definition-create"
+  name: "Create Gallery Image Definition"
+  description: "Create an image definition in the compute gallery for organizing VM images"
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/galleries/images"
+
+  # Duration expectations
+  duration:
+    expected: 60  # 1 minute
+    timeout: 300  # 5 minutes
+    type: "NORMAL"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "gallery_name"
+        type: "string"
+        description: "Name of the compute gallery"
+        default: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      - name: "definition_name"
+        type: "string"
+        description: "Name of the image definition"
+        default: "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "location"
+        type: "string"
+        description: "Azure region"
+        default: "{{AZURE_LOCATION}}"
+      - name: "publisher"
+        type: "string"
+        description: "Image publisher name"
+        default: "{{GOLDEN_IMAGE_IMAGE_PUBLISHER_NAME}}"
+      - name: "offer"
+        type: "string"
+        description: "Image offer name"
+        default: "{{GOLDEN_IMAGE_IMAGE_OFFER_NAME}}"
+      - name: "sku"
+        type: "string"
+        description: "Image SKU name"
+        default: "{{GOLDEN_IMAGE_IMAGE_SKU_NAME}}"
+      - name: "os_type"
+        type: "string"
+        description: "Operating system type (Windows or Linux)"
+        default: "Windows"
+      - name: "os_state"
+        type: "string"
+        description: "OS state (Generalized or Specialized)"
+        default: "Generalized"
+      - name: "hyper_v_generation"
+        type: "string"
+        description: "Hyper-V generation (V1 or V2)"
+        default: "V2"
+
+  # Dependencies
+  dependencies:
+    - operation_id: "gallery-create"
+      type: "required"
+      description: "Compute gallery must exist"
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/galleries/images"
+        resource_name: "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+        description: "Image definition created successfully"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Image definition provisioned successfully"
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    check_command: |
+      az sig image-definition show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --gallery-name "{{GOLDEN_IMAGE_GALLERY_NAME}}" \
+        --gallery-image-definition "{{GOLDEN_IMAGE_DEFINITION_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template
+  template:
+    type: "powershell-direct"
+    command: "# Generated from powershell.content"
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Image Definition"
+        description: "Remove the image definition from the gallery"
+        command: |
+          az sig image-definition delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --gallery-name "{{GOLDEN_IMAGE_GALLERY_NAME}}" \
+            --gallery-image-definition "{{GOLDEN_IMAGE_DEFINITION_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Create Gallery Image Definition: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      $definitionName = "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      $publisher = "{{GOLDEN_IMAGE_IMAGE_PUBLISHER_NAME}}"
+      $offer = "{{GOLDEN_IMAGE_IMAGE_OFFER_NAME}}"
+      $sku = "{{GOLDEN_IMAGE_IMAGE_SKU_NAME}}"
+
+      Write-Host "[i] Configuration:"
+      Write-Host "    Gallery: $galleryName"
+      Write-Host "    Definition: $definitionName"
+      Write-Host "    Publisher: $publisher"
+      Write-Host "    Offer: $offer"
+      Write-Host "    SKU: $sku"
+      Write-Host "    Resource Group: $resourceGroup"
+      Write-Host "    Location: $location"
+
+      # Check if image definition already exists
+      Write-Host "[*] Checking if image definition already exists..."
+      $existingDef = az sig image-definition show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $definitionName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[v] Image definition already exists: $definitionName"
+        $defDetails = $existingDef | ConvertFrom-Json
+        Write-Host "[i] Definition ID: $($defDetails.id)"
+        exit 0
+      }
+
+      # Verify gallery exists
+      Write-Host "[*] Verifying compute gallery exists..."
+      az sig show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Compute gallery not found: $galleryName"
+        Write-Host "[x] Run 'gallery-create' operation first"
+        exit 1
+      }
+
+      # Create the image definition
+      Write-Host "[*] Creating image definition..."
+      $createOutput = az sig image-definition create `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $definitionName `
+        --publisher $publisher `
+        --offer $offer `
+        --sku $sku `
+        --os-type Windows `
+        --os-state Generalized `
+        --hyper-v-generation V2 `
+        --location $location `
+        --features "SecurityType=TrustedLaunch" `
+        --description "Windows 11 golden image for AVD session hosts" `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Failed to create image definition"
+        Write-Host "[x] Error: $createOutput"
+        exit 1
+      }
+
+      $defDetails = $createOutput | ConvertFrom-Json
+
+      Write-Host "[v] Image definition created successfully"
+      Write-Host "[i] Definition Name: $($defDetails.name)"
+      Write-Host "[i] Definition ID: $($defDetails.id)"
+      Write-Host "[i] OS Type: $($defDetails.osType)"
+      Write-Host "[i] OS State: $($defDetails.osState)"
+      Write-Host "[i] Hyper-V Generation: $($defDetails.hyperVGeneration)"
+      Write-Host "[i] Provisioning State: $($defDetails.provisioningState)"
+
+      Write-Host ""
+      Write-Host "[i] Next steps:"
+      Write-Host "[i]   1. Create image version: gallery-image-version-create"
+      Write-Host "[i]   2. Or capture from VM: gallery-image-version-capture"
+
+      exit 0

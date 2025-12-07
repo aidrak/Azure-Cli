@@ -1,0 +1,245 @@
+# ==============================================================================
+# Capability Operation: Create Gallery Image Version
+# ==============================================================================
+#
+# Creates an image version in the compute gallery from an ALREADY generalized
+# and deallocated VM or existing managed image.
+#
+# PREREQUISITES:
+#   - Compute gallery must exist (gallery-create)
+#   - Image definition must exist (gallery-image-definition-create)
+#   - Source VM must be deallocated AND generalized, OR use an existing managed image
+#
+# This operation does NOT sysprep/generalize the VM - that should be done
+# separately as part of golden image preparation.
+# ==============================================================================
+
+operation:
+  id: "gallery-image-version-create"
+  name: "Create Gallery Image Version"
+  description: "Create an image version in the gallery from a generalized VM or managed image"
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/galleries/images/versions"
+
+  # Duration expectations
+  duration:
+    expected: 900   # 15 minutes
+    timeout: 3600   # 60 minutes (replication can take time)
+    type: "WAIT"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "gallery_name"
+        type: "string"
+        description: "Name of the compute gallery"
+        default: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      - name: "definition_name"
+        type: "string"
+        description: "Name of the image definition"
+        default: "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "source_vm_name"
+        type: "string"
+        description: "Name of the generalized source VM (mutually exclusive with source_image_id)"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "source_image_id"
+        type: "string"
+        description: "Resource ID of existing managed image (mutually exclusive with source_vm_name)"
+        default: ""
+      - name: "version"
+        type: "string"
+        description: "Image version number (major.minor.patch)"
+        default: ""
+      - name: "location"
+        type: "string"
+        description: "Azure region"
+        default: "{{AZURE_LOCATION}}"
+      - name: "replica_count"
+        type: "integer"
+        description: "Number of replicas in the region"
+        default: 1
+      - name: "exclude_from_latest"
+        type: "boolean"
+        description: "Exclude this version from 'latest'"
+        default: false
+
+  # Dependencies
+  dependencies:
+    - operation_id: "gallery-create"
+      type: "required"
+      description: "Compute gallery must exist"
+    - operation_id: "gallery-image-definition-create"
+      type: "required"
+      description: "Image definition must exist"
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/galleries/images/versions"
+        description: "Image version created successfully"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Image version provisioned successfully"
+
+  # Template
+  template:
+    type: "powershell-direct"
+    command: "# Generated from powershell.content"
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Image Version"
+        description: "Remove the image version from the gallery"
+        command: |
+          az sig image-version delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --gallery-name "{{GOLDEN_IMAGE_GALLERY_NAME}}" \
+            --gallery-image-definition "{{GOLDEN_IMAGE_DEFINITION_NAME}}" \
+            --gallery-image-version "$VERSION" \
+            --yes
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Create Gallery Image Version: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      $definitionName = "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      $sourceVmName = "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+
+      # Generate version based on date
+      $version = "1.0.$(Get-Date -Format 'yyyyMMdd')"
+
+      Write-Host "[i] Configuration:"
+      Write-Host "    Gallery: $galleryName"
+      Write-Host "    Definition: $definitionName"
+      Write-Host "    Version: $version"
+      Write-Host "    Source VM: $sourceVmName"
+      Write-Host "    Resource Group: $resourceGroup"
+      Write-Host "    Location: $location"
+
+      # Step 1: Verify gallery exists
+      Write-Host "[*] Step 1/4: Verifying compute gallery..."
+      az sig show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Compute gallery not found: $galleryName"
+        Write-Host "[x] Run 'gallery-create' operation first"
+        exit 1
+      }
+      Write-Host "[v] Gallery exists: $galleryName"
+
+      # Step 2: Verify image definition exists
+      Write-Host "[*] Step 2/4: Verifying image definition..."
+      az sig image-definition show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $definitionName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Image definition not found: $definitionName"
+        Write-Host "[x] Run 'gallery-image-definition-create' operation first"
+        exit 1
+      }
+      Write-Host "[v] Image definition exists: $definitionName"
+
+      # Step 3: Check if version already exists
+      Write-Host "[*] Step 3/4: Checking if version already exists..."
+      $existingVersion = az sig image-version show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $definitionName `
+        --gallery-image-version $version `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[v] Image version already exists: $version"
+        $versionDetails = $existingVersion | ConvertFrom-Json
+        Write-Host "[i] Version ID: $($versionDetails.id)"
+        Write-Host "[i] Provisioning State: $($versionDetails.provisioningState)"
+        exit 0
+      }
+
+      # Step 4: Get source and verify it's ready
+      Write-Host "[*] Step 4/4: Verifying source and creating image version..."
+
+      # Check VM exists and get its ID
+      $vmJson = az vm show `
+        --resource-group $resourceGroup `
+        --name $sourceVmName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Source VM not found: $sourceVmName"
+        exit 1
+      }
+
+      $vmDetails = $vmJson | ConvertFrom-Json
+      $vmId = $vmDetails.id
+
+      # Verify VM is deallocated
+      $vmState = az vm get-instance-view `
+        --resource-group $resourceGroup `
+        --name $sourceVmName `
+        --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" `
+        -o tsv 2>$null
+
+      if ($vmState -ne "VM deallocated") {
+        Write-Host "[x] Source VM must be deallocated. Current state: $vmState"
+        Write-Host "[x] Deallocate the VM first: az vm deallocate -g $resourceGroup -n $sourceVmName"
+        exit 1
+      }
+      Write-Host "[v] Source VM is deallocated"
+
+      # Create image version
+      Write-Host "[*] Creating image version (this may take 15-30 minutes)..."
+
+      $createOutput = az sig image-version create `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --gallery-image-definition $definitionName `
+        --gallery-image-version $version `
+        --managed-image $vmId `
+        --target-regions "$location=1=Standard_LRS" `
+        --replica-count 1 `
+        --exclude-from-latest false `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Failed to create image version"
+        Write-Host "[x] Error: $createOutput"
+        exit 1
+      }
+
+      $versionDetails = $createOutput | ConvertFrom-Json
+
+      Write-Host "[v] Image version created successfully"
+      Write-Host "[i] Version: $($versionDetails.name)"
+      Write-Host "[i] Version ID: $($versionDetails.id)"
+      Write-Host "[i] Provisioning State: $($versionDetails.provisioningState)"
+
+      Write-Host ""
+      Write-Host "[i] Image reference for VM creation:"
+      Write-Host "[i]   $galleryName/$definitionName/$version"
+
+      exit 0
