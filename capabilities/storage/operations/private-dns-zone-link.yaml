@@ -1,0 +1,141 @@
+# ==============================================================================
+# Capability Operation: Link Private DNS Zone to VNet
+# ==============================================================================
+
+operation:
+  id: "private-dns-zone-link"
+  name: "Link Private DNS Zone to VNet"
+  description: "Link the Azure Files private DNS zone to the virtual network"
+  capability: "storage"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/privateDnsZones/virtualNetworkLinks"
+  # Duration expectations
+  duration:
+    expected: 30 # 30 seconds
+    timeout: 90 # 1.5 minutes
+    type: "FAST"
+  # Prerequisites
+  requires:
+    - "private-dns-zone-create"
+  # Parameters
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Virtual network name for DNS zone link"
+        default: "{{NETWORKING_VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "dns_zone_name"
+        type: "string"
+        description: "DNS zone name (privatelink.file.core.windows.net)"
+        default: "privatelink.file.core.windows.net"
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "vnet_link_exists"
+        zone_name: "privatelink.file.core.windows.net"
+        vnet_name: "{{NETWORKING_VNET_NAME}}"
+        description: "VNet link exists and is completed"
+  # Idempotency: Check if VNet link already exists
+  idempotency:
+    enabled: true
+    check_command: |
+      az network private-dns link vnet show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --zone-name "privatelink.file.core.windows.net" \
+        --name "{{NETWORKING_VNET_NAME}}-link" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-direct"
+  # Rollback: Delete VNet link
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete VNet Link"
+        description: "Remove the VNet link from the private DNS zone"
+        command: |
+          az network private-dns link vnet delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --zone-name "privatelink.file.core.windows.net" \
+            --name "{{NETWORKING_VNET_NAME}}-link" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
+      $dnsZoneName = "privatelink.file.core.windows.net"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $linkName = "${vnetName}-link"
+
+      Write-Host "[START] Linking private DNS zone to VNet at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "  DNS zone: $dnsZoneName"
+      Write-Host "  VNet: $vnetName"
+      Write-Host "  Link name: $linkName"
+
+      # Check if VNet link already exists
+      Write-Host "[PROGRESS] Checking if VNet link exists..."
+
+      az network private-dns link vnet show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --zone-name $dnsZoneName `
+        --name $linkName `
+        --output none 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[SUCCESS] VNet link already exists: $linkName"
+        exit 0
+      }
+
+      # Get VNet ID
+      Write-Host "[PROGRESS] Getting VNet ID..."
+
+      $vnetId = az network vnet show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --name $vnetName `
+        --query id -o tsv
+
+      if ([string]::IsNullOrEmpty($vnetId)) {
+        Write-Host "[ERROR] VNet not found: $vnetName"
+        exit 1
+      }
+
+      # Create VNet link
+      Write-Host "[PROGRESS] Creating VNet link..."
+
+      az network private-dns link vnet create `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --zone-name $dnsZoneName `
+        --name $linkName `
+        --virtual-network $vnetId `
+        --registration-enabled false `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create VNet link"
+        exit 1
+      }
+
+      # Verify link state
+      $linkState = az network private-dns link vnet show `
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
+        --zone-name $dnsZoneName `
+        --name $linkName `
+        --query virtualNetworkLinkState -o tsv
+
+      if ($linkState -eq "Completed") {
+        Write-Host "[SUCCESS] VNet link created"
+        Write-Host "  Link: $linkName"
+        Write-Host "  State: $linkState"
+        exit 0
+      } else {
+        Write-Host "[ERROR] VNet link state is not 'Completed': $linkState"
+        exit 1
+      }

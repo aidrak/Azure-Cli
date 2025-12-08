@@ -6,22 +6,18 @@
 operation:
   id: "private-dns-zone-create"
   name: "Create Private DNS Zone for Azure Files"
-  description: "Create and configure private DNS zone for Azure Files private endpoint resolution"
+  description: "Create private DNS zone for Azure Files private endpoint resolution"
   capability: "storage"
   operation_mode: "create"
   resource_type: "Microsoft.Network/privateDnsZones"
   # Duration expectations
   duration:
-    expected: 60 # 60 seconds (1 minute)
-    timeout: 120 # 2 minutes
+    expected: 30 # 30 seconds
+    timeout: 60 # 1 minute
     type: "FAST"
   # Parameters extracted from old operation
   parameters:
     required:
-      - name: "vnet_name"
-        type: "string"
-        description: "Virtual network name for DNS zone link"
-        default: "{{NETWORKING_VNET_NAME}}"
       - name: "resource_group"
         type: "string"
         description: "Azure resource group name"
@@ -39,10 +35,6 @@ operation:
         resource_type: "Microsoft.Network/privateDnsZones"
         resource_name: "privatelink.file.core.windows.net"
         description: "Private DNS zone exists"
-      - type: "vnet_link_exists"
-        zone_name: "privatelink.file.core.windows.net"
-        vnet_name: "{{NETWORKING_VNET_NAME}}"
-        description: "VNet link exists and is completed"
   # Idempotency: Check if DNS zone already exists
   idempotency:
     enabled: true
@@ -55,19 +47,10 @@ operation:
   # Template command (variables substituted at runtime)
   template:
     type: "powershell-direct"
-  # Rollback: Delete DNS zone and VNet link
+  # Rollback: Delete DNS zone
   rollback:
     enabled: true
     steps:
-      - name: "Delete VNet Link"
-        description: "Remove the VNet link from the private DNS zone"
-        command: |
-          az network private-dns link vnet delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --zone-name "privatelink.file.core.windows.net" \
-            --name "{{NETWORKING_VNET_NAME}}-link" \
-            --yes
-        continue_on_error: true
       - name: "Delete Private DNS Zone"
         description: "Remove the private DNS zone"
         command: |
@@ -81,111 +64,42 @@ operation:
   powershell:
     content: |
       $dnsZoneName = "privatelink.file.core.windows.net"
-      $vnetName = "{{NETWORKING_VNET_NAME}}"
 
-      Write-Host "[START] Configuring private DNS zone at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "[START] Creating private DNS zone at $(Get-Date -Format 'HH:mm:ss')"
       Write-Host "  DNS zone: $dnsZoneName"
-      Write-Host "  VNet: $vnetName"
 
       # Check if private DNS zone exists
       Write-Host "[PROGRESS] Checking if private DNS zone exists..."
 
-      $dnsZoneExists = @(az network private-dns zone show `
+      az network private-dns zone show `
         --resource-group "{{AZURE_RESOURCE_GROUP}}" `
         --name $dnsZoneName `
-        --query "[0]" 2>$null | ConvertFrom-Json)
+        --output none 2>$null
 
-      if ($dnsZoneExists.Count -eq 0) {
-        Write-Host "[PROGRESS] Creating private DNS zone..."
-
-        $createDnsOutput = az network private-dns zone create `
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
-          --name $dnsZoneName `
-          --output json 2>&1
-
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "[ERROR] Failed to create private DNS zone"
-          Write-Host $createDnsOutput
-          exit 1
-        }
-
-        Write-Host "[SUCCESS] Private DNS zone created: $dnsZoneName"
-      } else {
+      if ($LASTEXITCODE -eq 0) {
         Write-Host "[SUCCESS] Private DNS zone already exists: $dnsZoneName"
+        exit 0
       }
 
-      # Check if VNet link exists
-      Write-Host "[PROGRESS] Checking VNet link..."
+      Write-Host "[PROGRESS] Creating private DNS zone..."
 
-      $linkName = "${vnetName}-link"
-
-      $vnetLinkExists = @(az network private-dns link vnet show `
+      az network private-dns zone create `
         --resource-group "{{AZURE_RESOURCE_GROUP}}" `
-        --zone-name $dnsZoneName `
-        --name $linkName `
-        --query "[0]" 2>$null | ConvertFrom-Json)
+        --name $dnsZoneName `
+        --output none
 
-      if ($vnetLinkExists.Count -eq 0) {
-        Write-Host "[PROGRESS] Creating VNet link..."
-
-        # Get VNet ID
-        $vnetId = az network vnet show `
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
-          --name $vnetName `
-          --query id -o tsv
-
-        if ([string]::IsNullOrEmpty($vnetId)) {
-          Write-Host "[ERROR] VNet not found: $vnetName"
-          exit 1
-        }
-
-        # Create VNet link
-        $createLinkOutput = az network private-dns link vnet create `
-          --resource-group "{{AZURE_RESOURCE_GROUP}}" `
-          --zone-name $dnsZoneName `
-          --name $linkName `
-          --virtual-network $vnetId `
-          --registration-enabled false `
-          --output json 2>&1
-
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "[ERROR] Failed to create VNet link"
-          Write-Host $createLinkOutput
-          exit 1
-        }
-
-        Write-Host "[SUCCESS] VNet link created: $linkName"
-      } else {
-        Write-Host "[SUCCESS] VNet link already exists: $linkName"
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create private DNS zone"
+        exit 1
       }
 
-      Write-Host "[VALIDATE] Verifying DNS zone configuration..."
-
-      # Verify DNS zone exists
+      # Verify creation
       $dnsZoneId = az network private-dns zone show `
         --resource-group "{{AZURE_RESOURCE_GROUP}}" `
         --name $dnsZoneName `
         --query id -o tsv
 
-      # Verify VNet link exists
-      $linkState = az network private-dns link vnet show `
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" `
-        --zone-name $dnsZoneName `
-        --name $linkName `
-        --query virtualNetworkLinkState -o tsv
-
-      if ($linkState -eq "Completed") {
-        Write-Host "[SUCCESS] Private DNS zone configured successfully"
-        Write-Host "  DNS zone ID: $dnsZoneId"
-        Write-Host "  VNet link: $linkName"
-        Write-Host "  Link state: $linkState"
-        Write-Host "  Auto-registration: Disabled"
-        Write-Host ""
-        Write-Host "[INFO] DNS Resolution:"
-        Write-Host "  Storage accounts will resolve to private IPs within VNet"
-        Write-Host "  Pattern: <storage-account>.file.core.windows.net -> <private-ip>"
-        exit 0
-      } else {
-        Write-Host "[ERROR] VNet link state is not 'Completed': $linkState"
-        exit 1
-      }
+      Write-Host "[SUCCESS] Private DNS zone created"
+      Write-Host "  Zone: $dnsZoneName"
+      Write-Host "  ID: $dnsZoneId"
+      exit 0

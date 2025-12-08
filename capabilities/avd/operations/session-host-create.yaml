@@ -77,10 +77,48 @@ operation:
   idempotency:
     enabled: true
     check_command: |
-      az vm show \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{SESSION_HOST_VM_NAME}}" \
-        --output none 2>/dev/null
+      # Full idempotency check - VM must exist with all required components:
+      # 1. VM exists with SystemAssigned identity
+      # 2. AADLoginForWindows extension succeeded
+      # 3. DSC extension succeeded (host pool registration)
+
+      RG="{{AZURE_RESOURCE_GROUP}}"
+      VM="{{SESSION_HOST_VM_NAME}}"
+      HP="{{HOST_POOL_NAME}}"
+
+      # Check VM exists with identity
+      IDENTITY=$(az vm show -g "$RG" -n "$VM" --query "identity.type" -o tsv 2>/dev/null)
+      if [[ "$IDENTITY" != "SystemAssigned" ]]; then
+        echo "VM missing or no SystemAssigned identity" >&2
+        exit 1
+      fi
+
+      # Check AADLoginForWindows extension succeeded
+      AAD_STATE=$(az vm extension show -g "$RG" --vm-name "$VM" -n AADLoginForWindows --query "provisioningState" -o tsv 2>/dev/null)
+      if [[ "$AAD_STATE" != "Succeeded" ]]; then
+        echo "AADLoginForWindows extension not succeeded: $AAD_STATE" >&2
+        exit 1
+      fi
+
+      # Check DSC extension succeeded
+      DSC_STATE=$(az vm extension show -g "$RG" --vm-name "$VM" -n DSC --query "provisioningState" -o tsv 2>/dev/null)
+      if [[ "$DSC_STATE" != "Succeeded" ]]; then
+        echo "DSC extension not succeeded: $DSC_STATE" >&2
+        exit 1
+      fi
+
+      # Check registered to host pool
+      SUB_ID=$(az account show --query id -o tsv)
+      REGISTERED=$(az rest --method GET \
+        --uri "https://management.azure.com/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.DesktopVirtualization/hostPools/$HP/sessionHosts?api-version=2023-09-05" \
+        --query "value[?contains(name, '$VM')].name" -o tsv 2>/dev/null)
+      if [[ -z "$REGISTERED" ]]; then
+        echo "VM not registered to host pool: $HP" >&2
+        exit 1
+      fi
+
+      echo "All components verified: VM + Identity + AAD + DSC + HostPool"
+      exit 0
     skip_if_exists: true
 
   template:

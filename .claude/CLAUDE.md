@@ -149,6 +149,41 @@ operation:
 
 ---
 
+## Self-Healing Protocol
+
+When an Azure operation fails, the `PostToolUse` hook will block with context. Follow this protocol:
+
+### Automatic Self-Healing Flow
+
+1. **Parse error context** from the hook's `additionalContext` JSON
+2. **Read `error-patterns.yaml`** to find a matching pattern by regex
+3. **Check `auto_fix` field**:
+   - **If `auto_fix: true`**: Follow `fix_action` instructions, edit YAML, retry
+   - **If `auto_fix: false`**: Inform user what manual action is needed
+
+### Self-Healing Rules
+
+- **NEVER create new scripts** - Always fix the existing YAML operation
+- **NEVER start over** - Fix incrementally, preserve completed work
+- **ALWAYS retry after fix** - Run `./core/engine.sh run <operation-id>` again
+- **For transient errors** (vm-run-command-busy): Just wait and retry, don't modify YAML
+
+### Example Self-Healing
+
+```
+Hook blocks with: "Azure operation failed. Apply self-healing..."
+Error output: "unrecognized arguments: --yes"
+
+1. Read error-patterns.yaml
+2. Match pattern: "az-cli-arg-unknown" (regex: "unrecognized arguments: --yes")
+3. auto_fix: true
+4. fix_action: Remove --yes flag from the az command in the YAML
+5. Edit the YAML operation file
+6. Retry: ./core/engine.sh run <operation-id>
+```
+
+---
+
 ## AI Assistant Rules
 
 ### Skills (Auto-Detected)

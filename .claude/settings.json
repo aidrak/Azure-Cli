@@ -34,6 +34,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/azure-error-detector.py",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

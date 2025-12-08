@@ -29,7 +29,7 @@ azure:
 networking:
   # Virtual Network
   vnet:
-    name: "avd-vnet"
+    name: "vnet-avd"
     address_space: ["10.0.0.0/16"] # Array for multiple address spaces
     location: "{{AZURE_LOCATION}}" # Inherit from global setting
     dns_servers: [] # Optional custom DNS (empty = Azure default)
@@ -177,7 +177,7 @@ networking:
   route_table_name: "rt-session-hosts"
 
   # Session Host Subnet Name (reference for operations)
-  session_host_subnet_name: "subnet-session-hosts"
+  session_host_subnet_name: "snet-sessionhosts"
 
 # ==============================================================================
 # Storage Configuration (Module 02)
@@ -246,7 +246,7 @@ entra_id:
 # Host Pool Configuration (Module 04)
 # ==============================================================================
 host_pool:
-  name: "Pool-Pooled-Prod"
+  name: "hp-pooled-prod"
   type: "Pooled" # Pooled or Personal
   max_sessions: 10
   load_balancer: "BreadthFirst" # BreadthFirst or DepthFirst
@@ -309,7 +309,7 @@ admin:
 golden_image:
   # Temporary VM for image creation
   temp_vm_name: "vm-golden-img"
-  vm_size: "Standard_D4s_v6"
+  vm_size: "Standard_D2s_v4"
   # Windows base image
   image_publisher: "MicrosoftWindowsDesktop"
   image_offer: "windows-11"
@@ -325,7 +325,7 @@ golden_image:
     # NSG rules are created to allow SSH from admin.public_ip
   # Azure Compute Gallery
   gallery_name: "avd_gallery"
-  definition_name: "windows11-golden-image"
+  definition_name: "Win11_Multi_25H2_Gen2"
   image_sku_name: "Win11-Pooled-FSLogix"
   image_publisher_name: "YourCompany"
   image_offer_name: "AVD"
@@ -343,7 +343,7 @@ golden_image:
   vdot_version: "3.8"
 
   # Golden Image Name (for compute gallery image definition)
-  image_name: "windows11-golden-image" # Alias for definition_name
+  image_name: "Win11_Multi_25H2_Gen2" # Alias for definition_name
 
   # Compute-related settings
   vm_name: "gm-temp-vm" # Alias for temp_vm_name (used by some operations)
@@ -355,13 +355,23 @@ golden_image:
 # ==============================================================================
 session_host:
   vm_count: 1
-  vm_size: "Standard_D4s_v6"
-  name_prefix: "avd-sh"
+  vm_size: "Standard_D2s_v4" # 2 vCPU, 8GB RAM - cost-effective for AVD
+  name_prefix: "avd-hp1-pool"
   # Image source (from golden image)
   use_golden_image: true
 
   # Compute VM name (for individual VMs)
-  vm_name: "avd-sh-01" # Individual session host VM name
+  vm_name: "avd-hp1-pool-01" # Individual session host VM name
+
+  # OS Disk Configuration
+  os_disk_size_gb: 128 # OS disk size in GB
+
+  # Public IP Configuration (for RDP access during setup)
+  public_ip_name: "pip-avd-hp1-pool-01" # Set empty for no public IP
+
+  # Entra ID Join Configuration
+  enable_entra_join: true # Join VM to Entra ID (Azure AD)
+  enable_intune: true # Enroll in Intune MDM (requires Intune license and MDM enrollment configured)
 
 # ==============================================================================
 # Compute Resources (Availability Sets, Extensions)
