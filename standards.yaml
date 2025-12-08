@@ -1,0 +1,220 @@
+# ==============================================================================
+# Azure VDI Deployment - Standards & Defaults
+# ==============================================================================
+# Schema Version: 2.0.0
+#
+# This file contains DEFAULTS and STANDARDS - not mandatory values.
+# Values are resolved dynamically via: User -> Azure Discovery -> Defaults -> Ask
+#
+# The config.yaml file is now deprecated for resource values.
+# Only secrets.yaml is required (for credentials).
+#
+# Usage:
+#   source core/config-manager.sh && load_config
+#   # Values resolved via: resolve_value "VARIABLE_NAME" "context"
+#
+# ==============================================================================
+
+schema_version: "2.0.0"
+
+# ==============================================================================
+# Naming Standards
+# ==============================================================================
+# AI follows these patterns when proposing names for new resources.
+# Patterns are overridden if existing resources in Azure have different conventions.
+#
+naming:
+  # Discovery settings
+  discovery:
+    enabled: true               # Enable pattern discovery from Azure
+    analyze_existing: true      # Extract patterns from existing resources
+    cache_ttl_minutes: 30       # Cache discovered patterns
+    min_samples: 2              # Minimum resources needed to establish a pattern
+    confidence_threshold: 0.7   # Minimum confidence to use discovered pattern
+
+  # Standard patterns (used when no existing pattern discovered)
+  # Available tokens: {type}, {project}, {env}, {purpose}, {region}, {number}, {random}
+  patterns:
+    resource_group: "RG-{project}-{env}-{number}"
+    virtual_network: "vnet-{purpose}-{env}"
+    subnet: "snet-{purpose}"
+    nsg: "nsg-{subnet_name}"
+    route_table: "rt-{purpose}"
+    public_ip: "pip-{purpose}"
+    storage_account: "{prefix}{random5}"    # Azure naming: 3-24 chars, lowercase alphanumeric only
+    file_share: "{purpose}-profiles"
+    host_pool: "hp-{type}-{env}"
+    workspace: "ws-{project}-{env}"
+    app_group: "dag-{type}-{env}"
+    vm: "{prefix}-{number}"
+    nic: "nic-{vm_name}"
+    disk: "{vm_name}-osdisk"
+    gallery: "{project}_gallery"
+    image_definition: "{os}_{version}_{type}"
+
+  # Prefix standards by resource type
+  prefixes:
+    storage_account: "fslogix"
+    session_host: "avd-sh"
+    golden_image: "gm"
+    management_vm: "mgmt"
+
+  # Environment abbreviations
+  environments:
+    production: "prod"
+    development: "dev"
+    staging: "stg"
+    testing: "test"
+
+  # Region abbreviations (for names)
+  regions:
+    centralus: "cus"
+    eastus: "eus"
+    eastus2: "eus2"
+    westus: "wus"
+    westus2: "wus2"
+    northeurope: "neu"
+    westeurope: "weu"
+
+# ==============================================================================
+# Resource Defaults
+# ==============================================================================
+# Default values used when not specified at runtime or discovered from Azure.
+#
+defaults:
+  # Azure global defaults
+  azure:
+    location: "centralus"
+    environment: "prod"
+
+  # Networking defaults
+  networking:
+    vnet:
+      address_space: ["10.0.0.0/16"]
+      dns_servers: []               # Empty = Azure default DNS
+    subnets:
+      session_hosts:
+        size: "/24"
+        offset: 1                   # 10.0.1.0/24
+        service_endpoints:
+          - "Microsoft.Storage"
+          - "Microsoft.KeyVault"
+      private_endpoints:
+        size: "/24"
+        offset: 2                   # 10.0.2.0/24
+        private_endpoint_network_policies: "Disabled"
+      management:
+        size: "/27"
+        offset: 3                   # 10.0.3.0/27
+    nsg:
+      use_defaults: true            # Apply AVD-recommended rules
+
+  # Compute defaults
+  compute:
+    vm_size: "Standard_D2s_v4"
+    golden_image_vm_size: "Standard_D4s_v6"
+    os_disk_size_gb: 128
+    os_disk_type: "Premium_LRS"
+    image:
+      publisher: "MicrosoftWindowsDesktop"
+      offer: "windows-11"
+      sku: "win11-25h2-avd"
+      version: "latest"
+
+  # Storage defaults
+  storage:
+    sku: "Premium_LRS"
+    kind: "FileStorage"
+    tier: "Premium"
+    quota_gb: 100
+    min_tls_version: "TLS1_2"
+    enable_soft_delete: true
+    soft_delete_retention_days: 7
+
+  # AVD defaults
+  avd:
+    host_pool_type: "Pooled"
+    load_balancer: "BreadthFirst"
+    max_sessions: 10
+    preferred_app_group_type: "Desktop"
+
+  # Session host defaults
+  session_host:
+    vm_count: 1
+    vm_size: "Standard_D2s_v4"
+
+  # Autoscaling defaults
+  autoscaling:
+    enabled: true
+    min_vms: 1
+    max_vms: 10
+    ramp_up_capacity_threshold: 60
+    ramp_down_capacity_threshold: 30
+    weekday_start_hour: 7
+    weekday_stop_hour: 19
+    weekend_enabled: false
+
+# ==============================================================================
+# Best Practices
+# ==============================================================================
+# These settings are enforced by default unless explicitly overridden.
+# They represent security and operational best practices for AVD deployments.
+#
+best_practices:
+  # Storage security
+  storage:
+    https_only: true
+    public_network_access: "Disabled"
+    allow_blob_public_access: false
+    enable_entra_kerberos: true
+    enable_smb_multichannel: true
+
+  # Networking security
+  networking:
+    private_endpoint_network_policies: "Disabled"
+    private_dns_enabled: true
+    nsg_enabled: true
+
+  # Identity & access
+  identity:
+    enable_entra_join: true
+    enable_intune: true
+    enable_sso: true
+
+  # Monitoring
+  monitoring:
+    enable_boot_diagnostics: true
+    enable_diagnostics: true
+
+# ==============================================================================
+# Resource Type Mappings
+# ==============================================================================
+# Maps friendly names to Azure resource types for discovery.
+#
+resource_types:
+  vnet: "Microsoft.Network/virtualNetworks"
+  subnet: "Microsoft.Network/virtualNetworks/subnets"
+  nsg: "Microsoft.Network/networkSecurityGroups"
+  storage_account: "Microsoft.Storage/storageAccounts"
+  vm: "Microsoft.Compute/virtualMachines"
+  nic: "Microsoft.Network/networkInterfaces"
+  disk: "Microsoft.Compute/disks"
+  public_ip: "Microsoft.Network/publicIPAddresses"
+  host_pool: "Microsoft.DesktopVirtualization/hostPools"
+  workspace: "Microsoft.DesktopVirtualization/workspaces"
+  app_group: "Microsoft.DesktopVirtualization/applicationGroups"
+  gallery: "Microsoft.Compute/galleries"
+  image_definition: "Microsoft.Compute/galleries/images"
+
+# ==============================================================================
+# Tags
+# ==============================================================================
+# Default tags applied to all resources (can be overridden per-resource).
+#
+tags:
+  defaults:
+    managed_by: "azure-vdi-toolkit"
+    created_by: "claude-code"
+  required:
+    - environment
+    - project

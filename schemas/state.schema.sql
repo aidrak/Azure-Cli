@@ -276,6 +276,48 @@ CREATE INDEX idx_metrics_name ON execution_metrics(metric_name);
 CREATE INDEX idx_metrics_recorded ON execution_metrics(recorded_at DESC);
 
 -- ==============================================================================
+-- NAMING_PATTERNS TABLE - Discovered naming conventions
+-- ==============================================================================
+CREATE TABLE naming_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource_type TEXT NOT NULL,
+    resource_group TEXT,                    -- NULL = subscription-wide pattern
+
+    -- Discovered pattern
+    pattern TEXT NOT NULL,                  -- e.g., "avd-{purpose}-{number}"
+    prefix TEXT,                            -- Common prefix
+    separator TEXT,                         -- "-", "_", or ""
+    suffix_type TEXT,                       -- "numeric", "random", "none"
+
+    -- Discovery metadata
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    confidence REAL NOT NULL DEFAULT 0.0,   -- 0.0-1.0 confidence score
+    discovered_at INTEGER NOT NULL,
+    last_validated_at INTEGER,
+
+    UNIQUE(resource_type, resource_group)
+);
+
+CREATE INDEX idx_naming_patterns_type ON naming_patterns(resource_type);
+CREATE INDEX idx_naming_patterns_discovered ON naming_patterns(discovered_at DESC);
+
+-- ==============================================================================
+-- CONFIG_OVERRIDES TABLE - Runtime configuration overrides
+-- ==============================================================================
+CREATE TABLE config_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_key TEXT NOT NULL UNIQUE,        -- e.g., "STORAGE_ACCOUNT_NAME"
+    source TEXT NOT NULL,                   -- "user", "discovery", "default"
+    value TEXT NOT NULL,
+    context_json TEXT,                      -- Context when value was set
+    set_at INTEGER NOT NULL,
+    expires_at INTEGER                      -- NULL = permanent
+);
+
+CREATE INDEX idx_config_overrides_key ON config_overrides(config_key);
+CREATE INDEX idx_config_overrides_source ON config_overrides(source);
+
+-- ==============================================================================
 -- VIEWS - Convenient query interfaces
 -- ==============================================================================
 

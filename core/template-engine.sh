@@ -85,91 +85,49 @@ parse_operation_yaml() {
 # ==============================================================================
 # Substitute Variables in Template
 # ==============================================================================
+# Now supports dynamic resolution via value-resolver.sh
+# Priority: Environment Variable -> Azure Discovery -> Standards -> Config -> Ask
+#
 substitute_variables() {
     local template="$1"
+    local context="${2:-}"
     local result="$template"
 
-    # Replace {{VAR}} with environment variable value
-    # Common variables from config.yaml (loaded by config-manager.sh):
+    # Source value resolver if available (for dynamic resolution)
+    local use_dynamic_resolution=false
+    if [[ -f "${PROJECT_ROOT}/core/value-resolver.sh" ]]; then
+        source "${PROJECT_ROOT}/core/value-resolver.sh" 2>/dev/null && use_dynamic_resolution=true
+    fi
 
-    # Azure variables
-    result="${result//\{\{AZURE_SUBSCRIPTION_ID\}\}/$AZURE_SUBSCRIPTION_ID}"
-    result="${result//\{\{AZURE_TENANT_ID\}\}/$AZURE_TENANT_ID}"
-    result="${result//\{\{AZURE_LOCATION\}\}/$AZURE_LOCATION}"
-    result="${result//\{\{AZURE_RESOURCE_GROUP\}\}/$AZURE_RESOURCE_GROUP}"
+    # Find all {{VARIABLE}} patterns in template
+    local variables
+    variables=$(echo "$result" | grep -oE '\{\{[A-Z_]+\}\}' | sort -u || true)
 
-    # Networking variables
-    result="${result//\{\{NETWORKING_VNET_NAME\}\}/${NETWORKING_VNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_VNET_CIDR\}\}/${NETWORKING_VNET_CIDR:-}}"
-    result="${result//\{\{NETWORKING_SUBNET_NAME\}\}/${NETWORKING_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_SUBNET_CIDR\}\}/${NETWORKING_SUBNET_CIDR:-}}"
-    result="${result//\{\{NETWORKING_NSG_NAME\}\}/${NETWORKING_NSG_NAME:-}}"
-    result="${result//\{\{NETWORKING_SESSION_HOST_SUBNET_NAME\}\}/${NETWORKING_SESSION_HOST_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME\}\}/${NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_MANAGEMENT_SUBNET_NAME\}\}/${NETWORKING_MANAGEMENT_SUBNET_NAME:-}}"
+    for var_pattern in $variables; do
+        # Skip POWERSHELL_CONTENT - handled separately below
+        [[ "$var_pattern" == "{{POWERSHELL_CONTENT}}" ]] && continue
 
-    # Storage variables
-    result="${result//\{\{STORAGE_ACCOUNT_NAME\}\}/${STORAGE_ACCOUNT_NAME:-}}"
-    result="${result//\{\{STORAGE_SHARE_NAME\}\}/${STORAGE_SHARE_NAME:-}}"
-    result="${result//\{\{STORAGE_FILE_SHARE_NAME\}\}/${STORAGE_FILE_SHARE_NAME:-}}"
-    result="${result//\{\{STORAGE_QUOTA_GB\}\}/${STORAGE_QUOTA_GB:-}}"
-    result="${result//\{\{STORAGE_SKU\}\}/${STORAGE_SKU:-}}"
-    result="${result//\{\{STORAGE_KIND\}\}/${STORAGE_KIND:-}}"
-    result="${result//\{\{STORAGE_ENABLE_ENTRA_KERBEROS\}\}/${STORAGE_ENABLE_ENTRA_KERBEROS:-}}"
-    result="${result//\{\{STORAGE_ENABLE_SMB_MULTICHANNEL\}\}/${STORAGE_ENABLE_SMB_MULTICHANNEL:-}}"
-    result="${result//\{\{STORAGE_PUBLIC_NETWORK_ACCESS\}\}/${STORAGE_PUBLIC_NETWORK_ACCESS:-}}"
-    result="${result//\{\{STORAGE_HTTPS_ONLY\}\}/${STORAGE_HTTPS_ONLY:-}}"
-    result="${result//\{\{STORAGE_MIN_TLS_VERSION\}\}/${STORAGE_MIN_TLS_VERSION:-}}"
+        # Extract variable name (remove {{ and }})
+        local var_name="${var_pattern//\{\{/}"
+        var_name="${var_name//\}\}/}"
 
-    # Entra ID variables
-    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD\}\}/${ENTRA_GROUP_USERS_STANDARD:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_STANDARD_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS\}\}/${ENTRA_GROUP_USERS_ADMINS:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_ADMINS_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO\}\}/${ENTRA_GROUP_DEVICES_SSO:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SSO_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK\}\}/${ENTRA_GROUP_DEVICES_NETWORK:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY\}\}/${ENTRA_GROUP_DEVICES_SECURITY:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION:-}}"
+        local resolved_value=""
 
-    # Golden Image variables
-    result="${result//\{\{GOLDEN_IMAGE_TEMP_VM_NAME\}\}/${GOLDEN_IMAGE_TEMP_VM_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_VM_SIZE\}\}/${GOLDEN_IMAGE_VM_SIZE:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_PUBLISHER\}\}/${GOLDEN_IMAGE_IMAGE_PUBLISHER:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_OFFER\}\}/${GOLDEN_IMAGE_IMAGE_OFFER:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_SKU\}\}/${GOLDEN_IMAGE_IMAGE_SKU:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_VERSION\}\}/${GOLDEN_IMAGE_IMAGE_VERSION:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_USERNAME\}\}/${GOLDEN_IMAGE_ADMIN_USERNAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_PASSWORD\}\}/${GOLDEN_IMAGE_ADMIN_PASSWORD:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_GALLERY_NAME\}\}/${GOLDEN_IMAGE_GALLERY_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/${GOLDEN_IMAGE_DEFINITION_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_APPLICATIONS_CSV\}\}/${GOLDEN_IMAGE_APPLICATIONS_CSV:-}}"
-    result="${result//\{\{APP_MANIFEST_CONTENT\}\}/${APP_MANIFEST_CONTENT:-}}"
-    result="${result//\{\{APP_MANIFEST_B64\}\}/${APP_MANIFEST_B64:-}}"
+        # Try dynamic resolution first (if available)
+        if [[ "$use_dynamic_resolution" == "true" ]]; then
+            resolved_value=$(resolve_value "$var_name" "$context" "{}" 2>/dev/null) || resolved_value=""
+        fi
 
-    # Host Pool variables
-    result="${result//\{\{HOST_POOL_NAME\}\}/${HOST_POOL_NAME:-}}"
-    result="${result//\{\{HOST_POOL_TYPE\}\}/${HOST_POOL_TYPE:-}}"
-    result="${result//\{\{HOST_POOL_MAX_SESSIONS\}\}/${HOST_POOL_MAX_SESSIONS:-}}"
-    result="${result//\{\{HOST_POOL_LOAD_BALANCER\}\}/${HOST_POOL_LOAD_BALANCER:-}}"
+        # Fall back to direct environment variable
+        if [[ -z "$resolved_value" ]]; then
+            resolved_value="${!var_name:-}"
+        fi
 
-    # Workspace variables
-    result="${result//\{\{WORKSPACE_NAME\}\}/${WORKSPACE_NAME:-}}"
-    result="${result//\{\{WORKSPACE_FRIENDLY_NAME\}\}/${WORKSPACE_FRIENDLY_NAME:-}}"
+        # Substitute in template
+        result="${result//$var_pattern/$resolved_value}"
+    done
 
-    # App Group variables
-    result="${result//\{\{APP_GROUP_NAME\}\}/${APP_GROUP_NAME:-}}"
-    result="${result//\{\{APP_GROUP_TYPE\}\}/${APP_GROUP_TYPE:-}}"
-
-    # Session Host variables
-    result="${result//\{\{SESSION_HOST_VM_COUNT\}\}/${SESSION_HOST_VM_COUNT:-}}"
-    result="${result//\{\{SESSION_HOST_VM_SIZE\}\}/${SESSION_HOST_VM_SIZE:-}}"
-    result="${result//\{\{SESSION_HOST_NAME_PREFIX\}\}/${SESSION_HOST_NAME_PREFIX:-}}"
-
-    # Project paths
+    # Handle PROJECT_ROOT separately (always available)
     result="${result//\{\{PROJECT_ROOT\}\}/$PROJECT_ROOT}"
 
     # PowerShell content (for powershell-vm-command template type)

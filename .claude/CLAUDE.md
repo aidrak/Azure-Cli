@@ -1,96 +1,92 @@
----
-title: "Azure VDI Deployment Engine - Project Memory"
-description: "Central hub for project context, architecture, and development standards"
-tags: ["azure", "avd", "deployment", "yaml", "capabilities"]
-last_updated: "2025-12-06"
----
-
 # Azure VDI Deployment Engine
 
-Production-ready YAML-based deployment engine for Azure Virtual Desktop (AVD). Declarative, idempotent, self-healing operations orchestrated by a core Bash engine.
+Production-ready YAML-based deployment engine for Azure Virtual Desktop (AVD). Declarative, idempotent, self-healing operations.
 
 ## Quick Start
 
 ```bash
-# Load configuration (exports 50+ environment variables)
-source core/config-manager.sh && load_config
-
-# Run operations
-./core/engine.sh run <operation-id>
-
-# Resume after failure
-./core/engine.sh resume
+source core/config-manager.sh && load_config   # Load configuration
+./core/engine.sh run <operation-id>            # Run operation
+./core/engine.sh resume                        # Resume after failure
 ```
 
-**Full guide:** [QUICKSTART.md](../QUICKSTART.md) | **Architecture:** [ARCHITECTURE.md](../ARCHITECTURE.md) | **Docs:** [docs/README.md](../docs/README.md)
+**Full guide:** [QUICKSTART.md](../QUICKSTART.md) | **Architecture:** [ARCHITECTURE.md](../ARCHITECTURE.md)
 
 ---
 
-## System Architecture
+## Dynamic Configuration (NEW)
 
-### Core Components
+Values are resolved at runtime, not pre-configured. Priority pipeline:
 
-**7 Core Scripts (3,018 lines):**
-- `config-manager.sh` - Load config.yaml, export ENV vars
-- `template-engine.sh` - Parse YAML, substitute {{VARIABLES}}
-- `engine.sh` - Main orchestrator (run/resume/status/list)
-- `progress-tracker.sh` - Real-time monitoring
-- `error-handler.sh` - Auto-fix errors, retry
-- `logger.sh` - Structured JSONL logging
-- `validator.sh` - Configuration validation
+1. **Environment Variable** - User-specified override
+2. **Azure Discovery** - Query existing resources for patterns
+3. **Standards Defaults** - From `standards.yaml`
+4. **Config Fallback** - From `config.yaml` (legacy)
+5. **Interactive Prompt** - Ask user if needed
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `secrets.yaml` | **Required:** Credentials only (subscription_id, tenant_id, passwords) |
+| `standards.yaml` | Defaults, naming patterns, best practices |
+| `config.yaml` | Legacy support (optional) |
+
+### AI Workflow for Creating Resources
+
+```bash
+# 1. Discover existing patterns
+source core/naming-analyzer.sh
+proposed=$(propose_name "storage_account" '{"purpose":"fslogix"}')
+
+# 2. Propose name to user
+echo "[?] Create storage account named '$proposed'? [Y/n]"
+
+# 3. Resolve other values dynamically
+source core/value-resolver.sh
+sku=$(resolve_value "STORAGE_SKU" "storage")  # Returns from pipeline
+```
+
+**Full guide:** `.claude/skills/azure-operations/context/dynamic-config.md`
+
+---
+
+## Core Components
+
+**Core Scripts:** `config-manager.sh`, `template-engine.sh`, `engine.sh`, `value-resolver.sh`, `naming-analyzer.sh`
 
 **79 Operations across 7 Capabilities:**
-- `networking/` (20) - VNets, NSGs, VPN, DNS
-- `storage/` (9) - Storage accounts, file shares
-- `identity/` (15) - Entra ID, RBAC
-- `compute/` (17) - VMs, images
-- `avd/` (15) - Host pools, workspaces
-- `management/` (2) - Resource groups
-- `test-capability/` (1) - Testing
-
-### Directory Structure
-
-```
-azure-cli/
-├── config.yaml              # Single source of truth
-├── state.db                 # SQLite state database
-├── core/                    # 7 engine scripts
-├── capabilities/            # 79 operations
-├── artifacts/               # Logs only (gitignored)
-├── docs/                    # 74 docs (all <300 lines)
-└── legacy/                  # Archived modules (DO NOT USE)
-```
+- `networking/` - VNets, NSGs, VPN, DNS
+- `storage/` - Storage accounts, file shares
+- `identity/` - Entra ID, RBAC
+- `compute/` - VMs, images
+- `avd/` - Host pools, workspaces
+- `management/` - Resource groups
 
 ---
 
 ## Development Standards
 
-### 🚫 Critical Anti-Patterns (NEVER)
+### Anti-Patterns (NEVER)
 
 1. **NO standalone scripts** - Use YAML operations
-2. **NO hardcoded values** - Use `{{VARIABLES}}` from config.yaml
+2. **NO hardcoded values** - Use `{{VARIABLES}}` with dynamic resolution
 3. **NO PowerShell remoting** - Use `az vm run-command invoke`
-4. **NO direct file edits** - Use template engine
 
-### ✅ Required Patterns (ALWAYS)
+### Required Patterns (ALWAYS)
 
 1. **Load config first:** `source core/config-manager.sh && load_config`
 2. **YAML operations only** - All logic in `capabilities/*/operations/*.yaml`
-3. **Use @filename syntax** - `--scripts "@path/to/script.ps1"`
-4. **ASCII markers in PowerShell** - `[*] [v] [x] [!] [i]` (NO emoji)
-5. **No file redirects** - Let output go to stdout (captured by state.db)
+3. **ASCII markers in PowerShell** - `[*] [v] [x] [!] [i]` (NO emoji)
 
 ### Naming Conventions
 
-- **Operations:** `{capability}-{action}-{resource}` (e.g., `networking-create-vnet`)
-- **Files:** `{action}-{resource}.yaml` (lowercase, hyphens)
-- **Variables:** `{category}.{subcategory}.{name}` → `CATEGORY_SUBCATEGORY_NAME`
+- **Operations:** `{action}-{resource}.yaml` (e.g., `vnet-create.yaml`)
+- **Variables:** `CATEGORY_SUBCATEGORY_NAME` (e.g., `STORAGE_ACCOUNT_NAME`)
 
 ---
 
 ## Common Workflows
-
-### Running Operations
 
 ```bash
 ./core/engine.sh list              # List all operations
@@ -102,50 +98,10 @@ azure-cli/
 ### Handling Failures
 
 ```bash
-# Engine creates checkpoint on failure
-./core/engine.sh resume
-
-# Check logs
-tail -f artifacts/logs/deployment_$(date +%Y%m%d).jsonl
-
-# Query state database
-sqlite3 state.db "SELECT * FROM operations WHERE operation_id = '<op-id>'"
+./core/engine.sh resume                              # Resume
+tail -f artifacts/logs/deployment_*.jsonl            # View logs
+sqlite3 state.db "SELECT * FROM operations"          # Query state
 ```
-
-### Creating Operations
-
-1. Create: `capabilities/{capability}/operations/{name}.yaml`
-2. Define: id, duration, template, validation
-3. Test: `./core/engine.sh run {operation-id}`
-
-**Guide:** [docs/guides/executor-overview.md](../docs/guides/executor-overview.md)
-
----
-
-## Configuration
-
-### config.yaml - Single Source of Truth
-
-```yaml
-azure:
-  subscription_id: "your-sub-id"
-  location: "centralus"
-  resource_group: "RG-Azure-VDI-01"
-
-networking:
-  vnet:
-    name: "vnet-avd-prod"
-    address_space: "10.0.0.0/16"
-```
-
-### Secrets Management
-
-```bash
-cp secrets.yaml.example secrets.yaml
-vi secrets.yaml  # This file is gitignored
-```
-
-Secrets in `secrets.yaml` override `config.yaml` values.
 
 ---
 
@@ -153,13 +109,9 @@ Secrets in `secrets.yaml` override `config.yaml` values.
 
 ```yaml
 operation:
-  id: "capability-action-resource"
+  id: "action-resource"
   name: "Human Readable Name"
-
-  duration:
-    expected: 180
-    timeout: 300
-    type: "NORMAL"
+  duration: { expected: 180, timeout: 300, type: "NORMAL" }
 
   template:
     type: "az-vm-run-command"
@@ -171,91 +123,18 @@ operation:
 
   powershell:
     content: |
-      Write-Host "[START] Operation: $(Get-Date)"
+      Write-Host "[START] Operation"
       # Your code here
       Write-Host "[SUCCESS] Complete"
       exit 0
-
-  validation:
-    enabled: true
-    checks:
-      - type: "exit_code"
-        expected: 0
 ```
-
----
-
-## Documentation Navigation
-
-**All docs are <300 lines. Navigate via [docs/README.md](../docs/README.md)**
-
-**By Task:**
-- Configure: [docs/guides/state-manager-overview.md](../docs/guides/state-manager-overview.md)
-- Run ops: [docs/guides/executor-overview.md](../docs/guides/executor-overview.md)
-- Create ops: [docs/capability-system/12a-best-practices-part1.md](../docs/capability-system/12a-best-practices-part1.md)
-- Troubleshoot: [QUICKSTART.md#troubleshooting](../QUICKSTART.md#troubleshooting)
-- Azure CLI: [docs/reference/azure-cli-core.md](../docs/reference/azure-cli-core.md)
-- Remote exec: [docs/features/remote-execution-part1.md](../docs/features/remote-execution-part1.md)
-
-**By Category:**
-- Guides (how-to): `docs/guides/` (13 files)
-- Reference (technical): `docs/reference/` (18 files)
-- Capability system: `docs/capability-system/` (39 files)
-- Features: `docs/features/` (2 files)
-- Migration: `docs/migration/` (2 files)
 
 ---
 
 ## Code Style
 
-### Bash Scripts
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-# UPPER_SNAKE_CASE for environment variables
-RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}"
-
-# lower_snake_case for local variables
-local_var="value"
-
-# Functions: verb_noun format
-function validate_prerequisites() {
-    [[ -n "$REQUIRED_VAR" ]] || { echo "ERROR: Not set"; return 1; }
-}
-```
-
-### PowerShell Scripts
-
-```powershell
-# ASCII markers only (NO emoji)
-Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
-
-try {
-    # Your code
-    Write-Host "[v] Success"
-    exit 0
-} catch {
-    Write-Host "[x] Error: $_"
-    exit 1
-}
-```
-
----
-
-## Git Workflow
-
-```bash
-git status
-git add .
-git commit -m "type(scope): Description
-
-```
-
-**Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
-**Branch:** Work on `dev` (default)
-**Commit frequency:** Every 15-30 minutes
+**Bash:** `set -euo pipefail`, UPPER_SNAKE_CASE for env vars, lower_snake_case for locals
+**PowerShell:** ASCII markers `[*] [v] [x] [!] [i]`, try/catch with exit codes
 
 ---
 
@@ -264,56 +143,45 @@ git commit -m "type(scope): Description
 | Issue | Solution |
 |-------|----------|
 | "Config not loaded" | `source core/config-manager.sh && load_config` |
-| "Variable not found" | Add to config.yaml, reload |
+| "Variable not found" | Check standards.yaml, then config.yaml |
 | "Operation not found" | `./core/engine.sh list` |
-| "VM not ready" | Check operation dependencies |
 | "Permission denied" | `az login` |
-
-**Debug:**
-```bash
-echo $AZURE_RESOURCE_GROUP        # Check variable
-az account show                   # Check login
-tail -f artifacts/logs/*.jsonl    # View logs
-cat state.json | jq               # Check state
-```
 
 ---
 
-## Important Notes for AI Assistants
+## AI Assistant Rules
 
-### Skill-Based Workflow
+### Skills (Auto-Detected)
 
-This project uses **three specialized skills** that Claude automatically invokes based on context:
-
-1. **azure-state-query** - Query current Azure environment state
-   - **Use when:** User asks "What VMs exist?", "Show current state", "List resources"
-   - **Location:** `.claude/skills/azure-state-query/SKILL.md`
-   - **Tools:** `queries/` directory with JQ filters
-   - **Pattern:** `az {resource} list -o json | jq -f queries/{type}.jq`
-
-2. **azure-operations** - Deploy and modify infrastructure
-   - **Use when:** User asks to deploy, create, or modify Azure resources
-   - **Location:** `.claude/skills/azure-operations/SKILL.md`
-   - **Tools:** `capabilities/` directory with YAML operations
-   - **Pattern:** `./core/engine.sh run {operation-id}`
-
-3. **azure-troubleshooting** - Debug and fix failures
-   - **Use when:** Operations fail or user asks to troubleshoot
-   - **Location:** `.claude/skills/azure-troubleshooting/SKILL.md`
-   - **Tools:** `artifacts/logs/`, `state.json`, validation operations
-   - **Pattern:** `./core/engine.sh resume`
-
-**How it works:** Claude automatically detects which skill to use based on your request. You don't need to manually invoke skills—they're discovered and activated automatically.
+1. **azure-state-query** - "What VMs exist?", "List resources"
+2. **azure-operations** - "Create VNet", "Deploy storage"
+3. **azure-troubleshooting** - "Operation failed", "Debug"
 
 ### Critical Rules
 
 1. **Read this file first** before making changes
 2. **NEVER create standalone scripts** - use YAML operations
-3. **NEVER hardcode values** - use config.yaml variables
+3. **NEVER hardcode values** - use `{{VARIABLES}}` with dynamic resolution
 4. **ALWAYS use `az vm run-command invoke`** for remote PowerShell
 5. **NEVER use RDP, WinRM, or PowerShell remoting**
-6. **All docs are <300 lines** - navigate via docs/README.md
-7. **Legacy modules (01-12) are archived** - DO NOT use
-8. **Use skills for specialized tasks** - state queries, operations, troubleshooting
+6. **Legacy modules (01-12) are archived** - DO NOT use
+
+### Dynamic Config Workflow
+
+When creating Azure resources:
+
+1. **Discover first** - Query Azure for existing resources
+2. **Follow patterns** - Match existing naming conventions
+3. **Propose names** - Show AI-generated name, ask user to approve
+4. **Use resolve_value** - Let the pipeline determine values dynamically
+5. **Only ask when necessary** - Pipeline handles most values automatically
 
 ---
+
+## Documentation
+
+**All docs <300 lines. Navigate via [docs/README.md](../docs/README.md)**
+
+- Guides: `docs/guides/`
+- Reference: `docs/reference/`
+- Capability system: `docs/capability-system/`
