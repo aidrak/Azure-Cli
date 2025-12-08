@@ -42,7 +42,7 @@ DISCOVERY_ENABLED="${DISCOVERY_ENABLED:-true}"
 resolve_value() {
     local var_name="$1"
     local context="${2:-}"
-    local context_json="${3:-{}}"
+    local context_json="${3:-"{}"}"
 
     local resolved=""
     local source=""
@@ -123,7 +123,7 @@ resolve_from_environment() {
 resolve_from_discovery() {
     local var_name="$1"
     local context="${2:-}"
-    local context_json="${3:-{}}"
+    local context_json="${3:-"{}"}"
 
     # Check state.db cache first
     local cached
@@ -459,7 +459,7 @@ get_default_suggestion() {
 resolve_values() {
     local var_names="$1"
     local context="${2:-}"
-    local context_json="${3:-{}}"
+    local context_json="${3:-"{}"}"
 
     local results=()
 
@@ -477,7 +477,7 @@ resolve_values() {
 export_resolved_values() {
     local var_names="$1"
     local context="${2:-}"
-    local context_json="${3:-{}}"
+    local context_json="${3:-"{}"}"
 
     for var_name in $var_names; do
         local value

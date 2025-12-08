@@ -109,14 +109,12 @@ extract_pattern_components() {
         suffix_type="random"
     fi
 
-    # Calculate confidence based on pattern consistency
+    # Calculate confidence based on pattern consistency (using awk instead of bc)
     local confidence
     if [[ -n "$prefix" && ${#prefix} -gt 2 ]]; then
-        confidence=$(echo "scale=2; 0.5 + ($count / 20)" | bc)
-        [[ $(echo "$confidence > 1.0" | bc) -eq 1 ]] && confidence="1.0"
+        confidence=$(awk "BEGIN {c = 0.5 + ($count / 20); if (c > 1.0) c = 1.0; printf \"%.2f\", c}")
     else
-        confidence=$(echo "scale=2; 0.3 + ($count / 30)" | bc)
-        [[ $(echo "$confidence > 0.7" | bc) -eq 1 ]] && confidence="0.7"
+        confidence=$(awk "BEGIN {c = 0.3 + ($count / 30); if (c > 0.7) c = 0.7; printf \"%.2f\", c}")
     fi
 
     # Output JSON
@@ -222,6 +220,11 @@ get_cached_pattern() {
 
     [[ ! -f "$STATE_DB" ]] && return 1
 
+    # Check if table exists
+    local table_exists
+    table_exists=$(sqlite3 "$STATE_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name='naming_patterns';" 2>/dev/null)
+    [[ -z "$table_exists" ]] && return 1
+
     local cache_ttl=1800  # 30 minutes
     local now
     now=$(date +%s)
@@ -234,17 +237,17 @@ get_cached_pattern() {
              WHERE resource_type = '$resource_type'
              AND resource_group = '$resource_group'
              AND discovered_at > $min_time
-             LIMIT 1;" 2>/dev/null)
+             LIMIT 1;" 2>/dev/null) || result=""
     else
         result=$(sqlite3 -json "$STATE_DB" \
             "SELECT * FROM naming_patterns
              WHERE resource_type = '$resource_type'
-             AND resource_group IS NULL
+             AND (resource_group IS NULL OR resource_group = '')
              AND discovered_at > $min_time
-             LIMIT 1;" 2>/dev/null)
+             LIMIT 1;" 2>/dev/null) || result=""
     fi
 
-    if [[ -n "$result" && "$result" != "[]" ]]; then
+    if [[ -n "$result" && "$result" != "[]" ]] && echo "$result" | jq -e '.[0]' >/dev/null 2>&1; then
         echo "$result" | jq '.[0]'
         return 0
     fi
@@ -303,7 +306,7 @@ generate_random_suffix() {
 # Usage: propose_name "vnet" '{"purpose":"avd","env":"prod"}' "RG-Name"
 propose_name() {
     local resource_type_friendly="$1"
-    local context_json="${2:-{}}"
+    local context_json="${2:-"{}"}"
     local resource_group="${3:-${AZURE_RESOURCE_GROUP:-}}"
 
     # Map friendly name to Azure resource type
@@ -316,15 +319,17 @@ propose_name() {
 
     # If no cached pattern, analyze from Azure
     if [[ -z "$pattern" || "$pattern" == "null" ]]; then
-        pattern=$(analyze_naming_patterns "$azure_resource_type" "$resource_group" 2>/dev/null)
+        pattern=$(analyze_naming_patterns "$azure_resource_type" "$resource_group" 2>/dev/null) || pattern=""
     fi
 
-    # Extract pattern components
-    local prefix separator suffix_type confidence
-    prefix=$(echo "$pattern" | jq -r '.prefix // ""')
-    separator=$(echo "$pattern" | jq -r '.separator // "-"')
-    suffix_type=$(echo "$pattern" | jq -r '.suffix_type // "numeric"')
-    confidence=$(echo "$pattern" | jq -r '.confidence // 0.0')
+    # Extract pattern components (with fallback for invalid/empty JSON)
+    local prefix="" separator="-" suffix_type="numeric" confidence="0.0"
+    if [[ -n "$pattern" ]] && echo "$pattern" | jq -e . >/dev/null 2>&1; then
+        prefix=$(echo "$pattern" | jq -r '.prefix // ""')
+        separator=$(echo "$pattern" | jq -r '.separator // "-"')
+        suffix_type=$(echo "$pattern" | jq -r '.suffix_type // "numeric"')
+        confidence=$(echo "$pattern" | jq -r '.confidence // 0.0')
+    fi
 
     # Extract context values
     local purpose env project
@@ -333,7 +338,8 @@ propose_name() {
     project=$(echo "$context_json" | jq -r '.project // "avd"')
 
     # If low confidence or no pattern, use standards.yaml default
-    if [[ $(echo "$confidence < 0.5" | bc) -eq 1 ]]; then
+    # Use awk for float comparison (bc may not be installed)
+    if [[ -z "$confidence" || "$confidence" == "null" ]] || awk "BEGIN {exit !($confidence < 0.5)}"; then
         prefix=$(get_standard_prefix "$resource_type_friendly")
         separator="-"
     fi
@@ -490,7 +496,7 @@ get_standard_pattern() {
 # Usage: propose_and_confirm "vnet" '{"purpose":"avd"}' "RG-Name"
 propose_and_confirm() {
     local resource_type="$1"
-    local context_json="${2:-{}}"
+    local context_json="${2:-"{}"}"
     local resource_group="${3:-}"
 
     local proposed
