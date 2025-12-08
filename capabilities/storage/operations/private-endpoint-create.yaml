@@ -15,6 +15,20 @@ operation:
     expected: 120 # 120 seconds (2 minutes)
     timeout: 240 # 4 minutes
     type: "NORMAL"
+  # Dependencies: Prerequisites that must be completed before this operation
+  dependencies:
+    operations:
+      - id: "storage-account-create"
+        status: "completed"
+        description: "Storage account must exist for private endpoint"
+      - id: "subnet-create"
+        status: "completed"
+        optional: true
+        description: "Private endpoint subnet should exist"
+    resources:
+      - type: "Microsoft.Storage/storageAccounts"
+        name: "{{STORAGE_ACCOUNT_NAME}}"
+        must_exist: true
   # Parameters extracted from old operation
   parameters:
     required:

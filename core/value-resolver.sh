@@ -319,20 +319,45 @@ map_var_to_yaml_path() {
     # Handle special mappings for standards.yaml
     if [[ "$file_type" == "standards" ]]; then
         case "$var_name" in
-            *_VM_SIZE)
+            # Compute defaults
+            *_VM_SIZE|GOLDEN_IMAGE_VM_SIZE|SESSION_HOST_VM_SIZE)
                 echo ".defaults.compute.vm_size"
                 return 0
                 ;;
-            *_SKU)
-                if [[ "$var_name" == *STORAGE* ]]; then
-                    echo ".defaults.storage.sku"
-                fi
+            GOLDEN_IMAGE_IMAGE_PUBLISHER)
+                echo ".defaults.compute.image.publisher"
                 return 0
                 ;;
-            *_QUOTA_GB)
+            GOLDEN_IMAGE_IMAGE_OFFER)
+                echo ".defaults.compute.image.offer"
+                return 0
+                ;;
+            GOLDEN_IMAGE_IMAGE_SKU)
+                echo ".defaults.compute.image.sku"
+                return 0
+                ;;
+            # Storage defaults
+            STORAGE_SKU|*_STORAGE_SKU)
+                echo ".defaults.storage.sku"
+                return 0
+                ;;
+            STORAGE_KIND)
+                echo ".defaults.storage.kind"
+                return 0
+                ;;
+            STORAGE_QUOTA_GB|*_QUOTA_GB)
                 echo ".defaults.storage.quota_gb"
                 return 0
                 ;;
+            STORAGE_HTTPS_ONLY)
+                echo ".defaults.storage.https_only"
+                return 0
+                ;;
+            STORAGE_MIN_TLS_VERSION)
+                echo ".defaults.storage.min_tls_version"
+                return 0
+                ;;
+            # AVD defaults
             HOST_POOL_TYPE)
                 echo ".defaults.avd.host_pool_type"
                 return 0
@@ -343,6 +368,20 @@ map_var_to_yaml_path() {
                 ;;
             HOST_POOL_LOAD_BALANCER)
                 echo ".defaults.avd.load_balancer"
+                return 0
+                ;;
+            # Networking defaults
+            NETWORKING_VNET_ADDRESS_SPACE)
+                echo ".defaults.networking.vnet.address_space"
+                return 0
+                ;;
+            NETWORKING_LB_SKU)
+                echo ".defaults.networking.load_balancer.sku"
+                return 0
+                ;;
+            # General defaults
+            AZURE_LOCATION)
+                echo ".defaults.general.location"
                 return 0
                 ;;
             *)

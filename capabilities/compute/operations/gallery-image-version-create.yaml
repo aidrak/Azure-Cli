@@ -71,12 +71,20 @@ operation:
 
   # Dependencies
   dependencies:
-    - operation_id: "gallery-create"
-      type: "required"
-      description: "Compute gallery must exist"
-    - operation_id: "gallery-image-definition-create"
-      type: "required"
-      description: "Image definition must exist"
+    operations:
+      - id: "gallery-create"
+        status: "completed"
+        description: "Compute gallery must exist"
+      - id: "gallery-image-definition-create"
+        status: "completed"
+        description: "Image definition must exist in gallery"
+    resources:
+      - type: "Microsoft.Compute/galleries"
+        name: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+        must_exist: true
+      - type: "Microsoft.Compute/galleries/images"
+        name: "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+        must_exist: true
 
   # Validation checks
   validation:
