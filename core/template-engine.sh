@@ -93,10 +93,17 @@ substitute_variables() {
     local context="${2:-}"
     local result="$template"
 
-    # Source value resolver if available (for dynamic resolution)
-    local use_dynamic_resolution=false
+    # Source value resolver for dynamic resolution (required)
+    local use_dynamic_resolution=true
     if [[ -f "${PROJECT_ROOT}/core/value-resolver.sh" ]]; then
-        source "${PROJECT_ROOT}/core/value-resolver.sh" 2>/dev/null && use_dynamic_resolution=true
+        source "${PROJECT_ROOT}/core/value-resolver.sh" 2>/dev/null || {
+            echo "[x] ERROR: Failed to load value-resolver.sh - dynamic resolution unavailable" >&2
+            use_dynamic_resolution=false
+        }
+    else
+        echo "[x] ERROR: value-resolver.sh not found at ${PROJECT_ROOT}/core/value-resolver.sh" >&2
+        echo "[!] Dynamic configuration resolution is disabled - template substitution will be limited" >&2
+        use_dynamic_resolution=false
     fi
 
     # Find all {{VARIABLE}} patterns in template

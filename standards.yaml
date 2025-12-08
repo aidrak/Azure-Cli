@@ -1,28 +1,254 @@
 # ==============================================================================
-# Azure VDI Deployment - Standards & Defaults
+# Azure VDI Deployment Engine - Standards and Defaults
 # ==============================================================================
-# Schema Version: 2.0.0
 #
-# This file contains DEFAULTS and STANDARDS - not mandatory values.
-# Values are resolved dynamically via: User -> Azure Discovery -> Defaults -> Ask
+# This file defines default values, naming conventions, and validation rules
+# for the AVD deployment engine. It serves as the fallback source when values
+# are not specified in config.yaml or via environment variables.
 #
-# The config.yaml file is now deprecated for resource values.
-# Only secrets.yaml is required (for credentials).
+# Configuration Resolution Priority:
+#   1. Environment Variable (user override)
+#   2. Azure Discovery (query existing resources for patterns)
+#   3. Standards Defaults (THIS FILE)
+#   4. Config Fallback (config.yaml - legacy)
+#   5. Interactive Prompt (ask user if needed)
 #
-# Usage:
-#   source core/config-manager.sh && load_config
-#   # Values resolved via: resolve_value "VARIABLE_NAME" "context"
+# Schema Version: 2.1.0 - Extended with comprehensive validation and recommendations
 #
 # ==============================================================================
 
-schema_version: "2.0.0"
+schema_version: "2.1.0"
 
 # ==============================================================================
-# Naming Standards
+# 1. DEFAULTS - Default values for resource creation
 # ==============================================================================
-# AI follows these patterns when proposing names for new resources.
-# Patterns are overridden if existing resources in Azure have different conventions.
-#
+
+defaults:
+  # ============================================================================
+  # General Defaults
+  # ============================================================================
+  general:
+    # Default Azure location (region) for resources
+    location: "eastus"
+
+    # Default environment designation
+    environment: "dev"
+
+    # Default tags applied to all resources
+    tags:
+      environment: "{{ environment }}"
+      project: "avd-deployment"
+      managed_by: "azure-automation"
+      cost_center: "IT"
+      created_date: "{{ current_date }}"
+
+  # ============================================================================
+  # Compute Defaults
+  # ============================================================================
+  compute:
+    # Virtual Machine sizing
+    vm:
+      # Standard_D4s_v5: 4 vCPU, 16GB RAM, Premium Storage capable
+      # Suitable for AVD session hosts with moderate workload
+      size: "Standard_D4s_v5"
+
+      # Alternative sizes by workload:
+      # - Development: Standard_D2s_v5 (2 vCPU, 8GB RAM)
+      # - Standard: Standard_D4s_v5 (4 vCPU, 16GB RAM)
+      # - Heavy: Standard_D8s_v5 (8 vCPU, 32GB RAM)
+      # - GPU: Standard_NV6_Promo (6 vCPU, 56GB RAM, NVIDIA GPU)
+
+      os_disk:
+        type: "Premium_LRS"  # Premium_LRS, Standard_LRS, StandardSSD_LRS
+        size_gb: 128
+
+      # OS Image defaults (Windows 11 for AVD)
+      image:
+        publisher: "MicrosoftWindowsDesktop"
+        offer: "windows-11"
+        sku: "win11-25h2-avd"  # Win 11 with AVD-optimized image
+        version: "latest"
+
+      # Security settings
+      security:
+        type: "TrustedLaunch"  # Standard or TrustedLaunch
+        enable_secure_boot: true
+        enable_vtpm: true
+
+    # Golden Image VM (temporary VM for image preparation)
+    golden_image:
+      vm_size: "Standard_D2s_v4"  # Cost-effective for golden image creation
+      disk_size_gb: 128
+      admin_username: "avd-admin"
+
+    # Availability Set defaults
+    availability_set:
+      fault_domain_count: 2
+      update_domain_count: 5
+
+    # Compute Gallery (formerly Shared Image Gallery)
+    gallery:
+      # Naming pattern: gallery_name_alphanumeric_only (3-80 chars)
+      offer_name: "AVD"
+      publisher_name: "YourCompany"
+
+  # ============================================================================
+  # Storage Defaults
+  # ============================================================================
+  storage:
+    # Storage Account tier and redundancy
+    sku: "Premium_LRS"
+      # Premium_LRS: Premium locally-redundant (single region)
+      # Premium_ZRS: Premium zone-redundant (HA across 3 zones)
+      # Standard_LRS: Standard locally-redundant (cost-effective)
+
+    kind: "FileStorage"  # FileStorage for premium file shares
+    tier: "Premium"      # Premium or Standard
+    access_tier: "Hot"   # Hot or Cool (only for BlobStorage kind)
+
+    # File Share defaults for FSLogix profiles
+    file_share:
+      quota_gb: 100  # Default 100GB quota
+      # Sizing formula: (number_of_users * 50GB) + 20% buffer
+      # Examples:
+      #   - 10 users: 600GB
+      #   - 20 users: 1200GB (1.2TB)
+      #   - 100 users: 6000GB (6TB)
+
+    # Security settings
+    security:
+      public_network_access: "Disabled"  # Disabled = private endpoint only
+      allow_blob_public_access: false
+      https_only: true
+      min_tls_version: "TLS1_2"
+
+    # Advanced features
+    features:
+      enable_large_file_share: true      # Support large file shares (100TB)
+      enable_soft_delete: true           # Soft delete for accidental removal
+      soft_delete_retention_days: 7
+      enable_smb_multichannel: true      # Enhanced SMB performance
+      enable_entra_kerberos: true        # Passwordless Entra ID authentication
+
+    # Private Endpoint settings
+    private_endpoint:
+      enabled: true
+      dns_zone_name: "privatelink.file.core.windows.net"
+
+    # Private DNS Zone
+    private_dns:
+      enabled: true
+      zone_name: "privatelink.file.core.windows.net"
+
+  # ============================================================================
+  # Networking Defaults
+  # ============================================================================
+  networking:
+    # Virtual Network address space
+    vnet:
+      # 10.0.0.0/16 provides 65,536 usable IP addresses
+      address_space_prefix: "10.0.0.0/16"
+      dns_servers: []  # Empty = use Azure DNS
+
+    # Subnet defaults
+    subnet:
+      # Session hosts subnet: 10.0.1.0/24 = 254 usable IPs
+      session_hosts_prefix: "10.0.1.0/24"
+      # Private endpoints subnet: 10.0.2.0/24 = 254 usable IPs
+      private_endpoints_prefix: "10.0.2.0/24"
+      # Management subnet: 10.0.3.0/27 = 30 usable IPs
+      management_prefix: "10.0.3.0/27"
+      # Gateway subnet (VPN/ExpressRoute): 10.0.4.0/24 = 254 usable IPs
+      gateway_prefix: "10.0.4.0/24"
+
+    # Network Security Group (NSG) defaults
+    nsg:
+      # Default rules for session host subnets
+      inbound_allow_rdp: true      # Allow RDP for management
+      inbound_rdp_source_ip: "*"   # Restrict to admin IP in production
+      inbound_allow_winrm: true    # Allow WinRM for PowerShell remoting
+
+    # Load Balancer defaults
+    load_balancer:
+      sku: "Standard"      # Standard or Basic
+      type: "Internal"     # Internal or Public
+
+    # Public IP defaults
+    public_ip:
+      sku: "Standard"      # Standard or Basic
+      allocation_method: "Static"  # Static or Dynamic
+
+    # VPN Gateway defaults
+    vpn_gateway:
+      type: "Vpn"          # Vpn or ExpressRoute
+      sku: "VpnGw1"        # VpnGw1, VpnGw2, VpnGw3, VpnGw4, VpnGw5
+      generation: "Generation2"  # Generation1 or Generation2
+
+  # ============================================================================
+  # AVD (Azure Virtual Desktop) Defaults
+  # ============================================================================
+  avd:
+    # Host Pool configuration
+    host_pool:
+      type: "Pooled"       # Pooled or Personal
+      max_sessions: 10     # Max concurrent users per session host
+      load_balancer_type: "BreadthFirst"  # BreadthFirst or DepthFirst
+        # BreadthFirst: Fill sessions on first host before moving to next (lower latency)
+        # DepthFirst: Fill each host to max before using next (better resource utilization)
+
+    # Workspace settings
+    workspace:
+      friendly_name: "Azure Virtual Desktop"
+
+    # Application Group defaults
+    app_group:
+      type: "Desktop"      # Desktop or RemoteApp
+      friendly_name: "Desktop Applications"
+
+    # Scaling Plan settings
+    scaling_plan:
+      time_zone: "Eastern Standard Time"
+      enabled: true
+
+      # Schedule-based scaling
+      weekday:
+        start_hour: 7      # 7 AM
+        stop_hour: 19      # 7 PM
+
+      weekend:
+        enabled: false     # No weekend scaling
+
+      # Capacity thresholds
+      min_vms: 1           # Minimum running VMs
+      max_vms: 10          # Maximum running VMs
+      ramp_up_threshold: 60    # CPU% to trigger scale-up
+      ramp_down_threshold: 30  # CPU% to trigger scale-down
+
+  # ============================================================================
+  # Identity and Access Defaults
+  # ============================================================================
+  identity:
+    # Entra ID (Azure AD) settings
+    entra:
+      # Group naming for user access
+      user_group_standard: "AVD-Users-Standard"
+      user_group_admin: "AVD-Users-Admins"
+
+      # Group naming for device policies
+      device_group_fslogix: "AVD-Devices-FSLogix"
+      device_group_network: "AVD-Devices-Network"
+      device_group_security: "AVD-Devices-Security"
+
+    # RBAC (Role-Based Access Control) defaults
+    rbac:
+      # Default roles for assignments
+      session_host_role: "Virtual Machine Contributor"
+      storage_role: "Storage File Data SMB Share Contributor"
+
+# ==============================================================================
+# 2. NAMING PATTERNS - Naming conventions for all resources
+# ==============================================================================
+
 naming:
   # Discovery settings
   discovery:
@@ -32,25 +258,268 @@ naming:
     min_samples: 2              # Minimum resources needed to establish a pattern
     confidence_threshold: 0.7   # Minimum confidence to use discovered pattern
 
-  # Standard patterns (used when no existing pattern discovered)
-  # Available tokens: {type}, {project}, {env}, {purpose}, {region}, {number}, {random}
   patterns:
-    resource_group: "RG-{project}-{env}-{number}"
-    virtual_network: "vnet-{purpose}-{env}"
-    subnet: "snet-{purpose}"
-    nsg: "nsg-{subnet_name}"
-    route_table: "rt-{purpose}"
-    public_ip: "pip-{purpose}"
-    storage_account: "{prefix}{random5}"    # Azure naming: 3-24 chars, lowercase alphanumeric only
-    file_share: "{purpose}-profiles"
-    host_pool: "hp-{type}-{env}"
-    workspace: "ws-{project}-{env}"
-    app_group: "dag-{type}-{env}"
-    vm: "{prefix}-{number}"
-    nic: "nic-{vm_name}"
-    disk: "{vm_name}-osdisk"
-    gallery: "{project}_gallery"
-    image_definition: "{os}_{version}_{type}"
+    # ========================================================================
+    # Storage Account Naming
+    # ========================================================================
+    storage_account:
+      # Pattern: st{purpose}{env}{random4}
+      # Example: stfslogixprod1a2b
+      # Rules: 3-24 chars, lowercase alphanumeric only
+      template: "st{purpose}{env}{random}"
+      rules:
+        min_length: 3
+        max_length: 24
+        allowed_chars: "lowercase_alphanumeric"
+      segments:
+        purpose:
+          description: "Storage purpose (fslogix, temp, backup)"
+          example: "fslogix"
+          max_length: 10
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+          max_length: 4
+        random:
+          description: "Random suffix for uniqueness"
+          length: 4
+          type: "alphanumeric"
+
+    # ========================================================================
+    # Virtual Network Naming
+    # ========================================================================
+    virtual_network:
+      # Pattern: vnet-{project}-{env}
+      # Example: vnet-avd-prod
+      template: "vnet-{project}-{env}"
+      rules:
+        max_length: 64
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        project:
+          description: "Project identifier (avd, workspace, etc.)"
+          example: "avd"
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Subnet Naming
+    # ========================================================================
+    subnet:
+      # Pattern: snet-{purpose}-{env}
+      # Examples:
+      #   - snet-sessionhosts-prod
+      #   - snet-privateep-prod
+      #   - snet-management-prod
+      template: "snet-{purpose}-{env}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        purpose:
+          description: "Subnet purpose (sessionhosts, privateep, management, gateway)"
+          examples: ["sessionhosts", "privateep", "management", "gateway"]
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Network Security Group Naming
+    # ========================================================================
+    nsg:
+      # Pattern: nsg-{purpose}-{env}
+      # Examples:
+      #   - nsg-sessionhosts-prod
+      #   - nsg-privateep-prod
+      #   - nsg-management-prod
+      template: "nsg-{purpose}-{env}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        purpose:
+          description: "NSG purpose/target resource"
+          example: "sessionhosts"
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Virtual Machine Naming
+    # ========================================================================
+    vm:
+      # Pattern: vm-{role}-{env}-{index}
+      # Examples:
+      #   - vm-sessionhost-prod-01
+      #   - vm-golden-dev-01
+      #   - vm-jumphost-prod-01
+      template: "vm-{role}-{env}-{index}"
+      rules:
+        max_length: 15  # Windows VM name limit
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        role:
+          description: "VM role (sessionhost, golden, jumphost, etc.)"
+          examples: ["sessionhost", "golden", "jumphost", "management"]
+          max_length: 5
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+          max_length: 4
+        index:
+          description: "Numeric index for multiple VMs"
+          type: "zero_padded_number"
+          width: 2
+          example: "01"
+
+    # ========================================================================
+    # Host Pool Naming
+    # ========================================================================
+    host_pool:
+      # Pattern: hp-{pool_type}-{env}
+      # Examples:
+      #   - hp-pooled-prod
+      #   - hp-personal-dev
+      template: "hp-{pool_type}-{env}"
+      rules:
+        max_length: 64
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        pool_type:
+          description: "Pool type indicator (pooled, personal, gpu)"
+          examples: ["pooled", "personal", "gpu"]
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Workspace Naming
+    # ========================================================================
+    workspace:
+      # Pattern: ws-{project}-{env}
+      # Examples:
+      #   - ws-avd-prod
+      #   - ws-vdi-dev
+      template: "ws-{project}-{env}"
+      rules:
+        max_length: 64
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        project:
+          description: "Project identifier (avd, vdi, etc.)"
+          example: "avd"
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Resource Group Naming
+    # ========================================================================
+    resource_group:
+      # Pattern: rg-{project}-{env}
+      # Examples:
+      #   - rg-avd-prod
+      #   - rg-workspace-dev
+      template: "rg-{project}-{env}"
+      rules:
+        max_length: 90
+        allowed_chars: "alphanumeric_hyphen_period_underscore"
+      segments:
+        project:
+          description: "Project identifier (avd, workspace, etc.)"
+          example: "avd"
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Application Group Naming
+    # ========================================================================
+    app_group:
+      # Pattern: ag-{type}-{env}
+      # Examples:
+      #   - ag-desktop-prod
+      #   - ag-remoteapp-prod
+      template: "ag-{type}-{env}"
+      rules:
+        max_length: 64
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        type:
+          description: "App group type (desktop, remoteapp)"
+          examples: ["desktop", "remoteapp"]
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Private Endpoint Naming
+    # ========================================================================
+    private_endpoint:
+      # Pattern: pe-{service}-{env}
+      # Examples:
+      #   - pe-storage-prod
+      #   - pe-keyvault-prod
+      template: "pe-{service}-{env}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        service:
+          description: "Azure service (storage, keyvault, etc.)"
+          examples: ["storage", "keyvault", "database"]
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
+    # ========================================================================
+    # Network Interface (NIC) Naming
+    # ========================================================================
+    nic:
+      # Pattern: nic-{vm_name}
+      # Example: nic-vm-sessionhost-prod-01
+      template: "nic-{vm_name}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+
+    # ========================================================================
+    # Public IP Naming
+    # ========================================================================
+    public_ip:
+      # Pattern: pip-{purpose}-{env}
+      # Examples:
+      #   - pip-vpngw-prod
+      #   - pip-vm-sessionhost-prod-01
+      template: "pip-{purpose}-{env}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+
+    # ========================================================================
+    # Load Balancer Naming
+    # ========================================================================
+    load_balancer:
+      # Pattern: lb-{purpose}-{env}
+      # Example: lb-sessionhosts-prod
+      template: "lb-{purpose}-{env}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
+
+    # ========================================================================
+    # Disk Naming
+    # ========================================================================
+    disk:
+      # Pattern: disk-{vm_name}-{disk_type}
+      # Examples:
+      #   - disk-vm-sessionhost-prod-01-osdisk
+      #   - disk-vm-sessionhost-prod-01-data01
+      template: "disk-{vm_name}-{type}"
+      rules:
+        max_length: 80
+        allowed_chars: "alphanumeric_hyphen"
 
   # Prefix standards by resource type
   prefixes:
@@ -77,89 +546,183 @@ naming:
     westeurope: "weu"
 
 # ==============================================================================
-# Resource Defaults
+# 3. VALIDATION - Constraints and validation rules for all resources
 # ==============================================================================
-# Default values used when not specified at runtime or discovered from Azure.
+
+validation:
+  # ============================================================================
+  # Storage Account Validation
+  # ============================================================================
+  storage_account:
+    name:
+      min_length: 3
+      max_length: 24
+      pattern: "^[a-z0-9]+$"  # Lowercase alphanumeric only
+      description: "Storage account names must be 3-24 chars, lowercase alphanumeric"
+
+    sku:
+      allowed_values: ["Premium_LRS", "Premium_ZRS", "Standard_LRS", "Standard_GRS"]
+      recommended: "Premium_LRS"  # For AVD FSLogix
+      description: "SKU must be Premium_LRS or Standard_LRS for AVD"
+
+    kind:
+      allowed_values: ["FileStorage", "BlobStorage", "StorageV2", "Storage"]
+      recommended: "FileStorage"  # For premium file shares
+      description: "Kind must be FileStorage for AVD premium file shares"
+
+    quota_gb:
+      min: 100
+      max: 102400  # 100TB max per share
+      recommended: 1024  # 1TB starting point
+      description: "Quota must be 100GB-100TB, sized for user count"
+
+  # ============================================================================
+  # Virtual Machine Validation
+  # ============================================================================
+  vm:
+    name:
+      min_length: 1
+      max_length: 15  # Windows VM name limit
+      pattern: "^[a-zA-Z0-9-]{1,15}$"
+      description: "Windows VM names must be 1-15 chars, alphanumeric and hyphen"
+
+    size:
+      allowed_values:
+        - "Standard_D2s_v5"   # 2 vCPU, 8GB RAM
+        - "Standard_D4s_v5"   # 4 vCPU, 16GB RAM
+        - "Standard_D8s_v5"   # 8 vCPU, 32GB RAM
+        - "Standard_D2s_v4"   # 2 vCPU, 8GB RAM (older generation)
+        - "Standard_D4s_v4"   # 4 vCPU, 16GB RAM (older generation)
+      recommended: "Standard_D4s_v5"
+      description: "Use D-series VMs (compute optimized) for AVD workloads"
+
+    os_disk_size_gb:
+      min: 30
+      max: 4096
+      recommended: 128
+      description: "OS disk must be at least 30GB, recommended 128GB for AVD"
+
+    admin_username:
+      min_length: 1
+      max_length: 20
+      description: "Admin username must be 1-20 characters"
+      forbidden_values: ["admin", "administrator", "root", "system"]
+
+  # ============================================================================
+  # Subnet Validation
+  # ============================================================================
+  subnet:
+    address_prefix:
+      pattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"  # CIDR notation
+      description: "Address prefix must be valid CIDR notation (e.g., 10.0.1.0/24)"
+
+    name:
+      min_length: 1
+      max_length: 80
+      pattern: "^[a-zA-Z0-9-._]{1,80}$"
+      description: "Subnet name must be 1-80 chars"
+
+  # ============================================================================
+  # Virtual Network Validation
+  # ============================================================================
+  vnet:
+    name:
+      min_length: 2
+      max_length: 64
+      pattern: "^[a-zA-Z0-9-._]{2,64}$"
+      description: "VNet name must be 2-64 chars"
+
+    address_space:
+      pattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"  # CIDR notation
+      description: "Address space must be valid CIDR notation (e.g., 10.0.0.0/16)"
+      min_prefix_length: 8  # /8 minimum
+      max_prefix_length: 29  # /29 maximum
+
+  # ============================================================================
+  # AVD Host Pool Validation
+  # ============================================================================
+  host_pool:
+    name:
+      min_length: 1
+      max_length: 64
+      pattern: "^[a-zA-Z0-9-]{1,64}$"
+      description: "Host pool name must be 1-64 chars"
+
+    type:
+      allowed_values: ["Pooled", "Personal"]
+      recommended: "Pooled"  # Cost-effective for most deployments
+      description: "Type must be Pooled or Personal"
+
+    max_sessions:
+      min: 1
+      max: 999
+      recommended: 10  # Balanced between resource usage and cost
+      description: "Max sessions per host must be 1-999"
+
+    load_balancer_type:
+      allowed_values: ["BreadthFirst", "DepthFirst"]
+      recommended: "BreadthFirst"  # Better user experience, lower latency
+      description: "Load balancer type must be BreadthFirst or DepthFirst"
+
+  # ============================================================================
+  # Resource Group Validation
+  # ============================================================================
+  resource_group:
+    name:
+      min_length: 1
+      max_length: 90
+      pattern: "^[a-zA-Z0-9-._()]{1,90}$"
+      description: "Resource group name must be 1-90 chars"
+
+    location:
+      allowed_values:
+        - "eastus"
+        - "eastus2"
+        - "westus"
+        - "westus2"
+        - "westus3"
+        - "centralus"
+        - "canadacentral"
+        - "northeurope"
+        - "westeurope"
+      description: "Location must be a valid Azure region"
+
+  # ============================================================================
+  # Entra ID (Azure AD) Validation
+  # ============================================================================
+  entra_id:
+    group_name:
+      min_length: 1
+      max_length: 256
+      description: "Group name must be 1-256 characters"
+
+    user_principal_name:
+      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      description: "UPN must be valid email format"
+
+# ==============================================================================
+# 4. RESOURCE TYPE MAPPINGS
+# ==============================================================================
+# Maps friendly names to Azure resource types for discovery.
 #
-defaults:
-  # Azure global defaults
-  azure:
-    location: "centralus"
-    environment: "prod"
-
-  # Networking defaults
-  networking:
-    vnet:
-      address_space: ["10.0.0.0/16"]
-      dns_servers: []               # Empty = Azure default DNS
-    subnets:
-      session_hosts:
-        size: "/24"
-        offset: 1                   # 10.0.1.0/24
-        service_endpoints:
-          - "Microsoft.Storage"
-          - "Microsoft.KeyVault"
-      private_endpoints:
-        size: "/24"
-        offset: 2                   # 10.0.2.0/24
-        private_endpoint_network_policies: "Disabled"
-      management:
-        size: "/27"
-        offset: 3                   # 10.0.3.0/27
-    nsg:
-      use_defaults: true            # Apply AVD-recommended rules
-
-  # Compute defaults
-  compute:
-    vm_size: "Standard_D2s_v4"
-    golden_image_vm_size: "Standard_D4s_v6"
-    os_disk_size_gb: 128
-    os_disk_type: "Premium_LRS"
-    image:
-      publisher: "MicrosoftWindowsDesktop"
-      offer: "windows-11"
-      sku: "win11-25h2-avd"
-      version: "latest"
-
-  # Storage defaults
-  storage:
-    sku: "Premium_LRS"
-    kind: "FileStorage"
-    tier: "Premium"
-    quota_gb: 100
-    min_tls_version: "TLS1_2"
-    enable_soft_delete: true
-    soft_delete_retention_days: 7
-
-  # AVD defaults
-  avd:
-    host_pool_type: "Pooled"
-    load_balancer: "BreadthFirst"
-    max_sessions: 10
-    preferred_app_group_type: "Desktop"
-
-  # Session host defaults
-  session_host:
-    vm_count: 1
-    vm_size: "Standard_D2s_v4"
-
-  # Autoscaling defaults
-  autoscaling:
-    enabled: true
-    min_vms: 1
-    max_vms: 10
-    ramp_up_capacity_threshold: 60
-    ramp_down_capacity_threshold: 30
-    weekday_start_hour: 7
-    weekday_stop_hour: 19
-    weekend_enabled: false
+resource_types:
+  vnet: "Microsoft.Network/virtualNetworks"
+  subnet: "Microsoft.Network/virtualNetworks/subnets"
+  nsg: "Microsoft.Network/networkSecurityGroups"
+  storage_account: "Microsoft.Storage/storageAccounts"
+  vm: "Microsoft.Compute/virtualMachines"
+  nic: "Microsoft.Network/networkInterfaces"
+  disk: "Microsoft.Compute/disks"
+  public_ip: "Microsoft.Network/publicIPAddresses"
+  host_pool: "Microsoft.DesktopVirtualization/hostPools"
+  workspace: "Microsoft.DesktopVirtualization/workspaces"
+  app_group: "Microsoft.DesktopVirtualization/applicationGroups"
+  gallery: "Microsoft.Compute/galleries"
+  image_definition: "Microsoft.Compute/galleries/images"
 
 # ==============================================================================
-# Best Practices
+# 5. BEST PRACTICES - Security and operational recommendations
 # ==============================================================================
-# These settings are enforced by default unless explicitly overridden.
-# They represent security and operational best practices for AVD deployments.
-#
 best_practices:
   # Storage security
   storage:
@@ -187,30 +750,8 @@ best_practices:
     enable_diagnostics: true
 
 # ==============================================================================
-# Resource Type Mappings
+# 6. TAGS - Default tags applied to all resources
 # ==============================================================================
-# Maps friendly names to Azure resource types for discovery.
-#
-resource_types:
-  vnet: "Microsoft.Network/virtualNetworks"
-  subnet: "Microsoft.Network/virtualNetworks/subnets"
-  nsg: "Microsoft.Network/networkSecurityGroups"
-  storage_account: "Microsoft.Storage/storageAccounts"
-  vm: "Microsoft.Compute/virtualMachines"
-  nic: "Microsoft.Network/networkInterfaces"
-  disk: "Microsoft.Compute/disks"
-  public_ip: "Microsoft.Network/publicIPAddresses"
-  host_pool: "Microsoft.DesktopVirtualization/hostPools"
-  workspace: "Microsoft.DesktopVirtualization/workspaces"
-  app_group: "Microsoft.DesktopVirtualization/applicationGroups"
-  gallery: "Microsoft.Compute/galleries"
-  image_definition: "Microsoft.Compute/galleries/images"
-
-# ==============================================================================
-# Tags
-# ==============================================================================
-# Default tags applied to all resources (can be overridden per-resource).
-#
 tags:
   defaults:
     managed_by: "azure-vdi-toolkit"

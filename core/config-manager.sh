@@ -34,169 +34,22 @@ load_config() {
 
     echo "[*] Loading configuration from: $config_file"
 
-    # Parse YAML and export as environment variables
-    # Format: SECTION_KEY="value"
-
-    # Azure section
+    # ===========================================================================
+    # Bootstrap Configuration (minimal required to start the engine)
+    # All other variables are resolved on-demand via value-resolver.sh
+    # ===========================================================================
     AZURE_SUBSCRIPTION_ID=$(yq e '.azure.subscription_id' "$config_file"); export AZURE_SUBSCRIPTION_ID
     AZURE_TENANT_ID=$(yq e '.azure.tenant_id' "$config_file"); export AZURE_TENANT_ID
     AZURE_LOCATION=$(yq e '.azure.location' "$config_file"); export AZURE_LOCATION
     AZURE_RESOURCE_GROUP=$(yq e '.azure.resource_group' "$config_file"); export AZURE_RESOURCE_GROUP
 
-    # Networking section (Module 01 - Advanced Networking)
-    NETWORKING_VNET_NAME=$(yq e '.networking.vnet.name' "$config_file"); export NETWORKING_VNET_NAME
-    NETWORKING_VNET_ADDRESS_SPACE=$(yq e '.networking.vnet.address_space | join(" ")' "$config_file"); export NETWORKING_VNET_ADDRESS_SPACE
-    NETWORKING_VNET_LOCATION=$(yq e '.networking.vnet.location' "$config_file"); export NETWORKING_VNET_LOCATION
-    NETWORKING_DNS_ENABLED=$(yq e '.networking.private_dns.enabled' "$config_file"); export NETWORKING_DNS_ENABLED
-    NETWORKING_PEERING_ENABLED=$(yq e '.networking.peering.enabled' "$config_file"); export NETWORKING_PEERING_ENABLED
-    NETWORKING_ROUTE_TABLES_ENABLED=$(yq e '.networking.route_tables.enabled' "$config_file"); export NETWORKING_ROUTE_TABLES_ENABLED
-
-    # Commonly used subnet names (extracted from array for convenience)
-    NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-session-hosts") | .name' "$config_file"); export NETWORKING_SESSION_HOST_SUBNET_NAME
-    NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-private-endpoints") | .name' "$config_file"); export NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME
-    NETWORKING_MANAGEMENT_SUBNET_NAME=$(yq e '.networking.subnets[] | select(.name == "subnet-management") | .name' "$config_file"); export NETWORKING_MANAGEMENT_SUBNET_NAME
-
-    # Note: Full subnet arrays, NSG rules, DNS zones are parsed dynamically in operations
-    # They are too complex for simple environment variables
-
-    # Storage section (Module 02)
-    STORAGE_ACCOUNT_NAME=$(yq e '.storage.account_name' "$config_file"); export STORAGE_ACCOUNT_NAME
-    STORAGE_SKU=$(yq e '.storage.sku' "$config_file"); export STORAGE_SKU
-    STORAGE_KIND=$(yq e '.storage.kind' "$config_file"); export STORAGE_KIND
-    STORAGE_FILE_SHARE_NAME=$(yq e '.storage.file_share_name' "$config_file"); export STORAGE_FILE_SHARE_NAME
-    STORAGE_QUOTA_GB=$(yq e '.storage.quota_gb' "$config_file"); export STORAGE_QUOTA_GB
-    STORAGE_ENABLE_ENTRA_KERBEROS=$(yq e '.storage.enable_entra_kerberos' "$config_file"); export STORAGE_ENABLE_ENTRA_KERBEROS
-    STORAGE_ENABLE_SMB_MULTICHANNEL=$(yq e '.storage.enable_smb_multichannel' "$config_file"); export STORAGE_ENABLE_SMB_MULTICHANNEL
-    STORAGE_PUBLIC_NETWORK_ACCESS=$(yq e '.storage.public_network_access' "$config_file"); export STORAGE_PUBLIC_NETWORK_ACCESS
-    STORAGE_HTTPS_ONLY=$(yq e '.storage.https_only' "$config_file"); export STORAGE_HTTPS_ONLY
-    STORAGE_MIN_TLS_VERSION=$(yq e '.storage.min_tls_version' "$config_file"); export STORAGE_MIN_TLS_VERSION
-
-    # Entra ID section (Module 03)
-    ENTRA_GROUP_USERS_STANDARD=$(yq e '.entra_id.group_users_standard' "$config_file"); export ENTRA_GROUP_USERS_STANDARD
-    ENTRA_GROUP_USERS_STANDARD_DESCRIPTION=$(yq e '.entra_id.group_users_standard_description' "$config_file"); export ENTRA_GROUP_USERS_STANDARD_DESCRIPTION
-    ENTRA_GROUP_USERS_ADMINS=$(yq e '.entra_id.group_users_admins' "$config_file"); export ENTRA_GROUP_USERS_ADMINS
-    ENTRA_GROUP_USERS_ADMINS_DESCRIPTION=$(yq e '.entra_id.group_users_admins_description' "$config_file"); export ENTRA_GROUP_USERS_ADMINS_DESCRIPTION
-    ENTRA_GROUP_DEVICES_SSO=$(yq e '.entra_id.group_devices_sso' "$config_file"); export ENTRA_GROUP_DEVICES_SSO
-    ENTRA_GROUP_DEVICES_SSO_DESCRIPTION=$(yq e '.entra_id.group_devices_sso_description' "$config_file"); export ENTRA_GROUP_DEVICES_SSO_DESCRIPTION
-    ENTRA_GROUP_DEVICES_FSLOGIX=$(yq e '.entra_id.group_devices_fslogix' "$config_file"); export ENTRA_GROUP_DEVICES_FSLOGIX
-    ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION=$(yq e '.entra_id.group_devices_fslogix_description' "$config_file"); export ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION
-    ENTRA_GROUP_DEVICES_NETWORK=$(yq e '.entra_id.group_devices_network' "$config_file"); export ENTRA_GROUP_DEVICES_NETWORK
-    ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION=$(yq e '.entra_id.group_devices_network_description' "$config_file"); export ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION
-    ENTRA_GROUP_DEVICES_SECURITY=$(yq e '.entra_id.group_devices_security' "$config_file"); export ENTRA_GROUP_DEVICES_SECURITY
-    ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION=$(yq e '.entra_id.group_devices_security_description' "$config_file"); export ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION
-
-    # Golden Image section
-    GOLDEN_IMAGE_TEMP_VM_NAME=$(yq e '.golden_image.temp_vm_name' "$config_file"); export GOLDEN_IMAGE_TEMP_VM_NAME
-    GOLDEN_IMAGE_VM_SIZE=$(yq e '.golden_image.vm_size' "$config_file"); export GOLDEN_IMAGE_VM_SIZE
-    GOLDEN_IMAGE_IMAGE_PUBLISHER=$(yq e '.golden_image.image_publisher' "$config_file"); export GOLDEN_IMAGE_IMAGE_PUBLISHER
-    GOLDEN_IMAGE_IMAGE_OFFER=$(yq e '.golden_image.image_offer' "$config_file"); export GOLDEN_IMAGE_IMAGE_OFFER
-    GOLDEN_IMAGE_IMAGE_SKU=$(yq e '.golden_image.image_sku' "$config_file"); export GOLDEN_IMAGE_IMAGE_SKU
-    GOLDEN_IMAGE_IMAGE_VERSION=$(yq e '.golden_image.image_version' "$config_file"); export GOLDEN_IMAGE_IMAGE_VERSION
-    GOLDEN_IMAGE_ADMIN_USERNAME=$(yq e '.golden_image.admin_username' "$config_file"); export GOLDEN_IMAGE_ADMIN_USERNAME
-    # Preserve environment variable if already set (for security - don't overwrite with empty value)
-    if [[ -z "${GOLDEN_IMAGE_ADMIN_PASSWORD:-}" ]]; then
-        GOLDEN_IMAGE_ADMIN_PASSWORD=$(yq e '.golden_image.admin_password' "$config_file"); export GOLDEN_IMAGE_ADMIN_PASSWORD
+    # ===========================================================================
+    # Load Value Resolver for on-demand variable resolution
+    # ===========================================================================
+    if [[ -f "${PROJECT_ROOT}/core/value-resolver.sh" ]]; then
+        source "${PROJECT_ROOT}/core/value-resolver.sh"
+        echo "[v] Value resolver loaded for on-demand configuration"
     fi
-    GOLDEN_IMAGE_GALLERY_NAME=$(yq e '.golden_image.gallery_name' "$config_file"); export GOLDEN_IMAGE_GALLERY_NAME
-    GOLDEN_IMAGE_DEFINITION_NAME=$(yq e '.golden_image.definition_name' "$config_file"); export GOLDEN_IMAGE_DEFINITION_NAME
-
-    # Golden Image Applications - convert array to CSV
-    GOLDEN_IMAGE_APPLICATIONS_CSV=$(yq e '.golden_image.applications | join(",")' "$config_file"); export GOLDEN_IMAGE_APPLICATIONS_CSV
-
-    # Load app manifest content and convert to base64-encoded JSON for VM parameter passing
-    local app_manifest_file="${PROJECT_ROOT}/capabilities/compute/app_manifest.yaml"
-    if [[ -f "$app_manifest_file" ]]; then
-        APP_MANIFEST_CONTENT=$(cat "$app_manifest_file"); export APP_MANIFEST_CONTENT
-        # Convert YAML to JSON and base64 encode (avoids shell escaping issues)
-        APP_MANIFEST_B64=$(yq -o=json "$app_manifest_file" | base64 -w0); export APP_MANIFEST_B64
-    else
-        APP_MANIFEST_CONTENT=""; export APP_MANIFEST_CONTENT
-        APP_MANIFEST_B64=""; export APP_MANIFEST_B64
-    fi
-
-    # Session Host section
-    SESSION_HOST_VM_COUNT=$(yq e '.session_host.vm_count' "$config_file"); export SESSION_HOST_VM_COUNT
-    SESSION_HOST_VM_SIZE=$(yq e '.session_host.vm_size' "$config_file"); export SESSION_HOST_VM_SIZE
-    SESSION_HOST_NAME_PREFIX=$(yq e '.session_host.name_prefix' "$config_file"); export SESSION_HOST_NAME_PREFIX
-
-    # Host Pool section
-    HOST_POOL_NAME=$(yq e '.host_pool.name' "$config_file"); export HOST_POOL_NAME
-    HOST_POOL_TYPE=$(yq e '.host_pool.type' "$config_file"); export HOST_POOL_TYPE
-    HOST_POOL_MAX_SESSIONS=$(yq e '.host_pool.max_sessions' "$config_file"); export HOST_POOL_MAX_SESSIONS
-    HOST_POOL_LOAD_BALANCER=$(yq e '.host_pool.load_balancer' "$config_file"); export HOST_POOL_LOAD_BALANCER
-
-    # Workspace section
-    WORKSPACE_NAME=$(yq e '.workspace.name' "$config_file"); export WORKSPACE_NAME
-    WORKSPACE_FRIENDLY_NAME=$(yq e '.workspace.friendly_name' "$config_file"); export WORKSPACE_FRIENDLY_NAME
-
-    # Application Group section
-    APP_GROUP_NAME=$(yq e '.app_group.name' "$config_file"); export APP_GROUP_NAME
-    APP_GROUP_TYPE=$(yq e '.app_group.type' "$config_file"); export APP_GROUP_TYPE
-    APP_GROUP_FRIENDLY_NAME=$(yq e '.app_group.friendly_name' "$config_file"); export APP_GROUP_FRIENDLY_NAME
-
-    # Host Pool additional fields
-    HOST_POOL_FRIENDLY_NAME=$(yq e '.host_pool.friendly_name' "$config_file"); export HOST_POOL_FRIENDLY_NAME
-    HOST_POOL_DESCRIPTION=$(yq e '.host_pool.description' "$config_file"); export HOST_POOL_DESCRIPTION
-
-    # Workspace additional fields
-    WORKSPACE_DESCRIPTION=$(yq e '.workspace.description' "$config_file"); export WORKSPACE_DESCRIPTION
-
-    # AVD Application section
-    AVD_APPLICATION_NAME=$(yq e '.avd_application.name' "$config_file"); export AVD_APPLICATION_NAME
-    AVD_APPLICATION_FRIENDLY_NAME=$(yq e '.avd_application.friendly_name' "$config_file"); export AVD_APPLICATION_FRIENDLY_NAME
-    AVD_APPLICATION_DESCRIPTION=$(yq e '.avd_application.description' "$config_file"); export AVD_APPLICATION_DESCRIPTION
-    AVD_APPLICATION_PATH=$(yq e '.avd_application.path' "$config_file"); export AVD_APPLICATION_PATH
-    AVD_APPLICATION_COMMAND_LINE_ARGS=$(yq e '.avd_application.command_line_args' "$config_file"); export AVD_APPLICATION_COMMAND_LINE_ARGS
-    AVD_APPLICATION_ICON_PATH=$(yq e '.avd_application.icon_path' "$config_file"); export AVD_APPLICATION_ICON_PATH
-    AVD_APPLICATION_ICON_INDEX=$(yq e '.avd_application.icon_index' "$config_file"); export AVD_APPLICATION_ICON_INDEX
-    AVD_APPLICATION_SHOW_IN_PORTAL=$(yq e '.avd_application.show_in_portal' "$config_file"); export AVD_APPLICATION_SHOW_IN_PORTAL
-
-    # AVD Scaling Plan section
-    AVD_SCALING_PLAN_NAME=$(yq e '.avd_scaling_plan.name' "$config_file"); export AVD_SCALING_PLAN_NAME
-    AVD_SCALING_PLAN_DESCRIPTION=$(yq e '.avd_scaling_plan.description' "$config_file"); export AVD_SCALING_PLAN_DESCRIPTION
-    AVD_SCALING_PLAN_TIME_ZONE=$(yq e '.avd_scaling_plan.time_zone' "$config_file"); export AVD_SCALING_PLAN_TIME_ZONE
-    AVD_SCALING_PLAN_ENABLED=$(yq e '.avd_scaling_plan.enabled' "$config_file"); export AVD_SCALING_PLAN_ENABLED
-
-    # Networking additional section
-    NETWORKING_LB_NAME=$(yq e '.networking.load_balancer_name' "$config_file"); export NETWORKING_LB_NAME
-    NETWORKING_LB_SKU=$(yq e '.networking.load_balancer_sku' "$config_file"); export NETWORKING_LB_SKU
-    NETWORKING_LB_TYPE=$(yq e '.networking.load_balancer_type' "$config_file"); export NETWORKING_LB_TYPE
-    NETWORKING_PUBLIC_IP_NAME=$(yq e '.networking.public_ip_name' "$config_file"); export NETWORKING_PUBLIC_IP_NAME
-    NETWORKING_PUBLIC_IP_SKU=$(yq e '.networking.public_ip_sku' "$config_file"); export NETWORKING_PUBLIC_IP_SKU
-    NETWORKING_PUBLIC_IP_ALLOCATION_METHOD=$(yq e '.networking.public_ip_allocation_method' "$config_file"); export NETWORKING_PUBLIC_IP_ALLOCATION_METHOD
-    NETWORKING_ROUTE_TABLE_NAME=$(yq e '.networking.route_table_name' "$config_file"); export NETWORKING_ROUTE_TABLE_NAME
-    NETWORKING_SESSION_HOST_SUBNET_NAME=$(yq e '.networking.session_host_subnet_name' "$config_file"); export NETWORKING_SESSION_HOST_SUBNET_NAME
-
-    # Storage additional section
-    STORAGE_BLOB_CONTAINER_NAME=$(yq e '.storage.blob_container_name' "$config_file"); export STORAGE_BLOB_CONTAINER_NAME
-    STORAGE_BLOB_PUBLIC_ACCESS=$(yq e '.storage.blob_public_access' "$config_file"); export STORAGE_BLOB_PUBLIC_ACCESS
-
-    # Golden Image additional fields
-    GOLDEN_IMAGE_NAME=$(yq e '.golden_image.image_name' "$config_file"); export GOLDEN_IMAGE_NAME
-    GOLDEN_IMAGE_VM_NAME=$(yq e '.golden_image.vm_name' "$config_file"); export GOLDEN_IMAGE_VM_NAME
-    DISK_NAME=$(yq e '.golden_image.disk_name' "$config_file"); export DISK_NAME
-    DISK_SIZE_GB=$(yq e '.golden_image.disk_size_gb' "$config_file"); export DISK_SIZE_GB
-
-    # Session Host additional fields
-    SESSION_HOST_VM_NAME=$(yq e '.session_host.vm_name' "$config_file"); export SESSION_HOST_VM_NAME
-
-    # Compute section
-    COMPUTE_AVAILABILITY_SET_NAME=$(yq e '.compute.availability_set_name' "$config_file"); export COMPUTE_AVAILABILITY_SET_NAME
-    COMPUTE_AVAILABILITY_SET_ENABLED=$(yq e '.compute.availability_set_enabled' "$config_file"); export COMPUTE_AVAILABILITY_SET_ENABLED
-    COMPUTE_AVAILABILITY_SET_MANAGED=$(yq e '.compute.availability_set_enabled' "$config_file"); export COMPUTE_AVAILABILITY_SET_MANAGED
-    COMPUTE_FAULT_DOMAIN_COUNT=$(yq e '.compute.fault_domain_count' "$config_file"); export COMPUTE_FAULT_DOMAIN_COUNT
-    COMPUTE_UPDATE_DOMAIN_COUNT=$(yq e '.compute.update_domain_count' "$config_file"); export COMPUTE_UPDATE_DOMAIN_COUNT
-    COMPUTE_EXTENSION_NAME=$(yq e '.compute.extension_name' "$config_file"); export COMPUTE_EXTENSION_NAME
-    COMPUTE_EXTENSION_PUBLISHER=$(yq e '.compute.extension_publisher' "$config_file"); export COMPUTE_EXTENSION_PUBLISHER
-    COMPUTE_EXTENSION_TYPE=$(yq e '.compute.extension_type' "$config_file"); export COMPUTE_EXTENSION_TYPE
-    COMPUTE_EXTENSION_VERSION=$(yq e '.compute.extension_version' "$config_file"); export COMPUTE_EXTENSION_VERSION
-    COMPUTE_VM_NAME=$(yq e '.session_host.vm_name' "$config_file"); export COMPUTE_VM_NAME
-
-    # Autoscaling additional fields
-    AUTOSCALING_MIN_VMS=$(yq e '.autoscaling.min_vms' "$config_file"); export AUTOSCALING_MIN_VMS
-    AUTOSCALING_MAX_VMS=$(yq e '.autoscaling.max_vms' "$config_file"); export AUTOSCALING_MAX_VMS
-    AUTOSCALING_WEEKDAY_START_HOUR=$(yq e '.autoscaling.weekday_start_hour' "$config_file"); export AUTOSCALING_WEEKDAY_START_HOUR
-    AUTOSCALING_WEEKDAY_STOP_HOUR=$(yq e '.autoscaling.weekday_stop_hour' "$config_file"); export AUTOSCALING_WEEKDAY_STOP_HOUR
 
     # ===========================================================================
     # Load Secrets (if secrets.yaml exists, merge with config.yaml)
@@ -224,28 +77,20 @@ load_config() {
         # fi
     fi
 
-    echo "[v] Configuration loaded successfully"
+    echo "[v] Configuration loaded successfully (bootstrap variables only)"
     return 0
 }
 
 # ==============================================================================
 # Validate Configuration
 # ==============================================================================
-# Usage: validate_config [module_id]
-# If module_id provided, only validates sections required for that module
-# If no module_id, validates all required sections (full validation)
+# Validates bootstrap variables only (all others resolved on-demand)
 validate_config() {
-    local module_id="${1:-}"
-
-    if [[ -n "$module_id" ]]; then
-        echo "[*] Validating configuration for module: $module_id"
-    else
-        echo "[*] Validating full configuration..."
-    fi
+    echo "[*] Validating bootstrap configuration..."
 
     local errors=0
 
-    # Always validate Azure global fields (required by all modules)
+    # Validate Azure bootstrap variables (required to start the engine)
     if [[ -z "$AZURE_SUBSCRIPTION_ID" || "$AZURE_SUBSCRIPTION_ID" == "null" ]]; then
         echo "[x] ERROR: azure.subscription_id is required"
         ((errors++))
@@ -266,74 +111,13 @@ validate_config() {
         ((errors++))
     fi
 
-    # Module-specific validation
-    case "$module_id" in
-        "01-networking")
-            # Networking module requires VNet configuration
-            if [[ -z "$NETWORKING_VNET_NAME" || "$NETWORKING_VNET_NAME" == "null" ]]; then
-                echo "[x] ERROR: networking.vnet.name is required"
-                ((errors++))
-            fi
-            ;;
-
-        "02-storage")
-            # Storage module - account_name is optional (auto-generated if empty)
-            # Validate other critical storage settings
-            if [[ -z "$STORAGE_SKU" || "$STORAGE_SKU" == "null" ]]; then
-                echo "[x] ERROR: storage.sku is required"
-                ((errors++))
-            fi
-            ;;
-
-        "03-entra-group")
-            # Entra ID module requires group configuration
-            if [[ -z "$ENTRA_GROUP_USERS_STANDARD" || "$ENTRA_GROUP_USERS_STANDARD" == "null" ]]; then
-                echo "[x] ERROR: entra_id.group_users_standard is required"
-                ((errors++))
-            fi
-            ;;
-
-        "04-host-pool-workspace"|"05-golden-image"|"06-session-host-deployment")
-            # These modules require golden image configuration
-            if [[ -z "$GOLDEN_IMAGE_TEMP_VM_NAME" || "$GOLDEN_IMAGE_TEMP_VM_NAME" == "null" ]]; then
-                echo "[x] ERROR: golden_image.temp_vm_name is required"
-                ((errors++))
-            fi
-
-            # Admin password only required for golden image module
-            if [[ "$module_id" == "05-golden-image" ]]; then
-                if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "" ]]; then
-                    echo "[x] ERROR: golden_image.admin_password is required for Module 05"
-                    echo "[!] Provide via environment variable:"
-                    echo "[!]   export GOLDEN_IMAGE_ADMIN_PASSWORD='your-secure-password'"
-                    ((errors++))
-                fi
-            fi
-            ;;
-
-        "")
-            # Full validation (no module specified)
-            # Check for admin password (security requirement)
-            if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "" ]]; then
-                echo "[!] WARNING: golden_image.admin_password not set"
-                echo "[!] You will need to provide it via environment variable for Module 05:"
-                echo "[!]   export GOLDEN_IMAGE_ADMIN_PASSWORD='your-secure-password'"
-                # Not an error - can be provided later when needed
-            fi
-            ;;
-
-        *)
-            # Unknown module - skip module-specific validation
-            echo "[i] No specific validation rules for module: $module_id"
-            ;;
-    esac
-
     if [[ $errors -gt 0 ]]; then
-        echo "[x] Configuration validation failed with $errors errors"
+        echo "[x] Bootstrap validation failed with $errors errors"
         return 1
     fi
 
-    echo "[v] Configuration validation passed"
+    echo "[v] Bootstrap validation passed"
+    echo "[i] Operation-specific variables will be validated on-demand"
     return 0
 }
 
@@ -343,13 +127,13 @@ validate_config() {
 prompt_user_for_config() {
     echo ""
     echo "===================================================================="
-    echo "  Azure VDI Deployment - Configuration"
+    echo "  Azure VDI Deployment - Bootstrap Configuration"
     echo "===================================================================="
     echo ""
     echo "Press ENTER to accept default values shown in [brackets]"
     echo ""
 
-    # Azure configuration
+    # Azure configuration (bootstrap variables only)
     echo "--- Azure Configuration ---"
     read -r -p "Subscription ID [$AZURE_SUBSCRIPTION_ID]: " input
     AZURE_SUBSCRIPTION_ID="${input:-$AZURE_SUBSCRIPTION_ID}"
@@ -364,26 +148,8 @@ prompt_user_for_config() {
     AZURE_RESOURCE_GROUP="${input:-$AZURE_RESOURCE_GROUP}"
 
     echo ""
-    echo "--- Golden Image VM ---"
-    read -r -p "Temp VM Name [$GOLDEN_IMAGE_TEMP_VM_NAME]: " input
-    GOLDEN_IMAGE_TEMP_VM_NAME="${input:-$GOLDEN_IMAGE_TEMP_VM_NAME}"
-
-    read -r -p "VM Size [$GOLDEN_IMAGE_VM_SIZE]: " input
-    GOLDEN_IMAGE_VM_SIZE="${input:-$GOLDEN_IMAGE_VM_SIZE}"
-
-    read -r -p "Admin Username [$GOLDEN_IMAGE_ADMIN_USERNAME]: " input
-    GOLDEN_IMAGE_ADMIN_USERNAME="${input:-$GOLDEN_IMAGE_ADMIN_USERNAME}"
-
-    # Admin password (secure input)
-    if [[ -z "$GOLDEN_IMAGE_ADMIN_PASSWORD" || "$GOLDEN_IMAGE_ADMIN_PASSWORD" == "null" ]]; then
-        read -r -sp "Admin Password (hidden): " GOLDEN_IMAGE_ADMIN_PASSWORD
-        echo ""
-    else
-        echo "Admin Password: [already set - not prompting]"
-    fi
-
-    echo ""
-    echo "[v] Configuration complete"
+    echo "[v] Bootstrap configuration complete"
+    echo "[i] Other variables will be resolved on-demand via value-resolver.sh"
     echo ""
 }
 
@@ -426,18 +192,13 @@ save_config() {
 
     echo "[*] Saving configuration to: $config_file"
 
-    # Update YAML file with current environment variables
+    # Update YAML file with bootstrap variables only
     yq e -i ".azure.subscription_id = \"$AZURE_SUBSCRIPTION_ID\"" "$config_file"
     yq e -i ".azure.tenant_id = \"$AZURE_TENANT_ID\"" "$config_file"
     yq e -i ".azure.location = \"$AZURE_LOCATION\"" "$config_file"
     yq e -i ".azure.resource_group = \"$AZURE_RESOURCE_GROUP\"" "$config_file"
 
-    yq e -i ".golden_image.temp_vm_name = \"$GOLDEN_IMAGE_TEMP_VM_NAME\"" "$config_file"
-    yq e -i ".golden_image.vm_size = \"$GOLDEN_IMAGE_VM_SIZE\"" "$config_file"
-    yq e -i ".golden_image.admin_username = \"$GOLDEN_IMAGE_ADMIN_USERNAME\"" "$config_file"
-    # Note: Never save password to config file (security)
-
-    echo "[v] Configuration saved"
+    echo "[v] Configuration saved (bootstrap variables only)"
     return 0
 }
 
@@ -447,31 +208,16 @@ save_config() {
 display_config() {
     echo ""
     echo "===================================================================="
-    echo "  Current Configuration"
+    echo "  Bootstrap Configuration"
     echo "===================================================================="
     echo ""
     echo "Azure:"
-    echo "  Subscription ID: $AZURE_SUBSCRIPTION_ID"
-    echo "  Tenant ID: $AZURE_TENANT_ID"
-    echo "  Location: $AZURE_LOCATION"
-    echo "  Resource Group: $AZURE_RESOURCE_GROUP"
+    echo "  Subscription ID: ${AZURE_SUBSCRIPTION_ID:-<not set>}"
+    echo "  Tenant ID: ${AZURE_TENANT_ID:-<not set>}"
+    echo "  Location: ${AZURE_LOCATION:-<not set>}"
+    echo "  Resource Group: ${AZURE_RESOURCE_GROUP:-<not set>}"
     echo ""
-    echo "Networking:"
-    echo "  VNet: $NETWORKING_VNET_NAME ($NETWORKING_VNET_CIDR)"
-    echo "  Subnet: $NETWORKING_SUBNET_NAME ($NETWORKING_SUBNET_CIDR)"
-    echo "  NSG: $NETWORKING_NSG_NAME"
-    echo ""
-    echo "Golden Image:"
-    echo "  Temp VM: $GOLDEN_IMAGE_TEMP_VM_NAME"
-    echo "  VM Size: $GOLDEN_IMAGE_VM_SIZE"
-    echo "  Admin: $GOLDEN_IMAGE_ADMIN_USERNAME"
-    echo "  Gallery: $GOLDEN_IMAGE_GALLERY_NAME"
-    echo ""
-    echo "Host Pool:"
-    echo "  Name: $HOST_POOL_NAME"
-    echo "  Type: $HOST_POOL_TYPE"
-    echo "  Max Sessions: $HOST_POOL_MAX_SESSIONS"
-    echo ""
+    echo "Note: All other variables are resolved on-demand via value-resolver.sh"
     echo "===================================================================="
     echo ""
 }

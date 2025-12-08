@@ -78,6 +78,11 @@ else
     exit 1
 fi
 
+# Optional: dependency-resolver.sh (warn-only integration)
+if [[ -f "${PROJECT_ROOT}/core/dependency-resolver.sh" ]]; then
+    source "${PROJECT_ROOT}/core/dependency-resolver.sh"
+fi
+
 # ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
@@ -161,9 +166,12 @@ get_steps() {
     # Try template command (Capability Schema) - use render_command for full processing
     local template_command
 
-    # First check if template exists in YAML
+    # Check if template exists - either command OR type (for powershell-direct and similar)
     local raw_template=$(yq eval '.operation.template.command' "$yaml_file")
-    if [[ -n "$raw_template" ]] && [[ "$raw_template" != "null" ]]; then
+    local template_type=$(yq eval '.operation.template.type' "$yaml_file")
+
+    # Call render_command if we have either a command OR a recognized template type
+    if [[ (-n "$raw_template" && "$raw_template" != "null") || (-n "$template_type" && "$template_type" != "null") ]]; then
         # Use render_command to properly process the template (substitutes {{POWERSHELL_CONTENT}}, etc.)
         template_command=$(render_command "$yaml_file" 2>/dev/null)
 
@@ -366,6 +374,14 @@ execute_operation() {
 
     # Track start time
     local start_time=$(date +%s)
+
+    # Validate operation dependencies from YAML (warn-only, non-blocking)
+    if [[ "$force_mode" != "true" ]] && command -v validate_operation_dependencies &>/dev/null; then
+        if ! validate_operation_dependencies "$yaml_file" 2>/dev/null; then
+            log_warn "Some operation dependencies may not be satisfied" "$operation_exec_id"
+            # Don't fail - just warn for now
+        fi
+    fi
 
     # Validate prerequisites (unless force mode)
     if [[ "$force_mode" != "true" ]]; then

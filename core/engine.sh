@@ -616,6 +616,7 @@ main() {
                 echo "ERROR: Module name or operation ID required"
                 echo "Usage: $0 run <module> [operation]"
                 echo "   OR: $0 run <operation-id>"
+                echo "   OR: $0 run <capability>/<operation>"
                 exit 1
             fi
 
@@ -626,24 +627,71 @@ main() {
             # Initialize state
             init_state
 
-            # Check if module_name is actually a capability operation ID
-            local capability_yaml
-            capability_yaml=$(find_capability_operation "$module_name" 2>/dev/null)
+            # NEW: Check for capability/operation syntax (e.g., compute/vm-create)
+            if [[ "$module_name" == */* && -z "$operation_id" ]]; then
+                local capability="${module_name%/*}"
+                local op_id="${module_name#*/}"
+                local capability_yaml="${CAPABILITIES_DIR}/${capability}/operations/${op_id}.yaml"
 
-            if [[ -n "$capability_yaml" && -z "$operation_id" ]]; then
-                # Direct capability operation execution
-                log_info "Executing capability operation: $module_name" "engine"
-                execute_single_operation "" "$module_name"
-            elif [[ -n "$operation_id" ]]; then
-                # Traditional: module + operation
-                validate_config "$module_name" || exit 1
-                execute_single_operation "${MODULES_DIR}/${module_name}" "$operation_id"
+                if [[ -f "$capability_yaml" ]]; then
+                    log_info "Executing capability operation: ${capability}/${op_id}" "engine"
+                    execute_single_operation "" "$op_id"
+                else
+                    log_error "Operation not found: ${capability}/${op_id}" "engine"
+                    log_error "Expected file: $capability_yaml" "engine"
+                    exit 1
+                fi
+            # Check if module_name is actually a capability operation ID
             else
-                # Execute entire module
-                validate_config "$module_name" || exit 1
-                execute_module "$module_name"
+                local capability_yaml
+                capability_yaml=$(find_capability_operation "$module_name" 2>/dev/null)
+
+                if [[ -n "$capability_yaml" && -z "$operation_id" ]]; then
+                    # Direct capability operation execution
+                    log_info "Executing capability operation: $module_name" "engine"
+                    execute_single_operation "" "$module_name"
+                elif [[ -n "$operation_id" ]]; then
+                    # Traditional: module + operation
+                    validate_config "$module_name" || exit 1
+                    execute_single_operation "${MODULES_DIR}/${module_name}" "$operation_id"
+                else
+                    # Execute entire module
+                    validate_config "$module_name" || exit 1
+                    execute_module "$module_name"
+                fi
             fi
-            ;; 
+            ;;
+
+        workflow)
+            local workflow_arg="${2:-}"
+
+            if [[ -z "$workflow_arg" ]]; then
+                echo "ERROR: Workflow file or ID required"
+                echo "Usage: $0 workflow <workflow.yaml>"
+                echo "   OR: $0 workflow <workflow-id>"
+                exit 1
+            fi
+
+            # Load configuration
+            log_info "Loading configuration" "engine"
+            load_config || exit 1
+
+            # Initialize state
+            init_state
+
+            # Source workflow engine
+            source "${PROJECT_ROOT}/core/workflow-engine.sh"
+
+            # Check if it's a file path or workflow ID
+            if [[ -f "$workflow_arg" ]]; then
+                execute_workflow "$workflow_arg"
+            elif [[ -f "${PROJECT_ROOT}/workflows/${workflow_arg}.yaml" ]]; then
+                execute_workflow "${PROJECT_ROOT}/workflows/${workflow_arg}.yaml"
+            else
+                log_error "Workflow not found: $workflow_arg" "engine"
+                exit 1
+            fi
+            ;;
 
         resume)
             load_config || exit 1
@@ -659,7 +707,7 @@ main() {
             ;;
 
         *)
-            echo "Usage: $0 {run|resume|status|list} ..."
+            echo "Usage: $0 {run|workflow|resume|status|list} ..."
             exit 1
             ;;
     esac
