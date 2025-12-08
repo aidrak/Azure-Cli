@@ -1,0 +1,112 @@
+# ==============================================================================
+# Atomic Operation: Verify Session Host Registration
+# ==============================================================================
+# Purpose: Verify session host is registered to host pool
+# Output: Registration status and session host details
+#
+# This is an ATOMIC operation - it does ONE thing only.
+# Use after session host deployment to confirm registration.
+# ==============================================================================
+
+operation:
+  id: "session-host-verify"
+  name: "Verify Session Host Registration"
+  description: "Verify that a session host VM is registered to the AVD host pool"
+  capability: "avd"
+  operation_mode: "read"
+  resource_type: "Microsoft.DesktopVirtualization/hostpools/sessionhosts"
+
+  duration:
+    expected: 30
+    timeout: 300  # Registration can take 5 minutes
+    type: "WAIT"
+
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        default: "{{HOST_POOL_NAME}}"
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the session host VM to verify"
+        default: "{{SESSION_HOST_VM_NAME}}"
+    optional:
+      - name: "max_wait_seconds"
+        type: "integer"
+        description: "Maximum time to wait for registration (default 300)"
+        default: 300
+      - name: "poll_interval_seconds"
+        type: "integer"
+        description: "Seconds between registration checks (default 30)"
+        default: 30
+
+  outputs:
+    - name: "registered"
+      type: "boolean"
+      description: "Whether session host is registered"
+    - name: "status"
+      type: "string"
+      description: "Session host status (Available, Unavailable, etc.)"
+    - name: "session_host_name"
+      type: "string"
+      description: "Full session host resource name"
+
+  template:
+    type: "bash"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      RG="{{resource_group}}"
+      HP="{{host_pool_name}}"
+      VM="{{vm_name}}"
+      MAX_WAIT={{max_wait_seconds}}
+      INTERVAL={{poll_interval_seconds}}
+
+      echo "[*] Verifying session host registration..."
+      echo "    Host Pool: $HP"
+      echo "    VM Name: $VM"
+
+      ELAPSED=0
+      while [ $ELAPSED -lt $MAX_WAIT ]; do
+        # List session hosts and find our VM
+        SESSION_HOST=$(az desktopvirtualization sessionhost list \
+          --resource-group "$RG" \
+          --host-pool-name "$HP" \
+          --query "[?contains(name, '$VM')]" \
+          -o json 2>/dev/null)
+
+        # Check if found
+        NAME=$(echo "$SESSION_HOST" | jq -r '.[0].name // empty')
+        if [ -n "$NAME" ]; then
+          STATUS=$(echo "$SESSION_HOST" | jq -r '.[0].status // "Unknown"')
+          ALLOW_NEW=$(echo "$SESSION_HOST" | jq -r '.[0].allowNewSession // false')
+
+          echo "[v] Session host registered!"
+          echo "    Name: $NAME"
+          echo "    Status: $STATUS"
+          echo "    Allow New Sessions: $ALLOW_NEW"
+
+          # Output JSON
+          echo "{\"registered\": true, \"status\": \"$STATUS\", \"session_host_name\": \"$NAME\"}"
+          exit 0
+        fi
+
+        echo "[i] Waiting for registration... ($ELAPSED/$MAX_WAIT seconds)"
+        sleep $INTERVAL
+        ELAPSED=$((ELAPSED + INTERVAL))
+      done
+
+      echo "[x] Session host not registered after ${MAX_WAIT}s"
+      echo "{\"registered\": false, \"status\": \"NotRegistered\", \"session_host_name\": null}"
+      exit 1
+
+  rollback:
+    enabled: false  # Read-only operation
+
+  fixes: []

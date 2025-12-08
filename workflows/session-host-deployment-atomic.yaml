@@ -1,0 +1,122 @@
+# ==============================================================================
+# Workflow: Session Host Deployment (Atomic)
+# ==============================================================================
+#
+# Purpose:
+#   Deploy AVD session host using ATOMIC operations for precise error recovery.
+#
+# Compared to Monolithic session-host-create.yaml:
+#   - Old: 4 steps blended in single 480-line PowerShell block
+#   - New: 3 atomic operations orchestrated by workflow
+#   - Benefit: Resume from failed step, reusable token generation
+#
+# Steps:
+#   1. Generate host pool registration token (atomic, reusable)
+#   2. Create session host VM with ARM template (the main deployment)
+#   3. Verify session host registration (atomic, reusable)
+#
+# Execution:
+#   source core/config-manager.sh && load_config
+#   ./core/engine.sh workflow workflows/session-host-deployment-atomic.yaml
+#
+# ==============================================================================
+
+workflow:
+  id: "session-host-deployment-atomic"
+  name: "Session Host Deployment (Atomic)"
+  description: "Deploy AVD session host using atomic operations for precise error recovery"
+
+  variables:
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    location: "{{AZURE_LOCATION}}"
+    subscription_id: "{{AZURE_SUBSCRIPTION_ID}}"
+    host_pool_name: "{{HOST_POOL_NAME}}"
+    vm_name: "{{SESSION_HOST_VM_NAME}}"
+    vm_size: "{{SESSION_HOST_VM_SIZE}}"
+    admin_username: "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+    admin_password: "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+
+  steps:
+
+    # =========================================================================
+    # STEP 1: Generate Host Pool Registration Token
+    # =========================================================================
+    - name: "Generate Registration Token"
+      operation: "capabilities/avd/operations/hostpool-token-generate.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        host_pool_name: "{{HOST_POOL_NAME}}"
+        expiration_hours: 24
+      outputs:
+        registration_token: "registration_token"
+        token_expiration: "expiration_time"
+      description: |
+        Generate host pool registration token.
+        This token is required for the DSC extension to register the VM.
+        Token is valid for 24 hours.
+
+    # =========================================================================
+    # STEP 2: Create Session Host VM
+    # =========================================================================
+    - name: "Create Session Host VM"
+      operation: "capabilities/avd/operations/session-host-create.yaml"
+      continue_on_error: false
+      parameters:
+        vm_name: "{{SESSION_HOST_VM_NAME}}"
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        admin_username: "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+        admin_password: "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+        vm_size: "{{SESSION_HOST_VM_SIZE}}"
+      description: |
+        Create session host VM from gallery image with:
+        - SystemAssigned managed identity
+        - AADLoginForWindows extension (Entra join)
+        - DSC extension (AVD agent + host pool registration)
+        - Intune MDM enrollment (if enabled)
+
+    # =========================================================================
+    # STEP 3: Verify Session Host Registration
+    # =========================================================================
+    - name: "Verify Registration"
+      operation: "capabilities/avd/operations/session-host-verify.yaml"
+      continue_on_error: true  # Registration may still be pending
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        host_pool_name: "{{HOST_POOL_NAME}}"
+        vm_name: "{{SESSION_HOST_VM_NAME}}"
+        max_wait_seconds: 300
+        poll_interval_seconds: 30
+      outputs:
+        registered: "registered"
+        host_status: "status"
+      description: |
+        Verify session host registered to host pool.
+        Waits up to 5 minutes for registration to complete.
+        Registration can take 2-10 minutes after VM deployment.
+
+# ==============================================================================
+# WORKFLOW BENEFITS vs MONOLITHIC OPERATION
+# ==============================================================================
+#
+# Resumability:
+#   - If VM deployment fails, token is already generated (step 1 complete)
+#   - If registration fails, VM exists (step 2 complete)
+#   - Resume continues from failed step, not from scratch
+#
+# Reusability:
+#   - hostpool-token-generate: Can generate tokens for any deployment
+#   - session-host-verify: Can verify any session host registration
+#   - Both operations usable in other workflows
+#
+# Debugging:
+#   - Clear step-by-step state in artifacts/workflow-state/
+#   - Each step has distinct success/failure status
+#   - Easy to identify exactly which step failed
+#
+# Idempotency:
+#   - Token generation is idempotent (regenerates if expired)
+#   - VM creation checks if exists (skip if deployed)
+#   - Verification is read-only (always safe to re-run)
+#
+# ==============================================================================

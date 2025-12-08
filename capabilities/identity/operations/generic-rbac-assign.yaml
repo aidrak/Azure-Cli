@@ -1,0 +1,86 @@
+# ==============================================================================
+# Atomic Operation: Assign RBAC Role (Generic)
+# ==============================================================================
+# Purpose: Assign any Azure RBAC role to any principal at any scope
+#
+# This is an ATOMIC operation - it does ONE thing only.
+# Use in workflows to chain with other operations.
+#
+# Examples:
+#   - Assign "Storage File Data SMB Share Contributor" to a group on a file share
+#   - Assign "Contributor" to a service principal on a resource group
+#   - Assign "Reader" to a user on a subscription
+# ==============================================================================
+
+operation:
+  id: "generic-rbac-assign"
+  name: "Assign RBAC Role"
+  description: "Assign an Azure RBAC role to a principal at a specific scope"
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Authorization/roleAssignments"
+
+  duration:
+    expected: 30
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "assignee_object_id"
+        type: "string"
+        description: "Object ID of the principal (user, group, or service principal)"
+      - name: "role_name"
+        type: "string"
+        description: "Name of the RBAC role to assign (e.g., 'Contributor', 'Reader')"
+      - name: "scope"
+        type: "string"
+        description: "Resource scope for the assignment (subscription, resource group, or resource ID)"
+
+  # Output specification
+  outputs:
+    - name: "assignment_id"
+      type: "string"
+      description: "ID of the created role assignment"
+    - name: "role_name"
+      type: "string"
+      description: "Name of the assigned role"
+
+  # Idempotency: Check if assignment already exists
+  idempotency:
+    enabled: true
+    check_command: |
+      az role assignment list \
+        --assignee "{{assignee_object_id}}" \
+        --role "{{role_name}}" \
+        --scope "{{scope}}" \
+        --query "[0].id" \
+        --output tsv 2>/dev/null
+    skip_if_exists: true
+    existing_message: "Role assignment already exists"
+
+  template:
+    type: "az-cli"
+    command: |
+      az role assignment create \
+        --assignee-object-id "{{assignee_object_id}}" \
+        --assignee-principal-type "Group" \
+        --role "{{role_name}}" \
+        --scope "{{scope}}" \
+        --query "{assignment_id: id, role_name: roleDefinitionName}" \
+        --output json
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Role Assignment"
+        description: "Delete the RBAC role assignment"
+        command: |
+          az role assignment delete \
+            --assignee "{{assignee_object_id}}" \
+            --role "{{role_name}}" \
+            --scope "{{scope}}" \
+            2>/dev/null || true
+        continue_on_error: true
+
+  fixes: []

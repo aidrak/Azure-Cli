@@ -1,0 +1,51 @@
+# ==============================================================================
+# Atomic Operation: Get Entra ID Group
+# ==============================================================================
+# Purpose: Retrieve an Entra ID (Azure AD) group by display name
+# Output: Group ID for use in subsequent operations
+#
+# This is an ATOMIC operation - it does ONE thing only.
+# Use in workflows to chain with other operations.
+# ==============================================================================
+
+operation:
+  id: "entra-group-get"
+  name: "Get Entra ID Group"
+  description: "Retrieve Entra ID group by display name and output its object ID"
+  capability: "identity"
+  operation_mode: "read"
+  resource_type: "Microsoft.Graph/groups"
+
+  duration:
+    expected: 10
+    timeout: 30
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Display name of the Entra ID group to retrieve"
+
+  # Output specification - what this operation returns
+  outputs:
+    - name: "group_id"
+      type: "string"
+      description: "Object ID of the Entra ID group"
+    - name: "group_name"
+      type: "string"
+      description: "Display name of the group (confirmed)"
+
+  template:
+    type: "az-cli"
+    command: |
+      az ad group show \
+        --group "{{group_name}}" \
+        --query "{group_id: id, group_name: displayName}" \
+        --output json
+
+  # No rollback needed - this is a read operation
+  rollback:
+    enabled: false
+
+  fixes: []

@@ -1,0 +1,79 @@
+# ==============================================================================
+# Atomic Operation: Generate Host Pool Registration Token
+# ==============================================================================
+# Purpose: Generate or retrieve AVD host pool registration token
+# Output: Registration token for use in session host deployment
+#
+# This is an ATOMIC operation - it does ONE thing only.
+# Use in workflows to chain with session host creation.
+# ==============================================================================
+
+operation:
+  id: "hostpool-token-generate"
+  name: "Generate Host Pool Registration Token"
+  description: "Generate or retrieve AVD host pool registration token for session host enrollment"
+  capability: "avd"
+  operation_mode: "update"
+  resource_type: "Microsoft.DesktopVirtualization/hostpools"
+
+  duration:
+    expected: 30
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        default: "{{HOST_POOL_NAME}}"
+    optional:
+      - name: "expiration_hours"
+        type: "integer"
+        description: "Token validity in hours (default 24)"
+        default: 24
+
+  outputs:
+    - name: "registration_token"
+      type: "string"
+      description: "Host pool registration token"
+      sensitive: true
+    - name: "expiration_time"
+      type: "string"
+      description: "Token expiration timestamp (UTC)"
+
+  template:
+    type: "az-cli"
+    command: |
+      # Calculate expiration time
+      EXPIRATION=$(date -u -d "+{{expiration_hours}} hours" '+%Y-%m-%dT%H:%M:%S.000Z')
+
+      # Generate new token
+      az desktopvirtualization hostpool update \
+        --resource-group "{{resource_group}}" \
+        --name "{{host_pool_name}}" \
+        --registration-info "expiration-time=$EXPIRATION" "registration-token-operation=Update" \
+        --output none
+
+      # Retrieve the token
+      TOKEN=$(az desktopvirtualization hostpool show \
+        --resource-group "{{resource_group}}" \
+        --name "{{host_pool_name}}" \
+        --query "registrationInfo.token" -o tsv)
+
+      if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+        echo "ERROR: Failed to generate registration token" >&2
+        exit 1
+      fi
+
+      # Output as JSON for workflow consumption
+      echo "{\"registration_token\": \"$TOKEN\", \"expiration_time\": \"$EXPIRATION\"}"
+
+  rollback:
+    enabled: false  # Token generation is safe, no rollback needed
+
+  fixes: []

@@ -1,0 +1,114 @@
+# ==============================================================================
+# Workflow: Storage RBAC Permissions (Atomic)
+# ==============================================================================
+#
+# Purpose:
+#   Assign FSLogix file share permissions to user groups using ATOMIC operations.
+#   Each step does ONE thing, enabling precise error recovery and reusability.
+#
+# Compared to Monolithic storage-rbac-assign.yaml:
+#   - Old: 6 steps in single PowerShell block (248 lines)
+#   - New: 4 atomic operations orchestrated by workflow
+#   - Benefit: Resume from failed step, reusable operations
+#
+# Execution:
+#   source core/config-manager.sh && load_config
+#   ./core/engine.sh workflow workflows/storage-permissions.yaml
+#
+# ==============================================================================
+
+workflow:
+  id: "storage-permissions"
+  name: "Storage RBAC Permissions (Atomic)"
+  description: "Assign FSLogix file share permissions using atomic operations"
+
+  variables:
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"
+    subscription_id: "{{AZURE_SUBSCRIPTION_ID}}"
+    storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+    fileshare_name: "{{FILESHARE_NAME}}"
+    standard_group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
+    admin_group_name: "{{ENTRA_GROUP_USERS_ADMINS}}"
+
+  steps:
+
+    # =========================================================================
+    # STEP 1: Get Standard Users Group ID
+    # =========================================================================
+    - name: "Get Standard Users Group"
+      operation: "capabilities/identity/operations/entra-group-get.yaml"
+      continue_on_error: false
+      parameters:
+        group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
+      outputs:
+        standard_group_id: "group_id"
+      description: |
+        Retrieve the Entra ID group for standard users.
+        Output: standard_group_id (used in step 3)
+
+    # =========================================================================
+    # STEP 2: Get Admin Users Group ID
+    # =========================================================================
+    - name: "Get Admin Users Group"
+      operation: "capabilities/identity/operations/entra-group-get.yaml"
+      continue_on_error: false
+      parameters:
+        group_name: "{{ENTRA_GROUP_USERS_ADMINS}}"
+      outputs:
+        admin_group_id: "group_id"
+      description: |
+        Retrieve the Entra ID group for admin users.
+        Output: admin_group_id (used in step 4)
+
+    # =========================================================================
+    # STEP 3: Assign Contributor Role to Standard Users
+    # =========================================================================
+    - name: "Assign Storage Contributor to Standard Users"
+      operation: "capabilities/identity/operations/generic-rbac-assign.yaml"
+      continue_on_error: false
+      parameters:
+        assignee_object_id: "{{standard_group_id}}"
+        role_name: "Storage File Data SMB Share Contributor"
+        scope: "/subscriptions/{{AZURE_SUBSCRIPTION_ID}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.Storage/storageAccounts/{{STORAGE_ACCOUNT_NAME}}/fileServices/default/fileshares/{{FILESHARE_NAME}}"
+      description: |
+        Assign "Storage File Data SMB Share Contributor" role to standard users.
+        This allows users to read/write files in the FSLogix profile share.
+
+    # =========================================================================
+    # STEP 4: Assign Elevated Contributor Role to Admin Users
+    # =========================================================================
+    - name: "Assign Storage Elevated Contributor to Admins"
+      operation: "capabilities/identity/operations/generic-rbac-assign.yaml"
+      continue_on_error: false
+      parameters:
+        assignee_object_id: "{{admin_group_id}}"
+        role_name: "Storage File Data SMB Share Elevated Contributor"
+        scope: "/subscriptions/{{AZURE_SUBSCRIPTION_ID}}/resourceGroups/{{AZURE_RESOURCE_GROUP}}/providers/Microsoft.Storage/storageAccounts/{{STORAGE_ACCOUNT_NAME}}/fileServices/default/fileshares/{{FILESHARE_NAME}}"
+      description: |
+        Assign "Storage File Data SMB Share Elevated Contributor" role to admins.
+        This allows admins to manage NTFS permissions and full file access.
+
+# ==============================================================================
+# WORKFLOW BENEFITS vs MONOLITHIC OPERATION
+# ==============================================================================
+#
+# Resumability:
+#   - If step 3 fails, resume from step 3 (steps 1-2 already completed)
+#   - Monolithic: Entire 6-step script re-runs from scratch
+#
+# Reusability:
+#   - entra-group-get.yaml can be used by any workflow needing group IDs
+#   - generic-rbac-assign.yaml can assign ANY role to ANY principal
+#   - Monolithic: Hardcoded to FSLogix-specific use case
+#
+# Testability:
+#   - Each atomic operation can be tested independently
+#   - ./core/engine.sh run identity/entra-group-get --group_name "MyGroup"
+#   - Monolithic: Must run entire 248-line script
+#
+# Debugging:
+#   - Clear step-by-step logging in workflow state
+#   - artifacts/workflow-state/ shows exactly which step failed
+#   - Monolithic: Parse through 248 lines to find failure point
+#
+# ==============================================================================
