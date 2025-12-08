@@ -245,6 +245,35 @@ defaults:
       session_host_role: "Virtual Machine Contributor"
       storage_role: "Storage File Data SMB Share Contributor"
 
+    # =========================================================================
+    # Authentication Settings (Claude Code automation)
+    # =========================================================================
+    # These settings control how Claude Code authenticates to Azure services
+    # without user intervention.
+    #
+    authentication:
+      # Preferred authentication methods
+      azure_cli_method: "service_principal"    # service_principal or device_code
+      ms_graph_method: "certificate"           # certificate, client_secret, or device_code
+
+      # Token caching (reduces re-authentication)
+      token_cache_enabled: true
+
+      # Auto-authenticate on failure (self-healing)
+      auto_authenticate_on_failure: true
+
+      # Required Azure RBAC roles for service principal
+      required_azure_roles:
+        - "Contributor"                        # For resource management
+        - "User Access Administrator"          # For RBAC assignments
+
+      # Required Microsoft Graph API permissions (Application type)
+      required_graph_permissions:
+        - "Application.ReadWrite.All"          # For app registrations
+        - "Directory.Read.All"                 # For directory queries
+        - "Group.ReadWrite.All"                # For group management
+        - "Application-RemoteDesktopConfig.ReadWrite.All"  # For AVD SSO config
+
 # ==============================================================================
 # 2. NAMING PATTERNS - Naming conventions for all resources
 # ==============================================================================
@@ -521,6 +550,25 @@ naming:
         max_length: 80
         allowed_chars: "alphanumeric_hyphen"
 
+    # ========================================================================
+    # Log Analytics Workspace Naming
+    # ========================================================================
+    log_analytics_workspace:
+      # Pattern: log-{project}-{env}
+      # Example: log-avd-prod
+      template: "log-{project}-{env}"
+      rules:
+        min_length: 4
+        max_length: 63
+        allowed_chars: "alphanumeric_hyphen"
+      segments:
+        project:
+          description: "Project identifier (avd, vdi, etc.)"
+          example: "avd"
+        env:
+          description: "Environment (dev, test, prod)"
+          example: "prod"
+
   # Prefix standards by resource type
   prefixes:
     storage_account: "fslogix"
@@ -719,6 +767,7 @@ resource_types:
   app_group: "Microsoft.DesktopVirtualization/applicationGroups"
   gallery: "Microsoft.Compute/galleries"
   image_definition: "Microsoft.Compute/galleries/images"
+  log_analytics_workspace: "Microsoft.OperationalInsights/workspaces"
 
 # ==============================================================================
 # 5. BEST PRACTICES - Security and operational recommendations
@@ -748,6 +797,9 @@ best_practices:
   monitoring:
     enable_boot_diagnostics: true
     enable_diagnostics: true
+    log_analytics:
+      sku: "PerGB2018"  # Pay-as-you-go pricing
+      retention_days: 30  # Standard 30-day retention
 
 # ==============================================================================
 # 6. TAGS - Default tags applied to all resources

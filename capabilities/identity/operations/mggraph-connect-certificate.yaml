@@ -1,0 +1,140 @@
+# ==============================================================================
+# Microsoft Graph Certificate Authentication
+# ==============================================================================
+#
+# Purpose: Connect to Microsoft Graph using service principal with certificate
+# Usage: ./core/engine.sh run identity/mggraph-connect-certificate
+#
+# Prerequisites:
+#   - Service principal with certificate uploaded to Azure AD
+#   - Certificate installed in local certificate store
+#   - Credentials configured in secrets.yaml:
+#     service_principal:
+#       client_id: "..."
+#       certificate_thumbprint: "..."
+#
+# Certificate Setup (Linux):
+#   pwsh -Command "Import-PfxCertificate -FilePath ./cert.pfx -CertStoreLocation Cert:\CurrentUser\My"
+#
+# ==============================================================================
+
+operation:
+  id: "mggraph-connect-certificate"
+  name: "Microsoft Graph Certificate Authentication"
+  description: "Connect to Microsoft Graph using service principal certificate for automated operations"
+  category: "identity"
+
+  duration:
+    expected: 15
+    timeout: 60
+    type: "QUICK"
+
+  variables:
+    required:
+      - AZURE_CLIENT_ID
+      - AZURE_TENANT_ID
+      - AZURE_CERTIFICATE_THUMBPRINT
+
+  template:
+    type: "bash"
+    command: |
+      set -euo pipefail
+
+      echo "[*] Microsoft Graph Certificate Authentication"
+      echo "==============================================="
+
+      # Validate required variables
+      if [[ -z "${AZURE_CLIENT_ID:-}" ]]; then
+        echo "[x] ERROR: AZURE_CLIENT_ID not set. Configure service_principal.client_id in secrets.yaml"
+        exit 1
+      fi
+
+      if [[ -z "${AZURE_TENANT_ID:-}" ]]; then
+        echo "[x] ERROR: AZURE_TENANT_ID not set. Configure azure.tenant_id in config.yaml"
+        exit 1
+      fi
+
+      if [[ -z "${AZURE_CERTIFICATE_THUMBPRINT:-}" ]]; then
+        echo "[x] ERROR: AZURE_CERTIFICATE_THUMBPRINT not set. Configure service_principal.certificate_thumbprint in secrets.yaml"
+        exit 1
+      fi
+
+      # Run PowerShell to connect to Microsoft Graph
+      pwsh -Command '
+        $ErrorActionPreference = "Stop"
+
+        $clientId = $env:AZURE_CLIENT_ID
+        $tenantId = $env:AZURE_TENANT_ID
+        $thumbprint = $env:AZURE_CERTIFICATE_THUMBPRINT
+
+        Write-Host "[*] Client ID: $clientId"
+        Write-Host "[*] Tenant ID: $tenantId"
+        Write-Host "[*] Certificate Thumbprint: $thumbprint"
+
+        # Check if already connected with correct identity
+        $context = Get-MgContext -ErrorAction SilentlyContinue
+        if ($context -and $context.ClientId -eq $clientId) {
+          Write-Host ""
+          Write-Host "[v] Already connected to Microsoft Graph"
+          Write-Host "[v] Tenant: $($context.TenantId)"
+          Write-Host "[v] Client: $($context.ClientId)"
+          Write-Host "[v] Scopes: $($context.Scopes -join ", ")"
+          exit 0
+        }
+
+        # Disconnect any existing session
+        if ($context) {
+          Write-Host "[*] Disconnecting existing session..."
+          Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        }
+
+        # Verify certificate exists in store
+        Write-Host "[*] Checking certificate in store..."
+        $cert = Get-ChildItem -Path "Cert:\CurrentUser\My\$thumbprint" -ErrorAction SilentlyContinue
+        if (-not $cert) {
+          Write-Host "[x] ERROR: Certificate not found in CurrentUser store"
+          Write-Host "[!] Install certificate with:"
+          Write-Host "    pwsh -Command \"Import-PfxCertificate -FilePath ./cert.pfx -CertStoreLocation Cert:\CurrentUser\My\""
+          exit 1
+        }
+        Write-Host "[v] Certificate found: $($cert.Subject)"
+
+        # Connect with certificate
+        Write-Host "[*] Connecting to Microsoft Graph..."
+        Connect-MgGraph `
+          -ClientId $clientId `
+          -TenantId $tenantId `
+          -CertificateThumbprint $thumbprint `
+          -NoWelcome
+
+        # Verify connection
+        $ctx = Get-MgContext
+        if (-not $ctx) {
+          Write-Host "[x] ERROR: Failed to connect to Microsoft Graph"
+          exit 1
+        }
+
+        Write-Host ""
+        Write-Host "[v] Successfully connected to Microsoft Graph"
+        Write-Host "[v] Tenant: $($ctx.TenantId)"
+        Write-Host "[v] Client: $($ctx.ClientId)"
+        Write-Host "[v] Auth Type: $($ctx.AuthType)"
+        Write-Host "[v] Scopes: $($ctx.Scopes -join ", ")"
+      '
+
+  outputs:
+    - name: "connected_tenant"
+      description: "The connected tenant ID"
+    - name: "connected_client"
+      description: "The connected client ID"
+
+  on_success:
+    message: "Microsoft Graph authenticated with certificate"
+
+  on_failure:
+    message: "Failed to authenticate to Microsoft Graph"
+    suggestions:
+      - "Verify certificate is installed: Get-ChildItem Cert:\\CurrentUser\\My"
+      - "Check certificate thumbprint matches secrets.yaml"
+      - "Ensure certificate is uploaded to Azure AD app registration"
+      - "Verify app has required Graph API permissions with admin consent"

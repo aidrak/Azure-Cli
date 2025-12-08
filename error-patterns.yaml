@@ -73,16 +73,20 @@ patterns:
       3. Retry the operation
 
   - id: "az-cli-not-logged-in"
-    regex: "Please run 'az login'|AADSTS|authentication.*failed"
-    description: "Not authenticated to Azure"
-    auto_fix: false
+    regex: "Please run 'az login'|AADSTS[0-9]+|authentication.*failed|not logged in|login.*required"
+    description: "Not authenticated to Azure CLI"
+    auto_fix: true
     fix_action: |
-      Cannot auto-fix authentication issues.
-      Inform user:
-      1. Run: az login
-      2. Select the correct subscription: az account set -s <subscription-id>
-      3. Verify: az account show
-      4. Retry the operation
+      Azure CLI authentication required.
+      Steps:
+      1. Run: ./core/engine.sh run identity/az-login-service-principal
+      2. This uses service principal credentials from secrets.yaml
+      3. Retry the original operation after authentication succeeds
+
+      If service principal not configured:
+      1. Create SP: az ad sp create-for-rbac --name "claude-code-automation" --role Contributor
+      2. Add credentials to secrets.yaml under service_principal section
+      3. Run authentication operation again
 
   # ===========================================================================
   # Azure Resource Errors
@@ -223,6 +227,23 @@ patterns:
          RIGHT: $rule = '(device.displayName -startsWith "' + $prefix + '")'
       3. Edit the YAML operation with corrected escaping
       4. Retry the operation
+
+  - id: "mggraph-not-connected"
+    regex: "Connect-MgGraph|Get-MgContext.*null|Microsoft\\.Graph.*not connected|authentication_required|MgGraph.*not.*authenticated"
+    description: "Not authenticated to Microsoft Graph"
+    auto_fix: true
+    fix_action: |
+      Microsoft Graph authentication required.
+      Steps:
+      1. Run: ./core/engine.sh run identity/mggraph-connect-certificate
+      2. This uses certificate credentials from secrets.yaml
+      3. Retry the original operation after authentication succeeds
+
+      If certificate not configured:
+      1. Generate cert: openssl req -x509 -newkey rsa:4096 -keyout claude.key -out claude.crt -days 365 -nodes
+      2. Upload to Azure AD: az ad app credential reset --id "CLIENT_ID" --cert "@claude.crt" --append
+      3. Install locally: pwsh -Command "Import-PfxCertificate -FilePath ./claude.pfx -CertStoreLocation Cert:\CurrentUser\My"
+      4. Add thumbprint to secrets.yaml under service_principal.certificate_thumbprint
 
   - id: "service-principal-not-found"
     regex: "service principal.*not found|application.*not found"

@@ -1,0 +1,102 @@
+# ==============================================================================
+# Azure CLI Service Principal Authentication
+# ==============================================================================
+#
+# Purpose: Authenticate Azure CLI using service principal credentials
+# Usage: ./core/engine.sh run identity/az-login-service-principal
+#
+# Prerequisites:
+#   - Service principal created with appropriate roles
+#   - Credentials configured in secrets.yaml:
+#     service_principal:
+#       client_id: "..."
+#       client_secret: "..."
+#
+# ==============================================================================
+
+operation:
+  id: "az-login-service-principal"
+  name: "Azure CLI Service Principal Login"
+  description: "Authenticate Azure CLI using service principal credentials for automated operations"
+  category: "identity"
+
+  duration:
+    expected: 10
+    timeout: 30
+    type: "QUICK"
+
+  variables:
+    required:
+      - AZURE_CLIENT_ID
+      - AZURE_CLIENT_SECRET
+      - AZURE_TENANT_ID
+      - AZURE_SUBSCRIPTION_ID
+
+  template:
+    type: "bash"
+    command: |
+      set -euo pipefail
+
+      echo "[*] Azure CLI Service Principal Authentication"
+      echo "=============================================="
+
+      # Validate required variables
+      if [[ -z "${AZURE_CLIENT_ID:-}" ]]; then
+        echo "[x] ERROR: AZURE_CLIENT_ID not set. Configure service_principal.client_id in secrets.yaml"
+        exit 1
+      fi
+
+      if [[ -z "${AZURE_CLIENT_SECRET:-}" ]]; then
+        echo "[x] ERROR: AZURE_CLIENT_SECRET not set. Configure service_principal.client_secret in secrets.yaml"
+        exit 1
+      fi
+
+      if [[ -z "${AZURE_TENANT_ID:-}" ]]; then
+        echo "[x] ERROR: AZURE_TENANT_ID not set. Configure azure.tenant_id in config.yaml"
+        exit 1
+      fi
+
+      # Check if already authenticated as this service principal
+      CURRENT_USER=$(az account show --query "user.name" -o tsv 2>/dev/null || echo "")
+      if [[ "$CURRENT_USER" == "${AZURE_CLIENT_ID}" ]]; then
+        echo "[v] Already authenticated as service principal: ${AZURE_CLIENT_ID}"
+        echo "[v] Subscription: $(az account show --query name -o tsv)"
+        exit 0
+      fi
+
+      # Login with service principal
+      echo "[*] Logging in with service principal..."
+      az login --service-principal \
+        --username "${AZURE_CLIENT_ID}" \
+        --password "${AZURE_CLIENT_SECRET}" \
+        --tenant "${AZURE_TENANT_ID}" \
+        --output none
+
+      # Set subscription if specified
+      if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
+        echo "[*] Setting subscription: ${AZURE_SUBSCRIPTION_ID}"
+        az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+      fi
+
+      # Verify authentication
+      echo ""
+      echo "[v] Authentication successful"
+      echo "[v] Authenticated as: $(az account show --query user.name -o tsv)"
+      echo "[v] Subscription: $(az account show --query name -o tsv)"
+      echo "[v] Tenant: $(az account show --query tenantId -o tsv)"
+
+  outputs:
+    - name: "authenticated_user"
+      description: "The authenticated service principal ID"
+    - name: "subscription_name"
+      description: "The active subscription name"
+
+  on_success:
+    message: "Azure CLI authenticated with service principal"
+
+  on_failure:
+    message: "Failed to authenticate Azure CLI"
+    suggestions:
+      - "Verify service principal credentials in secrets.yaml"
+      - "Check if service principal has required permissions"
+      - "Ensure tenant_id and subscription_id are correct"

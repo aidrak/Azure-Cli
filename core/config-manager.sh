@@ -67,14 +67,38 @@ load_config() {
             echo "[v] Golden image admin password loaded from secrets"
         fi
 
-        # Add more secret overrides here as needed
-        # Example:
-        # local secret_api_key
-        # secret_api_key=$(yq e '.api.key' "$SECRETS_FILE" 2>/dev/null)
-        # if [[ -n "$secret_api_key" && "$secret_api_key" != "null" ]]; then
-        #     API_KEY="$secret_api_key"
-        #     export API_KEY
-        # fi
+        # =====================================================================
+        # Service Principal Credentials (for Claude Code automation)
+        # =====================================================================
+        local sp_client_id sp_client_secret sp_cert_thumbprint sp_cert_path
+
+        sp_client_id=$(yq e '.service_principal.client_id' "$SECRETS_FILE" 2>/dev/null)
+        if [[ -n "$sp_client_id" && "$sp_client_id" != "null" ]]; then
+            AZURE_CLIENT_ID="$sp_client_id"
+            export AZURE_CLIENT_ID
+            echo "[v] Service principal client_id loaded"
+        fi
+
+        sp_client_secret=$(yq e '.service_principal.client_secret' "$SECRETS_FILE" 2>/dev/null)
+        if [[ -n "$sp_client_secret" && "$sp_client_secret" != "null" ]]; then
+            AZURE_CLIENT_SECRET="$sp_client_secret"
+            export AZURE_CLIENT_SECRET
+            echo "[v] Service principal client_secret loaded"
+        fi
+
+        sp_cert_thumbprint=$(yq e '.service_principal.certificate_thumbprint' "$SECRETS_FILE" 2>/dev/null)
+        if [[ -n "$sp_cert_thumbprint" && "$sp_cert_thumbprint" != "null" ]]; then
+            AZURE_CERTIFICATE_THUMBPRINT="$sp_cert_thumbprint"
+            export AZURE_CERTIFICATE_THUMBPRINT
+            echo "[v] Service principal certificate_thumbprint loaded"
+        fi
+
+        sp_cert_path=$(yq e '.service_principal.certificate_path' "$SECRETS_FILE" 2>/dev/null)
+        if [[ -n "$sp_cert_path" && "$sp_cert_path" != "null" ]]; then
+            AZURE_CERTIFICATE_PATH="$sp_cert_path"
+            export AZURE_CERTIFICATE_PATH
+            echo "[v] Service principal certificate_path loaded"
+        fi
     fi
 
     echo "[v] Configuration loaded successfully (bootstrap variables only)"
