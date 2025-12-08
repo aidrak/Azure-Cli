@@ -1,0 +1,305 @@
+# Golden Image Build Pipeline Workflow
+# ====================================
+# This workflow orchestrates the complete process of building, configuring, and
+# capturing a golden image for Azure Virtual Desktop (AVD) deployment.
+#
+# Golden images are pre-configured VM images that serve as templates for rapid
+# deployment of standardized AVD session hosts. This workflow automates the
+# traditional manual process of:
+# 1. Creating compute infrastructure
+# 2. Installing and configuring applications
+# 3. Applying security/policy baselines
+# 4. Generalizing and capturing the image
+# 5. Cleaning up temporary resources
+#
+# Idempotent Design:
+# - Steps marked with continue_on_error: true handle pre-existing resources
+# - Steps can be resumed if execution fails at any point
+# - State is tracked in SQLite database for recovery
+
+workflow:
+  id: "golden-image-build"
+  name: "Golden Image Build Pipeline"
+  description: "Complete workflow to build, configure, and capture a golden image for AVD"
+
+  # Workflow-scoped variables resolved at runtime
+  # These are available to all steps via template engine
+  variables:
+    vm_size: "{{GOLDEN_IMAGE_VM_SIZE}}"
+    gallery_name: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+
+  steps:
+
+    # PHASE 1: GALLERY INFRASTRUCTURE
+    # ===============================
+    # Ensures the Azure Compute Gallery exists to store image definitions and versions.
+    # This is the container for all golden images in the subscription.
+    #
+    # Idempotent: Safely runs even if gallery already exists
+    # Impact: Creates named gallery resource (negligible cost when empty)
+
+    - name: "Create Compute Gallery"
+      operation: "capabilities/compute/operations/gallery-create.yaml"
+      continue_on_error: true  # May already exist from previous runs
+      description: |
+        Creates Azure Compute Gallery (formerly Shared Image Gallery) to store
+        image definitions and versions. This is the centralized repository for
+        all golden images used by AVD deployments.
+
+        Azure Compute Gallery provides:
+        - Versioned image management (track multiple versions)
+        - Cross-region replication support
+        - Role-based access control
+        - Integration with AVD host pool deployment
+
+    # PHASE 2: IMAGE DEFINITION
+    # ==========================
+    # Defines the image specification within the gallery (OS type, publisher metadata).
+    # This metadata describes the image contents without storing actual VM disks yet.
+    #
+    # Idempotent: Safely runs even if definition already exists
+    # Impact: Creates metadata only (no cost)
+
+    - name: "Create Image Definition"
+      operation: "capabilities/compute/operations/gallery-image-definition-create.yaml"
+      continue_on_error: true  # May already exist from previous runs
+      description: |
+        Creates an Image Definition within the Compute Gallery that describes
+        the structure and requirements of golden images (OS type, architecture).
+
+        The definition specifies:
+        - Operating system (Windows Server 2022, Windows 11, etc.)
+        - VM generation (Hyper-V generation 1 or 2)
+        - Architecture (x64)
+        - License type (Windows Server, Windows Client)
+
+        Multiple image versions are stored under this single definition,
+        enabling quick rollback or A/B testing of golden image updates.
+
+    # PHASE 3: TEMPORARY VM CREATION
+    # ==============================
+    # Provisions a temporary virtual machine that serves as the "golden" template.
+    # This VM will be configured, then captured as a reusable image.
+    #
+    # Non-idempotent: Must succeed; VM name must be unique
+    # Impact: Creates compute resources (charges apply while running)
+    # Duration: 2-5 minutes for Azure to provision the VM
+
+    - name: "Create Temp VM"
+      operation: "capabilities/compute/operations/vm-create.yaml"
+      continue_on_error: false  # MUST succeed; VM name cannot be reused in same RG
+      description: |
+        Provisions a temporary virtual machine with specified size and image.
+        This VM becomes the "golden" master that will be configured with all
+        required applications, settings, and policies.
+
+        The VM is created with:
+        - Managed OS disk (standard setup)
+        - Network interface on standard VNet/subnet
+        - Diagnostic monitoring enabled (optional)
+        - Public IP disabled (internal only, for security)
+
+        Duration: 2-5 minutes
+        Cost: Accrues for entire duration until vm-delete step
+
+      parameters:
+        vm_name: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"  # e.g., "golden-image-temp-001"
+        vm_size: "{{vm_size}}"                     # e.g., "Standard_D4s_v3"
+
+    # PHASE 4: SYSTEM DEFAULTS CONFIGURATION
+    # ======================================
+    # Applies base OS configuration and settings.
+    # Sets Windows defaults that all AVD sessions should inherit.
+    #
+    # Idempotent: Safe to re-run (idempotent PowerShell operations)
+    # Impact: Configures OS behavior (no additional resources created)
+    # Duration: 5-10 minutes
+
+    - name: "Configure Defaults"
+      operation: "capabilities/compute/operations/golden-image-configure-defaults.yaml"
+      continue_on_error: false  # Configuration failures prevent valid image capture
+      description: |
+        Applies foundational Windows configuration settings across the system.
+        This step ensures consistency and security baseline for all AVD sessions.
+
+        Typical configurations include:
+        - Disable unnecessary services (Windows Update auto-restart, Cortana)
+        - Enable Windows Sandbox, Hyper-V (for nested virtualization scenarios)
+        - Configure power settings (prevent sleep/hibernate in VDI context)
+        - Set timezone and language preferences
+        - Configure Windows Defender exclusions for AVD/Office 365
+        - Apply Windows registry optimizations for RDP performance
+        - Disable telemetry and data collection
+
+        These settings become the baseline for all session hosts deployed from this image.
+
+    # PHASE 5: USER PROFILE CONFIGURATION
+    # ====================================
+    # Configures the user environment and default profile settings.
+    # Creates FSLogix configurations, applies group policies, installs applications.
+    #
+    # Idempotent: Safe to re-run (installations check for existing packages)
+    # Impact: Installs software and profiles (significant disk growth expected)
+    # Duration: 15-45 minutes (highly dependent on application catalog)
+
+    - name: "Configure Profile"
+      operation: "capabilities/compute/operations/golden-image-configure-profile.yaml"
+      continue_on_error: false  # Failed app installation invalidates the golden image
+      description: |
+        Configures the default user profile and installs required applications.
+        This step builds the actual user environment that session host users will access.
+
+        Profile configuration includes:
+        - Create and configure default user profile (%SystemDrive%\Users\Default)
+        - Install FSLogix Profile Container agent (MSIX App Attach, Profile Container)
+        - Apply group policy templates and settings
+        - Install required applications from approved list
+        - Configure application-specific settings and licenses
+        - Install Windows Terminal, Edge browser, Office 365 (if licensed)
+        - Apply desktop background, screensaver, login screen customization
+        - Configure OneDrive for enterprise cloud storage
+        - Apply Windows Sandbox and development tools (as needed)
+        - Install RDP performance monitoring and diagnostic tools
+
+        The resulting profile becomes a template copied to all new session host sessions.
+        Application installation is sequential (not parallel) for stability and logging.
+
+    # PHASE 6: TEMPORARY FILE CLEANUP
+    # ===============================
+    # Removes build artifacts, temporary files, and logs before image capture.
+    # Reduces image size and removes sensitive data (passwords, installation logs).
+    #
+    # Idempotent: Safe to run even if files don't exist
+    # Impact: Reduces captured image size (improves replication/deployment speed)
+    # Duration: 1-2 minutes
+
+    - name: "Cleanup Temp Files"
+      operation: "capabilities/compute/operations/golden-image-cleanup-temp.yaml"
+      continue_on_error: false  # Cleanup failures suggest disk space or permission issues
+      description: |
+        Removes build artifacts, temporary files, and installation caches
+        to reduce the final image size and improve deployment speed.
+
+        Cleanup targets:
+        - Windows Update cache (%SystemRoot%\SoftwareDistribution)
+        - Temporary files (%TEMP%, %WINDOWS%\Temp)
+        - Application installer caches (MSI, EXE, etc.)
+        - PowerShell module cache and history
+        - Event logs and diagnostic traces
+        - Browser cache and temp data
+        - Windows Sandbox files
+        - Recycle Bin contents
+
+        Final disk usage is reduced from ~30-50GB to ~15-25GB depending on applications.
+        This significantly speeds up:
+        - Image replication to other regions (if used)
+        - VM deployment from image (fewer bytes to copy)
+        - Backup and archival processes
+
+    # PHASE 7: VM GENERALIZATION
+    # ==========================
+    # Runs Windows Sysprep to remove system-specific identifiers.
+    # Required before image capture; prepares VM for use as a template.
+    #
+    # Non-idempotent: Must be the final configuration step (VM becomes unusable after)
+    # Impact: VM is generalized and will not boot (expected behavior)
+    # Duration: 5-10 minutes (includes Sysprep and shutdown)
+
+    - name: "Generalize VM"
+      operation: "capabilities/compute/operations/vm-generalize.yaml"
+      continue_on_error: false  # Generalization failure prevents image capture
+      description: |
+        Runs Windows Sysprep to remove system-specific identifiers and settings.
+        This step is REQUIRED before capturing the VM as an image.
+
+        Sysprep process:
+        1. Removes system-specific identifiers (SID, hostname, security identifiers)
+        2. Clears Windows activation state (allows fresh activation on new VMs)
+        3. Resets user account security identifiers
+        4. Clears event logs
+        5. Removes installed device drivers (will be re-discovered on new VMs)
+        6. Resets network configuration (DHCP will assign new IPs)
+        7. Gracefully shuts down the VM
+
+        After generalization, the VM is in a "deallocated" state and will NOT reboot.
+        This is the expected state for image capture.
+
+        WARNING: Once generalized, the temporary VM is no longer usable as a
+        running system. The only value is in the image capture that follows.
+
+    # PHASE 8: IMAGE VERSION CAPTURE
+    # ==============================
+    # Captures the generalized VM as an image version in the compute gallery.
+    # Creates a permanent, reusable template for AVD session host deployment.
+    #
+    # Non-idempotent: Each execution creates a new version (v1, v2, v3, etc.)
+    # Impact: Creates image version resource (~15-25GB managed disk in gallery)
+    # Duration: 5-15 minutes (copies VM disk to managed image, region-dependent)
+
+    - name: "Capture Image Version"
+      operation: "capabilities/compute/operations/gallery-image-version-create.yaml"
+      continue_on_error: false  # Capture failure means no usable image created
+      description: |
+        Captures the generalized temporary VM as a new image version in the
+        Compute Gallery. This creates a permanent, immutable template that can
+        be deployed to create new AVD session hosts.
+
+        Image capture process:
+        1. Takes the VM's OS disk (which contains the generalized Windows image)
+        2. Converts it to a managed image within the compute gallery
+        3. Assigns a version number (e.g., 1.0.0, 1.0.1, 2.0.0)
+        4. Applies metadata (timestamp, description, tags)
+        5. Replicates to other Azure regions (if configured)
+        6. Makes it available for deployment via:
+           - Azure Portal VM creation UI
+           - Azure CLI (az vm create --image)
+           - ARM templates
+           - AVD Host Pool automated provisioning
+
+        This image version is immutable and can be deployed to create unlimited
+        session hosts without further modification. To test changes, create a new
+        temporary VM and capture a new version.
+
+        Common versioning strategy:
+        - v1.0.0 = Initial baseline with core apps
+        - v1.0.1 = Patch for bug fix or security update
+        - v2.0.0 = Major update with new application version or feature
+
+    # PHASE 9: CLEANUP TEMPORARY VM
+    # =============================
+    # Deletes the temporary VM after successful image capture.
+    # Prevents ongoing compute costs and cleans up build artifacts.
+    #
+    # Idempotent: Safely runs even if VM already deleted (handles race conditions)
+    # Impact: Removes compute resource (stops hourly charges)
+    # Duration: 2-3 minutes (deallocation and deletion)
+
+    - name: "Cleanup Temp VM"
+      operation: "capabilities/compute/operations/vm-delete.yaml"
+      continue_on_error: true  # Non-critical; image is already captured
+      description: |
+        Deletes the temporary VM after the image has been successfully captured.
+        This prevents ongoing compute resource charges and cleans up build artifacts.
+
+        Cleanup includes:
+        - Deallocate the VM (stop charges)
+        - Delete VM resource
+        - Delete associated network interface (NIC)
+        - Delete OS disk (unless created outside this workflow)
+        - Optionally delete public IP address
+
+        At this point, only the image version remains in the Compute Gallery.
+        New session hosts can be deployed from this image without the temporary VM.
+
+        Cost savings:
+        - Compute charges stop immediately after deallocation
+        - Storage charges for the temporary VM's disk are eliminated
+        - Only the image gallery disk remains (shared by all VMs created from image)
+
+        continue_on_error: true because:
+        - If VM deletion fails, the image is already safely captured
+        - Temporary resource cleanup is non-critical to workflow success
+        - Manual cleanup can be performed if needed
+
+      parameters:
+        vm_name: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"  # Same VM created in step 3

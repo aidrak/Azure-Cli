@@ -1,0 +1,437 @@
+# ==============================================================================
+# Workflow: FSLogix Storage Setup with Private Endpoints
+# ==============================================================================
+#
+# Purpose:
+#   Complete workflow to provision secure, highly-available storage infrastructure
+#   for FSLogix profile containers. This workflow implements Azure best practices
+#   for enterprise-grade virtual desktop environments.
+#
+# Workflow Features:
+#   - Creates premium file share storage (Premium_LRS tier)
+#   - Configures file shares with proper quotas
+#   - Establishes private DNS zones for name resolution
+#   - Deploys private endpoints to isolate traffic
+#   - Assigns RBAC roles for secure access control
+#
+# Security Architecture:
+#
+#   WITHOUT Private Endpoints (NOT SECURE):
+#     User/VM -> Internet -> Azure Storage Firewall -> Storage Account
+#     [x] Data traverses public internet
+#     [x] Vulnerable to DDoS attacks
+#     [x] Cannot restrict to VNet
+#
+#   WITH Private Endpoints (SECURE):
+#     User/VM -> Private Link -> Storage Account
+#     [v] All traffic stays within Azure backbone
+#     [v] Storage account has no public IP
+#     [v] Access restricted to VNet via private endpoint
+#     [v] DNS resolution via private zone (files.core.windows.net -> 10.x.x.x)
+#     [v] Compliance-ready (no internet exposure)
+#
+# Prerequisites:
+#   - Azure subscription and tenant configuration
+#   - Virtual network and subnet already created
+#   - User has Contributor role in target resource group
+#   - config.yaml or standards.yaml properly configured with:
+#     * AZURE_RESOURCE_GROUP
+#     * AZURE_LOCATION
+#     * AZURE_VNET_NAME
+#     * AZURE_SUBNET_NAME
+#
+# Typical Execution:
+#   source core/config-manager.sh && load_config
+#   ./core/workflow-engine.sh execute workflows/storage-setup.yaml
+#
+# State Tracking:
+#   - Execution state saved to: artifacts/workflow-state/wf_storage-setup_*.json
+#   - Operation logs saved to: artifacts/workflow-logs/wf_storage-setup_*.log
+#
+# ==============================================================================
+
+workflow:
+  id: "storage-setup"
+  name: "FSLogix Storage Setup with Private Endpoints"
+  description: "Complete secure storage infrastructure for Azure Virtual Desktop with private endpoint isolation"
+
+  # ===========================================================================
+  # VARIABLES SECTION
+  # ===========================================================================
+  #
+  # These variables are resolved at runtime using the dynamic configuration
+  # pipeline (environment -> Azure discovery -> standards.yaml -> config.yaml)
+  #
+  # Variable Resolution Order:
+  #   1. {{VARIABLE_NAME}} - Checked in environment variables first
+  #   2. Then checked in Azure discovery (existing resources)
+  #   3. Then checked in standards.yaml defaults
+  #   4. Then checked in config.yaml (legacy)
+  #   5. Finally, user is prompted if still not found
+  #
+  variables:
+    # Storage Configuration
+    storage_sku: "{{STORAGE_SKU}}"                    # Premium_LRS or Standard_GRS
+    storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"  # Auto-generated pattern
+
+    # File Share Configuration
+    quota_gb: "{{STORAGE_QUOTA_GB}}"                  # Share quota (e.g., 100)
+    fileshare_name: "{{FILESHARE_NAME}}"              # e.g., fslogix-profiles
+
+    # Network Configuration for Private Endpoint
+    vnet_name: "{{AZURE_VNET_NAME}}"                  # Virtual network
+    subnet_name: "{{AZURE_SUBNET_NAME}}"              # Subnet for private endpoint
+    location: "{{AZURE_LOCATION}}"                    # Azure region
+    resource_group: "{{AZURE_RESOURCE_GROUP}}"        # Target resource group
+
+    # DNS Configuration
+    dns_zone_name: "privatelink.file.core.windows.net" # Standard DNS zone for Azure Files
+
+  # ===========================================================================
+  # STEPS: Sequential Operation Execution
+  # ===========================================================================
+  #
+  # Each step executes an operation from capabilities/storage/operations/
+  # Steps run sequentially. If continue_on_error is false, failure stops workflow.
+  #
+  # Step Status Tracking:
+  #   - [START] Step begins (logged in artifacts/workflow-logs/)
+  #   - [PROGRESS] Step in progress
+  #   - [SUCCESS] Step completed (also updates artifacts/workflow-state/)
+  #   - [ERROR] Step failed (execution halts unless continue_on_error=true)
+  #
+  steps:
+
+    # =========================================================================
+    # STEP 1: Create Storage Account
+    # =========================================================================
+    # Purpose:
+    #   Provision Premium FileStorage account for FSLogix profiles
+    #
+    # Why Premium_LRS:
+    #   - FSLogix profiles are I/O intensive
+    #   - Premium tier provides consistent latency and IOPS
+    #   - Required for file shares (not available with Standard)
+    #   - Supports both SMB and NFS protocols
+    #
+    # Resource Created:
+    #   Microsoft.Storage/storageAccounts (Premium_LRS, FileStorage kind)
+    #   - No public endpoint (network restrictions applied later)
+    #   - Encryption at rest (AES-256)
+    #   - TLS 1.2 minimum enforced
+    #
+    # Idempotency:
+    #   - If account exists, skips creation
+    #   - Idempotent checks run automatically
+    #
+    # Failure Handling:
+    #   - continue_on_error: false (REQUIRED)
+    #   - Workflow stops if creation fails (cannot continue without storage)
+    #
+    - name: "Create Storage Account"
+      operation: "capabilities/storage/operations/account-create.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        location: "{{AZURE_LOCATION}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+        sku: "{{STORAGE_SKU}}"
+
+    # =========================================================================
+    # STEP 2: Create File Share
+    # =========================================================================
+    # Purpose:
+    #   Create file share for FSLogix profile containers
+    #
+    # What is a File Share:
+    #   - NFS or SMB mount point within storage account
+    #   - FSLogix user profiles stored here as VHDX containers
+    #   - Quota enforces max size (e.g., 100 GB per share)
+    #
+    # Configuration:
+    #   - Quota in GB ({{STORAGE_QUOTA_GB}})
+    #   - Protocol: SMB 3.x (Windows clients)
+    #   - Accessible via: \\storageaccount.file.core.windows.net\sharename
+    #
+    # Usage Pattern:
+    #   - Session hosts mount this share during login
+    #   - FSLogix redirects user profile to VHD/X containers
+    #   - Multiple users share same file share (isolation via VHDX)
+    #
+    # Failure Handling:
+    #   - continue_on_error: false (REQUIRED)
+    #   - Workflow stops if share creation fails
+    #
+    - name: "Create File Share"
+      operation: "capabilities/storage/operations/fileshare-create.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+        fileshare_name: "{{FILESHARE_NAME}}"
+        quota_gb: "{{STORAGE_QUOTA_GB}}"
+
+    # =========================================================================
+    # STEP 3: Create Private DNS Zone
+    # =========================================================================
+    # Purpose:
+    #   Establish private DNS zone for internal name resolution
+    #
+    # Why Private DNS:
+    #   Storage account public FQDN: storageaccount.file.core.windows.net
+    #   Private DNS resolves this to PRIVATE IP (10.x.x.x) instead
+    #
+    # Resolution Flow:
+    #   [1] Session host queries: storageaccount.file.core.windows.net
+    #   [2] Private DNS zone intercepts query
+    #   [3] Resolves to PRIVATE IP (e.g., 10.0.1.100)
+    #   [4] Traffic routes to private endpoint (NOT internet)
+    #
+    # Standard DNS Zone Name:
+    #   - All Azure Files use: privatelink.file.core.windows.net
+    #   - Zone linked to VNet (applies to all resources in VNet)
+    #
+    # Failure Handling:
+    #   - continue_on_error: true (OPTIONAL)
+    #   - DNS zone may already exist from previous operations
+    #   - Safe to skip if zone already created
+    #
+    # Idempotency Notes:
+    #   - If zone exists, operation detects and skips creation
+    #   - Multiple file shares can use same DNS zone
+    #
+    - name: "Create Private DNS Zone"
+      operation: "capabilities/storage/operations/private-dns-zone-create.yaml"
+      continue_on_error: true
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        dns_zone_name: "{{DNS_ZONE_NAME}}"
+        vnet_name: "{{AZURE_VNET_NAME}}"
+        vnet_resource_group: "{{AZURE_RESOURCE_GROUP}}"
+
+    # =========================================================================
+    # STEP 4: Create Private Endpoint
+    # =========================================================================
+    # Purpose:
+    #   Deploy private endpoint to securely connect storage to VNet
+    #
+    # What is a Private Endpoint:
+    #   - Virtual network interface (ENI) with private IP (e.g., 10.0.1.100)
+    #   - Created in specified subnet (typically management/private subnet)
+    #   - Provides private connectivity to storage account via Private Link
+    #
+    # Private Link Architecture:
+    #   Storage Account (public, no internet access)
+    #     ^
+    #     |
+    #     | Microsoft Azure Backbone (encrypted, isolated)
+    #     |
+    #   Private Endpoint (10.0.1.100)
+    #     ^
+    #     |
+    #     | Private VNet traffic
+    #     |
+    #   Session Host VMs (10.0.2.x)
+    #
+    # Security Benefits:
+    #   [v] Storage account has NO public IP
+    #   [v] NO internet gateway exposure
+    #   [v] Traffic never leaves Azure network
+    #   [v] DDoS protected (Azure DDoS Standard covers Private Link)
+    #   [v] Network policies restrict access via NSG rules
+    #
+    # Network Configuration:
+    #   - Subnet: Private/Management subnet (not user-facing)
+    #   - Private DNS: Names resolve to private endpoint IP
+    #   - NIC created in subnet (shows in networking)
+    #
+    # Failure Handling:
+    #   - continue_on_error: false (REQUIRED)
+    #   - Private endpoint is critical for security
+    #   - Workflow stops if endpoint creation fails
+    #
+    - name: "Create Private Endpoint"
+      operation: "capabilities/storage/operations/private-endpoint-create.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+        vnet_name: "{{AZURE_VNET_NAME}}"
+        subnet_name: "{{AZURE_SUBNET_NAME}}"
+        location: "{{AZURE_LOCATION}}"
+        endpoint_name: "pep-{{STORAGE_ACCOUNT_NAME}}-files"
+
+    # =========================================================================
+    # STEP 5: Link Private DNS Zone to VNet
+    # =========================================================================
+    # Purpose:
+    #   Associate DNS zone with VNet (enables DNS resolution)
+    #
+    # DNS Zone Linking:
+    #   Without link: DNS queries fail (zone unknown to VNet)
+    #   With link: Zone applies to all VMs in linked VNet
+    #
+    # Behavior After Link:
+    #   - All VMs in VNet: storageaccount.file.core.windows.net -> 10.0.1.100
+    #   - Private endpoint handles traffic (no internet routing)
+    #
+    # Scope:
+    #   - Link is one-to-many: one zone can link to multiple VNets
+    #   - Each VNet gets independent DNS resolution
+    #   - Useful for multi-region or hub-spoke topologies
+    #
+    # Failure Handling:
+    #   - continue_on_error: true (OPTIONAL)
+    #   - May fail if zone already linked to VNet (idempotent)
+    #   - Safe to skip on retry
+    #
+    - name: "Link Private DNS Zone to VNet"
+      operation: "capabilities/storage/operations/private-dns-zone-link.yaml"
+      continue_on_error: true
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        dns_zone_name: "{{DNS_ZONE_NAME}}"
+        vnet_name: "{{AZURE_VNET_NAME}}"
+        vnet_resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        link_name: "link-{{AZURE_VNET_NAME}}"
+
+    # =========================================================================
+    # STEP 6: Register Private Endpoint in DNS Zone
+    # =========================================================================
+    # Purpose:
+    #   Create DNS A record pointing storage FQDN to private endpoint IP
+    #
+    # DNS Record Creation:
+    #   Record Type: A (IPv4 address)
+    #   Name: storage account name (e.g., "myfslogixstg")
+    #   Zone: privatelink.file.core.windows.net
+    #   Value: Private endpoint IP (e.g., 10.0.1.100)
+    #   TTL: 300 seconds (5 minutes)
+    #
+    # Resolution Example:
+    #   Query: myfslogixstg.file.core.windows.net
+    #   -> Zone: privatelink.file.core.windows.net
+    #   -> Record: myfslogixstg.privatelink.file.core.windows.net -> 10.0.1.100
+    #   -> Response: 10.0.1.100 (private endpoint)
+    #
+    # Failure Handling:
+    #   - continue_on_error: true (OPTIONAL)
+    #   - Record may already exist from previous operations
+    #   - Safe to skip if DNS already configured
+    #
+    # Azure's Auto-Registration:
+    #   Note: Some versions auto-register. Explicit registration ensures
+    #   compatibility with all Azure subscription types and regions.
+    #
+    - name: "Register Private Endpoint in DNS Zone"
+      operation: "capabilities/storage/operations/private-endpoint-dns-register.yaml"
+      continue_on_error: true
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        dns_zone_name: "{{DNS_ZONE_NAME}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+        private_endpoint_ip: "{{PRIVATE_ENDPOINT_IP}}"
+
+    # =========================================================================
+    # STEP 7: Disable Public Network Access
+    # =========================================================================
+    # Purpose:
+    #   Restrict storage account to private endpoint ONLY
+    #
+    # Security Hardening:
+    #   Default: Storage account accessible from anywhere on internet
+    #   After step: Storage account ONLY accessible via private endpoint
+    #
+    # Network Firewall Rules:
+    #   - Default action: Deny (all external access blocked)
+    #   - Exception: Allow from private endpoint (Private Link)
+    #   - Session hosts: Connect via private endpoint (allowed)
+    #   - Internet clients: Blocked (access denied)
+    #
+    # Compliance Benefits:
+    #   - Meets HIPAA/PCI-DSS requirements (no public exposure)
+    #   - Demonstrates "defense in depth" (network isolation)
+    #   - Audit trail: All access through Private Link (traceable)
+    #
+    # Failure Handling:
+    #   - continue_on_error: false (REQUIRED)
+    #   - Public access disabling is critical security control
+    #   - Workflow stops if hardening fails
+    #
+    - name: "Disable Public Network Access"
+      operation: "capabilities/storage/operations/public-access-disable.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+
+    # =========================================================================
+    # STEP 8: Assign RBAC Roles
+    # =========================================================================
+    # Purpose:
+    #   Grant necessary permissions for AVD session hosts and administrators
+    #
+    # Roles Assigned:
+    #   - Storage File Data SMB Share Contributor (Session Hosts)
+    #     Scope: File share level
+    #     Allows: Mount share, read/write user profiles
+    #
+    #   - Storage Account Contributor (Administrators)
+    #     Scope: Storage account level
+    #     Allows: Manage settings, firewall rules, RBAC assignments
+    #
+    # Least Privilege:
+    #   - Session hosts: Only share-level access (cannot delete account)
+    #   - Admins: Account-level (full management)
+    #   - No Storage Account Keys shared (prefer AD authentication)
+    #
+    # Authentication Method (Recommended):
+    #   - Azure AD authentication with Kerberos
+    #   - Session hosts authenticate as machine identity
+    #   - No password/key storage on individual VMs
+    #
+    # Failure Handling:
+    #   - continue_on_error: false (REQUIRED)
+    #   - RBAC assignment is critical for session host access
+    #   - Workflow stops if role assignment fails
+    #
+    - name: "Assign RBAC Roles"
+      operation: "capabilities/storage/operations/storage-rbac-assign.yaml"
+      continue_on_error: false
+      parameters:
+        resource_group: "{{AZURE_RESOURCE_GROUP}}"
+        storage_account_name: "{{STORAGE_ACCOUNT_NAME}}"
+        fileshare_name: "{{FILESHARE_NAME}}"
+        session_host_group_name: "{{SESSIONHOST_GROUP_NAME}}"
+
+# ==============================================================================
+# WORKFLOW SUMMARY
+# ==============================================================================
+#
+# Execution Flow:
+#   1. Create storage account (Premium, no public access)
+#   2. Create file share (quota enforced)
+#   3. Create DNS zone (for name resolution)
+#   4. Create private endpoint (secure connection)
+#   5. Link DNS zone to VNet (enables resolution)
+#   6. Register DNS record (A record for storage)
+#   7. Disable public access (block internet access)
+#   8. Assign RBAC (grant session host permissions)
+#
+# Estimated Duration: 8-12 minutes (per step: 60-90 seconds)
+#
+# Success Criteria:
+#   [v] Storage account created (Premium_LRS, FileStorage)
+#   [v] File share created with quota enforced
+#   [v] Private endpoint created (has private IP)
+#   [v] DNS zone linked to VNet
+#   [v] DNS A record points to private endpoint IP
+#   [v] Public access disabled (firewall active)
+#   [v] RBAC roles assigned (session hosts have access)
+#
+# Troubleshooting:
+#   - Use: ./core/workflow-engine.sh status <exec-id>
+#   - View logs: tail -f artifacts/workflow-logs/wf_storage-setup_*.log
+#   - Check state: cat artifacts/workflow-state/wf_storage-setup_*.json | jq '.'
+#
+# ==============================================================================

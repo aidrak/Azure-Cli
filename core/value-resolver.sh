@@ -319,24 +319,24 @@ map_var_to_yaml_path() {
     # Handle special mappings for standards.yaml
     if [[ "$file_type" == "standards" ]]; then
         case "$var_name" in
-            # Compute defaults
+            # Compute defaults (structure: .defaults.compute.vm.size)
             *_VM_SIZE|GOLDEN_IMAGE_VM_SIZE|SESSION_HOST_VM_SIZE)
-                echo ".defaults.compute.vm_size"
+                echo ".defaults.compute.vm.size"
                 return 0
                 ;;
             GOLDEN_IMAGE_IMAGE_PUBLISHER)
-                echo ".defaults.compute.image.publisher"
+                echo ".defaults.compute.vm.image.publisher"
                 return 0
                 ;;
             GOLDEN_IMAGE_IMAGE_OFFER)
-                echo ".defaults.compute.image.offer"
+                echo ".defaults.compute.vm.image.offer"
                 return 0
                 ;;
             GOLDEN_IMAGE_IMAGE_SKU)
-                echo ".defaults.compute.image.sku"
+                echo ".defaults.compute.vm.image.sku"
                 return 0
                 ;;
-            # Storage defaults
+            # Storage defaults (structure: .defaults.storage.file_share.*)
             STORAGE_SKU|*_STORAGE_SKU)
                 echo ".defaults.storage.sku"
                 return 0
@@ -346,7 +346,7 @@ map_var_to_yaml_path() {
                 return 0
                 ;;
             STORAGE_QUOTA_GB|*_QUOTA_GB)
-                echo ".defaults.storage.quota_gb"
+                echo ".defaults.storage.file_share.quota_gb"
                 return 0
                 ;;
             STORAGE_HTTPS_ONLY)
@@ -357,17 +357,17 @@ map_var_to_yaml_path() {
                 echo ".defaults.storage.min_tls_version"
                 return 0
                 ;;
-            # AVD defaults
+            # AVD defaults (structure: .defaults.avd.host_pool.type)
             HOST_POOL_TYPE)
-                echo ".defaults.avd.host_pool_type"
+                echo ".defaults.avd.host_pool.type"
                 return 0
                 ;;
             HOST_POOL_MAX_SESSIONS)
-                echo ".defaults.avd.max_sessions"
+                echo ".defaults.avd.host_pool.max_sessions"
                 return 0
                 ;;
             HOST_POOL_LOAD_BALANCER)
-                echo ".defaults.avd.load_balancer"
+                echo ".defaults.avd.host_pool.load_balancer_type"
                 return 0
                 ;;
             # Networking defaults
