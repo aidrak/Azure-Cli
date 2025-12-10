@@ -66,6 +66,7 @@ operation:
         $clientId = $env:AZURE_CLIENT_ID
         $tenantId = $env:AZURE_TENANT_ID
         $thumbprint = $env:AZURE_CERTIFICATE_THUMBPRINT
+        $certPath = $env:AZURE_CERTIFICATE_PATH
 
         Write-Host "[*] Client ID: $clientId"
         Write-Host "[*] Tenant ID: $tenantId"
@@ -88,23 +89,56 @@ operation:
           Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
         }
 
-        # Verify certificate exists in store
-        Write-Host "[*] Checking certificate in store..."
-        $cert = Get-ChildItem -Path "Cert:\CurrentUser\My\$thumbprint" -ErrorAction SilentlyContinue
+        # Try to load certificate - first from PFX file (Linux), then from store (Windows)
+        $cert = $null
+
+        # Method 1: Load from PFX file (works on Linux and Windows)
+        if ($certPath -and (Test-Path $certPath)) {
+          Write-Host "[*] Loading certificate from PFX file..."
+          try {
+            $pfxBytes = [System.IO.File]::ReadAllBytes($certPath)
+            $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+              $pfxBytes,
+              "",
+              [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+            )
+            Write-Host "[v] Certificate loaded from: $certPath"
+          }
+          catch {
+            Write-Host "[!] Failed to load PFX: $_"
+          }
+        }
+
+        # Method 2: Try Windows certificate store (Windows only)
+        if (-not $cert -and $thumbprint) {
+          Write-Host "[*] Checking Windows certificate store..."
+          try {
+            $cert = Get-ChildItem -Path "Cert:\CurrentUser\My\$thumbprint" -ErrorAction SilentlyContinue
+            if ($cert) {
+              Write-Host "[v] Certificate found in Windows store"
+            }
+          }
+          catch {
+            # Expected to fail on Linux
+          }
+        }
+
         if (-not $cert) {
-          Write-Host "[x] ERROR: Certificate not found in CurrentUser store"
-          Write-Host "[!] Install certificate with:"
-          Write-Host "    pwsh -Command \"Import-PfxCertificate -FilePath ./cert.pfx -CertStoreLocation Cert:\CurrentUser\My\""
+          Write-Host "[x] ERROR: Certificate not found"
+          Write-Host "[!] Ensure certificate_path is set in secrets.yaml"
+          Write-Host "[!] Or on Windows, import to Cert:\CurrentUser\My"
           exit 1
         }
-        Write-Host "[v] Certificate found: $($cert.Subject)"
 
-        # Connect with certificate
+        Write-Host "[v] Certificate: $($cert.Subject)"
+        Write-Host "[v] Thumbprint: $($cert.Thumbprint)"
+
+        # Connect with certificate object
         Write-Host "[*] Connecting to Microsoft Graph..."
         Connect-MgGraph `
           -ClientId $clientId `
           -TenantId $tenantId `
-          -CertificateThumbprint $thumbprint `
+          -Certificate $cert `
           -NoWelcome
 
         # Verify connection

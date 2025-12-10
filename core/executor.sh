@@ -218,7 +218,7 @@ get_rollback_steps() {
 
 validate_prerequisites() {
     local yaml_file="$1"
-    local operation_exec_id="$2"
+    local operation_exec_id="${2:-}"
 
     log_info "Validating prerequisites..." "$operation_exec_id"
 
