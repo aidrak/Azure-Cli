@@ -724,6 +724,7 @@ add_validation_check() {
 # ==============================================================================
 # Export functions for use by other scripts
 # ==============================================================================
+export -f preparse_config_values
 export -f parse_operation_yaml
 export -f substitute_variables
 export -f extract_powershell_script

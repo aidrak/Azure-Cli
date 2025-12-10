@@ -85,6 +85,16 @@ operation:
         continue_on_error: false
   # Self-healing: Previous fixes applied to this template
   fixes: []
+
+  # Operation outputs (stored in state.db for inter-operation data passing)
+  outputs:
+    - name: "storage_account_name"
+      type: "string"
+      description: "Name of the created storage account"
+    - name: "storage_resource_id"
+      type: "string"
+      description: "Azure resource ID of the storage account"
+
   powershell:
     content: |
       # Generate unique storage account name if not provided
@@ -154,6 +164,7 @@ operation:
       Write-Host "  Public blob access: Disabled"
       Write-Host "  HTTPS only: Enabled"
 
-      # Export storage account name for subsequent operations
-      $storageName | Out-File -FilePath /tmp/storage-account-name.txt -NoNewline
+      # Output storage account name as JSON for state.db storage
+      # The executor will capture this and call store_operation_output()
+      Write-Host "[OUTPUT] {""storage_account_name"": ""$storageName"", ""storage_resource_id"": ""$storageId""}"
       exit 0
