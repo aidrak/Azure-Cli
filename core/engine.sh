@@ -37,25 +37,106 @@ source "${PROJECT_ROOT}/core/progress-tracker.sh"
 source "${PROJECT_ROOT}/core/error-handler.sh"
 source "${PROJECT_ROOT}/core/logger.sh"
 source "${PROJECT_ROOT}/core/executor.sh"  # Include the executor for command tracking helpers
+source "${PROJECT_ROOT}/core/state-manager.sh"  # SQLite-based state management
 
 # ==============================================================================
-# Initialize State File
+# Initialize State Database (SQLite)
 # ==============================================================================
 init_state() {
-    if [[ ! -f "$STATE_FILE" ]]; then
-        log_info "Initializing state file" "engine"
-        cat > "$STATE_FILE" <<EOF
-{
-  "version": "1.0",
-  "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "current_module": null,
-  "current_operation": null,
-  "status": "initialized",
-  "modules": {},
-  "operations": {}
-}
-EOF
+    # Initialize SQLite database
+    init_state_db || {
+        log_error "Failed to initialize state database" "engine"
+        return 1
+    }
+
+    # Migrate existing state.json if present (backward compatibility)
+    if [[ -f "$STATE_FILE" ]]; then
+        migrate_json_to_sqlite
     fi
+}
+
+# ==============================================================================
+# Migrate Legacy JSON State to SQLite (Backward Compatibility)
+# ==============================================================================
+migrate_json_to_sqlite() {
+    log_info "Migrating legacy state.json to SQLite database" "engine"
+
+    # Check if state.json has any operations
+    local operation_count
+    operation_count=$(jq '.operations | length' "$STATE_FILE" 2>/dev/null || echo "0")
+
+    if [[ "$operation_count" -eq 0 ]]; then
+        log_info "No operations in state.json to migrate" "engine"
+        return 0
+    fi
+
+    # Extract and migrate each operation
+    local operation_ids
+    operation_ids=$(jq -r '.operations | keys[]' "$STATE_FILE" 2>/dev/null)
+
+    while IFS= read -r op_id; do
+        if [[ -z "$op_id" ]]; then
+            continue
+        fi
+
+        # Get operation data from JSON
+        local status
+        local duration
+        local timestamp
+
+        status=$(jq -r ".operations[\"$op_id\"].status // \"unknown\"" "$STATE_FILE")
+        duration=$(jq -r ".operations[\"$op_id\"].duration // 0" "$STATE_FILE")
+        timestamp=$(jq -r ".operations[\"$op_id\"].timestamp // \"\"" "$STATE_FILE")
+
+        # Convert ISO 8601 timestamp to Unix epoch
+        local started_at
+        if [[ -n "$timestamp" && "$timestamp" != "null" ]]; then
+            started_at=$(date -d "$timestamp" +%s 2>/dev/null || echo "$(get_timestamp)")
+        else
+            started_at=$(get_timestamp)
+        fi
+
+        # Check if operation already exists in SQLite
+        local exists
+        exists=$(execute_sql "SELECT COUNT(*) FROM operations WHERE operation_id = '$(sql_escape "$op_id")';" 2>/dev/null || echo "0")
+
+        if [[ "$exists" -eq 0 ]]; then
+            # Create operation record in SQLite
+            local completed_at="NULL"
+            if [[ "$status" == "completed" || "$status" == "failed" ]]; then
+                completed_at=$((started_at + duration))
+            fi
+
+            local sql="
+INSERT INTO operations (
+    operation_id, capability, operation_name, operation_type,
+    status, started_at, completed_at, duration
+) VALUES (
+    '$(sql_escape "$op_id")',
+    'legacy',
+    '$(sql_escape "$op_id")',
+    'migrated',
+    '$(sql_escape "$status")',
+    $started_at,
+    $completed_at,
+    $duration
+);"
+
+            execute_sql "$sql" "Failed to migrate operation: $op_id" 2>/dev/null || {
+                log_warn "Could not migrate operation: $op_id" "engine"
+                continue
+            }
+
+            log_info "Migrated operation: $op_id ($status)" "engine"
+        fi
+    done <<< "$operation_ids"
+
+    # Rename state.json to state.json.migrated
+    local backup_file="${STATE_FILE}.migrated.$(date +%Y%m%d_%H%M%S)"
+    mv "$STATE_FILE" "$backup_file"
+    log_success "Legacy state.json migrated to SQLite and backed up to: $backup_file" "engine"
+
+    return 0
 }
 
 # ==============================================================================

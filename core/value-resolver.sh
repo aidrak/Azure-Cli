@@ -226,10 +226,14 @@ get_cached_value() {
     now=$(date +%s)
     local min_time=$((now - cache_ttl))
 
+    # Escape var_name for SQL
+    local escaped_var_name
+    escaped_var_name=$(echo "$var_name" | sed "s/'/''/g")
+
     local value
     value=$(sqlite3 "$STATE_DB" \
         "SELECT value FROM config_overrides
-         WHERE config_key = '$var_name'
+         WHERE config_key = '$escaped_var_name'
          AND (expires_at IS NULL OR expires_at > $now)
          AND set_at > $min_time
          LIMIT 1;" 2>/dev/null)
@@ -258,9 +262,15 @@ cache_resolved_value() {
     local now
     now=$(date +%s)
 
+    # Escape all values for SQL
+    local escaped_var_name escaped_source escaped_value
+    escaped_var_name=$(echo "$var_name" | sed "s/'/''/g")
+    escaped_source=$(echo "$source" | sed "s/'/''/g")
+    escaped_value=$(echo "$value" | sed "s/'/''/g")
+
     sqlite3 "$STATE_DB" <<EOF
 INSERT OR REPLACE INTO config_overrides (config_key, source, value, set_at)
-VALUES ('$var_name', '$source', '$value', $now);
+VALUES ('$escaped_var_name', '$escaped_source', '$escaped_value', $now);
 EOF
 }
 

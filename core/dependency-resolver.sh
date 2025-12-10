@@ -920,6 +920,10 @@ get_dependency_tree() {
         return 1
     fi
 
+    # Escape resource_id for SQL
+    local escaped_resource_id
+    escaped_resource_id=$(echo "$resource_id" | sed "s/'/''/g")
+
     # Use recursive CTE if database is available
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
         sqlite3 "$STATE_DB" -json <<EOF
@@ -935,7 +939,7 @@ WITH RECURSIVE dep_tree AS (
         1 as depth
     FROM dependencies d
     JOIN resources r ON d.depends_on_resource_id = r.resource_id
-    WHERE d.resource_id = '$resource_id'
+    WHERE d.resource_id = '$escaped_resource_id'
 
     UNION ALL
 

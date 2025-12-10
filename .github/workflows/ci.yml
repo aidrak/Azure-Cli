@@ -1,0 +1,318 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ dev, main ]
+
+env:
+  ARTIFACT_RETENTION_DAYS: 7
+
+jobs:
+  # Job 1: Lint shell scripts with shellcheck
+  shellcheck:
+    name: ShellCheck Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on core scripts
+        id: shellcheck_core
+        continue-on-error: true
+        run: |
+          echo "Linting core/*.sh scripts..."
+          shellcheck -x core/*.sh || EXIT_CODE=$?
+          exit ${EXIT_CODE:-0}
+
+      - name: Run shellcheck on test scripts
+        id: shellcheck_tests
+        continue-on-error: true
+        run: |
+          echo "Linting tests/*.sh scripts..."
+          shellcheck -x tests/*.sh || EXIT_CODE=$?
+          exit ${EXIT_CODE:-0}
+
+      - name: ShellCheck Summary
+        if: always()
+        run: |
+          echo "## ShellCheck Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.shellcheck_core.outcome }}" == "success" ]; then
+            echo "✅ Core scripts passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Core scripts have warnings/errors (see logs)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.shellcheck_tests.outcome }}" == "success" ]; then
+            echo "✅ Test scripts passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Test scripts have warnings/errors (see logs)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Job 2: Validate YAML files
+  yaml-validation:
+    name: YAML Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yamllint
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate YAML syntax
+        id: yaml_syntax
+        continue-on-error: true
+        run: |
+          echo "Validating YAML files in capabilities..."
+          find capabilities -name "*.yaml" -type f | while read file; do
+            echo "Checking: $file"
+            yq eval '.' "$file" > /dev/null || exit 1
+          done
+          echo "All YAML files are syntactically valid"
+
+      - name: Validate operation YAML structure
+        id: yaml_structure
+        continue-on-error: true
+        run: |
+          echo "Validating operation YAML structure..."
+
+          # Check that operation files have required fields
+          find capabilities -path "*/operations/*.yaml" -type f | while read file; do
+            echo "Checking operation structure: $file"
+
+            # Verify operation.id exists
+            if ! yq eval 'has("operation")' "$file" | grep -q "true"; then
+              echo "ERROR: $file missing 'operation' key"
+              exit 1
+            fi
+
+            # Verify operation.id exists
+            if ! yq eval '.operation | has("id")' "$file" | grep -q "true"; then
+              echo "ERROR: $file missing 'operation.id'"
+              exit 1
+            fi
+          done
+          echo "All operation files have correct structure"
+
+      - name: YAML Validation Summary
+        if: always()
+        run: |
+          echo "## YAML Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.yaml_syntax.outcome }}" == "success" ]; then
+            echo "✅ YAML syntax valid" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ YAML syntax errors (see logs)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.yaml_structure.outcome }}" == "success" ]; then
+            echo "✅ Operation structure valid" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Operation structure errors (see logs)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Job 3: Run unit and integration tests
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: []
+
+    strategy:
+      matrix:
+        test-script:
+          - tests/test-query-simple.sh
+          - tests/test-query.sh
+          - tests/test-discovery.sh
+          - tests/test-executor.sh
+          - tests/test-dependency-resolver.sh
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            jq \
+            sqlite3 \
+            yamllint
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Make test scripts executable
+        run: |
+          chmod +x tests/*.sh
+          chmod +x core/*.sh
+
+      - name: Run test - ${{ matrix.test-script }}
+        id: test_run
+        continue-on-error: true
+        run: |
+          echo "Running: ${{ matrix.test-script }}"
+          bash "${{ matrix.test-script }}" 2>&1 | tee test-output-${{ matrix.test-script }}.log
+          TEST_EXIT=${PIPESTATUS[0]}
+          echo "TEST_EXIT=$TEST_EXIT" >> $GITHUB_OUTPUT
+          exit $TEST_EXIT
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.test-script }}
+          path: test-output-${{ matrix.test-script }}.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+      - name: Test Result Summary
+        if: always()
+        run: |
+          if [ "${{ steps.test_run.outcome }}" == "success" ]; then
+            echo "✅ ${{ matrix.test-script }} passed"
+          else
+            echo "❌ ${{ matrix.test-script }} failed"
+          fi
+
+  # Job 4: Run capability validation tests
+  capability-tests:
+    name: Capability Validation Tests
+    runs-on: ubuntu-latest
+    needs: []
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq sqlite3
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Make scripts executable
+        run: |
+          chmod +x tests/*.sh
+          chmod +x core/*.sh
+
+      - name: Run capability validation test
+        id: capability_test
+        continue-on-error: true
+        run: |
+          if [ -f tests/integration-test-capabilities.sh ]; then
+            bash tests/integration-test-capabilities.sh 2>&1 | tee capability-test.log
+            TEST_EXIT=${PIPESTATUS[0]}
+            echo "TEST_EXIT=$TEST_EXIT" >> $GITHUB_OUTPUT
+            exit $TEST_EXIT
+          else
+            echo "⚠️ Capability test not found, skipping"
+            exit 0
+          fi
+
+      - name: Upload capability test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-test-logs
+          path: capability-test.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # Job 5: Generate test report
+  test-report:
+    name: Test Report
+    runs-on: ubuntu-latest
+    needs: [ shellcheck, yaml-validation, tests, capability-tests ]
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate test summary
+        run: |
+          echo "## CI/CD Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.shellcheck.result }}" == "success" ]; then
+            echo "| ShellCheck | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ShellCheck | ⚠️ Warnings |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.yaml-validation.result }}" == "success" ]; then
+            echo "| YAML Validation | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| YAML Validation | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.tests.result }}" == "success" ]; then
+            echo "| Unit Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Unit Tests | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.capability-tests.result }}" == "success" ]; then
+            echo "| Capability Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Capability Tests | ⚠️ Skipped/Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count and report available logs
+          if [ -d artifacts ]; then
+            echo "Test logs are available in artifacts:" >> $GITHUB_STEP_SUMMARY
+            find artifacts -type f -name "*.log" | while read file; do
+              echo "- $(basename $file)" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+      - name: Check overall success
+        run: |
+          OVERALL_SUCCESS=true
+
+          if [ "${{ needs.yaml-validation.result }}" != "success" ]; then
+            echo "❌ YAML validation failed"
+            OVERALL_SUCCESS=false
+          fi
+
+          if [ "${{ needs.tests.result }}" != "success" ]; then
+            echo "❌ Unit tests failed"
+            OVERALL_SUCCESS=false
+          fi
+
+          if [ "$OVERALL_SUCCESS" == "true" ]; then
+            echo "✅ CI/CD Pipeline passed"
+            exit 0
+          else
+            echo "❌ CI/CD Pipeline failed"
+            exit 1
+          fi

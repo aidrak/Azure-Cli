@@ -1,0 +1,257 @@
+# ==============================================================================
+# Capability Operation: Install AVD DSC Extension (Host Pool Registration)
+# Atomic operation for registering a VM to an AVD host pool
+# ==============================================================================
+
+operation:
+  id: "vm-extension-avd-dsc"
+  name: "Install AVD DSC Extension"
+  description: "Install DSC extension to register VM with AVD host pool using registration token"
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines/extensions"
+
+  dependencies:
+    operations:
+      - id: "vm-extension-entra-join"
+        status: "completed"
+        description: "Entra ID join must be configured first"
+      - id: "hostpool-create"
+        status: "completed"
+        description: "Host pool must exist"
+    resources:
+      - type: "Microsoft.Compute/virtualMachines"
+        name: "{{SESSION_HOST_VM_NAME}}"
+        must_exist: true
+      - type: "Microsoft.DesktopVirtualization/hostpools"
+        name: "{{HOST_POOL_NAME}}"
+        must_exist: true
+
+  duration:
+    expected: 300 # 5 minutes
+    timeout: 600 # 10 minutes
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the VM"
+        default: "{{SESSION_HOST_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the AVD host pool"
+        default: "{{HOST_POOL_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "extension_state"
+        extension_name: "DSC"
+        expected: "Succeeded"
+        description: "DSC extension succeeded"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm extension show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vm-name "{{SESSION_HOST_VM_NAME}}" \
+        --name DSC \
+        --query "provisioningState" -o tsv 2>/dev/null | grep -q "Succeeded"
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete DSC Extension"
+        description: "Remove the AVD DSC extension"
+        command: |
+          az vm extension delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vm-name "{{SESSION_HOST_VM_NAME}}" \
+            --name DSC \
+            --no-wait
+        continue_on_error: true
+
+  fixes: []
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Installing AVD DSC extension: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $vmName = "{{SESSION_HOST_VM_NAME}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $enableIntune = "{{SESSION_HOST_ENABLE_INTUNE}}"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  VM: $vmName"
+      Write-Host "  Host Pool: $hostPoolName"
+
+      # Step 1: Get registration token
+      Write-Host "[PROGRESS] Getting host pool registration token..."
+
+      $registrationToken = az desktopvirtualization hostpool show `
+        --resource-group $resourceGroup `
+        --name $hostPoolName `
+        --query "registrationInfo.token" -o tsv 2>$null
+
+      # If no token, generate new one
+      if ([string]::IsNullOrEmpty($registrationToken) -or $registrationToken -eq "null") {
+        Write-Host "[i] Generating new registration token..."
+        $expiration = (Get-Date).ToUniversalTime().AddHours(24).ToString('yyyy-MM-ddTHH:mm:ss.000Z')
+
+        az desktopvirtualization hostpool update `
+          --resource-group $resourceGroup `
+          --name $hostPoolName `
+          --registration-info "expiration-time=$expiration" "registration-token-operation=Update" `
+          --output none 2>&1
+
+        $registrationToken = az desktopvirtualization hostpool show `
+          --resource-group $resourceGroup `
+          --name $hostPoolName `
+          --query "registrationInfo.token" -o tsv 2>$null
+      }
+
+      if ([string]::IsNullOrEmpty($registrationToken) -or $registrationToken -eq "null") {
+        Write-Host "[ERROR] Failed to get registration token"
+        exit 1
+      }
+      Write-Host "[v] Registration token ready (${registrationToken.Length} chars)"
+
+      # Step 2: Check if DSC extension already exists
+      Write-Host "[PROGRESS] Checking existing extension..."
+      $extState = az vm extension show -g $resourceGroup --vm-name $vmName -n DSC --query "provisioningState" -o tsv 2>$null
+
+      if ($extState -eq "Succeeded") {
+        Write-Host "[INFO] DSC extension already succeeded, checking host pool registration..."
+
+        # Verify registration to host pool
+        $subscriptionId = az account show --query id -o tsv
+        $sessionHosts = az rest --method GET `
+          --uri "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName/sessionHosts?api-version=2023-09-05" `
+          --query "value[?contains(name, '$vmName')].name" -o tsv 2>$null
+
+        if ($sessionHosts) {
+          Write-Host "[SUCCESS] VM is registered to host pool: $hostPoolName"
+          exit 0
+        }
+        Write-Host "[!] Extension succeeded but VM not in host pool, reinstalling..."
+        az vm extension delete -g $resourceGroup --vm-name $vmName -n DSC --no-wait 2>$null
+        Start-Sleep -Seconds 30
+      }
+
+      if ($extState -eq "Failed") {
+        Write-Host "[!] Extension in Failed state, deleting and recreating..."
+        az vm extension delete -g $resourceGroup --vm-name $vmName -n DSC --no-wait 2>$null
+        Start-Sleep -Seconds 30
+      }
+
+      # Step 3: Install DSC extension
+      Write-Host "[PROGRESS] Installing DSC extension for AVD agent..."
+
+      # AVD Agent DSC configuration
+      $dscConfigUrl = "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.02797.442.zip"
+
+      # Build MDM ID setting
+      if ($enableIntune -eq "true") {
+        $mdmId = "0000000a-0000-0000-c000-000000000000"
+      } else {
+        $mdmId = ""
+      }
+
+      # Create settings JSON
+      $settingsJson = @{
+        modulesUrl = $dscConfigUrl
+        configurationFunction = "Configuration.ps1\AddSessionHost"
+        properties = @{
+          hostPoolName = $hostPoolName
+          registrationInfoTokenCredential = @{
+            UserName = "YOURTOKEN"
+            Password = "PrivateSettingsRef:RegistrationInfoToken"
+          }
+          aadJoin = $true
+          UseAgentDownloadEndpoint = $true
+          aadJoinPreview = $false
+          mdmId = $mdmId
+          sessionHostConfigurationLastUpdateTime = ""
+        }
+      } | ConvertTo-Json -Depth 5 -Compress
+
+      $protectedSettingsJson = @{
+        Items = @{
+          RegistrationInfoToken = $registrationToken
+        }
+      } | ConvertTo-Json -Depth 3 -Compress
+
+      # Write settings to temp files
+      $settingsFile = "/tmp/dsc-settings-$vmName.json"
+      $protectedFile = "/tmp/dsc-protected-$vmName.json"
+      $settingsJson | Out-File -FilePath $settingsFile -Encoding utf8
+      $protectedSettingsJson | Out-File -FilePath $protectedFile -Encoding utf8
+
+      $result = az vm extension set `
+        --resource-group $resourceGroup `
+        --vm-name $vmName `
+        --name DSC `
+        --publisher Microsoft.Powershell `
+        --version 2.73 `
+        --settings "@$settingsFile" `
+        --protected-settings "@$protectedFile" `
+        --output json 2>&1
+
+      # Clean up temp files
+      Remove-Item $settingsFile -Force -ErrorAction SilentlyContinue
+      Remove-Item $protectedFile -Force -ErrorAction SilentlyContinue
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to install DSC extension"
+        Write-Host $result
+        exit 1
+      }
+
+      # Step 4: Wait for host pool registration
+      Write-Host "[PROGRESS] Waiting for host pool registration (this may take 2-5 minutes)..."
+
+      $subscriptionId = az account show --query id -o tsv
+      $maxAttempts = 10
+      $attempt = 0
+      $registered = $false
+
+      while ($attempt -lt $maxAttempts -and -not $registered) {
+        $attempt++
+        Start-Sleep -Seconds 30
+
+        $sessionHosts = az rest --method GET `
+          --uri "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName/sessionHosts?api-version=2023-09-05" `
+          --query "value[?contains(name, '$vmName')]" -o json 2>$null | ConvertFrom-Json
+
+        if ($sessionHosts -and $sessionHosts.Count -gt 0) {
+          $registered = $true
+          $status = $sessionHosts[0].properties.status
+          Write-Host "[v] Session host registered to pool: $hostPoolName"
+          Write-Host "  Status: $status"
+        } else {
+          Write-Host "[i] Waiting for registration... (attempt $attempt/$maxAttempts)"
+        }
+      }
+
+      if ($registered) {
+        Write-Host "[SUCCESS] AVD DSC extension installed and host pool registration complete"
+        exit 0
+      } else {
+        Write-Host "[!] DSC extension installed but registration pending"
+        Write-Host "[i] Registration can take 5-10 minutes. Check status:"
+        Write-Host "    az desktopvirtualization sessionhost list -g $resourceGroup --host-pool-name $hostPoolName"
+        exit 0
+      }

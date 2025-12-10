@@ -9,11 +9,18 @@
 #   pattern and applies the fix_action automatically (if auto_fix: true).
 #
 # Pattern Format:
+#   - code: Structured error code (ERR-XXX-YYY)
 #   - id: Unique identifier for the pattern
+#   - category: Error category (template, auth, resource, network, etc.)
 #   - regex: Regular expression to match error output
 #   - description: Human-readable description
 #   - auto_fix: Whether Claude should fix automatically (true/false)
+#   - severity: ERROR, WARNING, or INFO
 #   - fix_action: Instructions for Claude on how to fix
+#
+# Error Code Format: ERR-CAT-NUM
+#   - CAT: Category (TPL=Template, AUTH=Auth, RES=Resource, NET=Network, etc.)
+#   - NUM: Sequential number within category
 #
 # ==============================================================================
 
@@ -23,9 +30,12 @@ patterns:
   # Template/Variable Errors
   # ===========================================================================
 
-  - id: "template-var-unresolved"
+  - code: "ERR-TPL-001"
+    id: "template-var-unresolved"
+    category: "template"
     regex: "\\{\\{[A-Z_]+\\}\\}"
     description: "Template variable not substituted before execution"
+    severity: "ERROR"
     auto_fix: true
     fix_action: |
       The YAML file has unresolved {{VARIABLE}} placeholders in the output.
@@ -36,9 +46,12 @@ patterns:
       4. If exists but wrong path, update core/value-resolver.sh map_var_to_yaml_path()
       5. Retry the operation
 
-  - id: "config-not-loaded"
+  - code: "ERR-TPL-002"
+    id: "config-not-loaded"
+    category: "template"
     regex: "AZURE_RESOURCE_GROUP.*unbound|AZURE_SUBSCRIPTION_ID.*unbound"
     description: "Configuration not loaded before operation"
+    severity: "ERROR"
     auto_fix: true
     fix_action: |
       The operation was run without loading configuration first.
@@ -49,9 +62,12 @@ patterns:
   # Azure CLI Errors
   # ===========================================================================
 
-  - id: "az-cli-arg-unknown"
+  - code: "ERR-CLI-001"
+    id: "az-cli-arg-unknown"
+    category: "cli"
     regex: "unrecognized arguments: --yes"
     description: "Azure CLI version incompatibility with --yes flag"
+    severity: "ERROR"
     auto_fix: true
     fix_action: |
       The --yes flag is not supported by this az command version.
@@ -61,9 +77,12 @@ patterns:
       3. Modern az commands auto-confirm in non-interactive mode
       4. Retry the operation
 
-  - id: "az-cli-extension-missing"
+  - code: "ERR-CLI-002"
+    id: "az-cli-extension-missing"
+    category: "cli"
     regex: "extension.*not found|install.*extension"
     description: "Azure CLI extension not installed"
+    severity: "ERROR"
     auto_fix: true
     fix_action: |
       An Azure CLI extension is required but not installed.
@@ -72,9 +91,12 @@ patterns:
       2. Run: az extension add --name <extension-name>
       3. Retry the operation
 
-  - id: "az-cli-not-logged-in"
+  - code: "ERR-CLI-003"
+    id: "az-cli-not-logged-in"
+    category: "cli"
     regex: "Please run 'az login'|AADSTS[0-9]+|authentication.*failed|not logged in|login.*required"
     description: "Not authenticated to Azure CLI"
+    severity: "ERROR"
     auto_fix: true
     fix_action: |
       Azure CLI authentication required.
