@@ -102,7 +102,11 @@ assert_db_table_exists() {
     local table="$1"
     local test_name="${2:-Database table exists: $table}"
 
-    if sqlite3 state.db "SELECT name FROM sqlite_master WHERE type='table' AND name='$table';" | grep -q "$table"; then
+    # Escape table name for SQL
+    local escaped_table
+    escaped_table=$(echo "$table" | sed "s/'/''/g")
+
+    if sqlite3 state.db "SELECT name FROM sqlite_master WHERE type='table' AND name='$escaped_table';" | grep -q "$table"; then
         test_pass "$test_name"
         return 0
     else

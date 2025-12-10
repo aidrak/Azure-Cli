@@ -1,8 +1,8 @@
 ---
 title: "System Architecture"
-description: "Technical reference for the YAML-based deployment engine: system flow, core components, and design patterns"
-tags: ["architecture", "technical", "engine", "design"]
-last_updated: "2025-12-07"
+description: "Technical reference for the YAML-based deployment engine: unified execution path, core components, and design patterns"
+tags: ["architecture", "technical", "engine", "design", "unified-execution"]
+last_updated: "2025-12-10"
 ---
 # System Architecture
 
@@ -12,35 +12,61 @@ Technical reference for the YAML-based deployment engine. For operational guides
 
 ## Architecture Overview
 
-### System Flow
+### Unified Execution Flow (Updated 2025-12-10)
+
+The system now uses a **unified execution path** through `executor.sh`:
 
 ```
-config.yaml → config-manager.sh → Export ENV vars
-                ↓
-      template-engine.sh → Substitute {{VARIABLES}}
-                ↓
-           engine.sh → Execute operations
-                ↓
-    progress-tracker.sh → Monitor markers
-                ↓
-       error-handler.sh → Self-heal failures
-                ↓
-    state.db + artifacts/logs/ → Track state
+┌─────────────────────────────────────────────────────────────┐
+│ CLI Entry Points                                            │
+├─────────────────────────────────────────────────────────────┤
+│ ./core/engine.sh run <op-id>    (single operations)        │
+│ ./core/engine.sh workflow <id>  (multi-step workflows)     │
+└────────────┬────────────────────────────────┬───────────────┘
+             │                                │
+             v                                v
+    ┌────────────────┐              ┌──────────────────┐
+    │  engine.sh     │              │ workflow-engine  │
+    │  (thin wrapper)│              │  (orchestration) │
+    └────────┬───────┘              └────────┬─────────┘
+             │                                │
+             └────────────┬───────────────────┘
+                          v
+                ┌──────────────────┐
+                │   executor.sh    │ ← UNIFIED EXECUTION ENGINE
+                │                  │
+                │ • Prerequisites  │
+                │ • Step execution │
+                │ • Rollback       │
+                │ • State tracking │
+                └────────┬─────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         v               v               v
+   config-manager   template-engine   state-manager
+   query.sh         error-handler     logger.sh
 ```
 
 ### Core Components
 
-| Component | Lines | Purpose |
-|-----------|-------|---------|
-| `config-manager.sh` | 556 | Load config, export ENV vars, validate |
-| `template-engine.sh` | 556 | Parse YAML, substitute variables |
-| `engine.sh` | 515 | Main orchestrator (run/resume/status) |
-| `progress-tracker.sh` | 325 | Real-time monitoring, duration tracking |
-| `error-handler.sh` | 382 | Extract errors, apply fixes, retry |
-| `logger.sh` | 322 | Structured JSONL logging |
-| `validator.sh` | 362 | Configuration validation |
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| `engine.sh` | CLI wrapper, operation discovery, backward compatibility | REFACTORED (thin wrapper) |
+| `executor.sh` | **UNIFIED execution engine**: prerequisites, steps, rollback, state | PRIMARY PATH |
+| `workflow-engine.sh` | Multi-step orchestration (delegates to executor.sh) | ACTIVE |
+| `config-manager.sh` | Load config, export ENV vars, validate | ACTIVE |
+| `template-engine.sh` | Parse YAML, substitute variables | ACTIVE |
+| `state-manager.sh` | SQLite state tracking | ACTIVE |
+| `query.sh` | Azure resource queries and caching | ACTIVE |
+| `logger.sh` | Structured JSONL logging | ACTIVE |
+| `error-handler.sh` | Self-healing pattern matching | ACTIVE |
+| `progress-tracker.sh` | Real-time monitoring | LEGACY (used by engine.sh only) |
 
-**Total**: 3,018 lines across 7 core scripts
+### Deprecated Components
+
+- **Module-based execution** (`execute_module` in engine.sh) - Use capability operations instead
+- **Parallel group execution** (`execute_parallel_group`) - Use workflow-engine.sh instead
+- **Legacy operation format** - Migrate to capability format with prerequisites and rollback
 
 ---
 

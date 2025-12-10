@@ -1,0 +1,950 @@
+# ==============================================================================
+# Error Patterns Database - Self-Healing Fix Registry
+# ==============================================================================
+#
+# Purpose: Known error patterns and their automatic fixes for Claude self-healing
+#
+# Usage:
+#   When an Azure operation fails, Claude reads this file to find a matching
+#   pattern and applies the fix_action automatically (if auto_fix: true).
+#
+# Pattern Format:
+#   - code: Structured error code (ERR-XXX-YYY)
+#   - id: Unique identifier for the pattern
+#   - category: Error category (template, auth, resource, network, etc.)
+#   - regex: Regular expression to match error output
+#   - description: Human-readable description
+#   - auto_fix: Whether Claude should fix automatically (true/false)
+#   - severity: ERROR, WARNING, or INFO
+#   - fix_action: Instructions for Claude on how to fix
+#
+# Error Code Format: ERR-CAT-NUM
+#   - CAT: Category (TPL=Template, AUTH=Auth, RES=Resource, NET=Network, etc.)
+#   - NUM: Sequential number within category
+#
+# Categories:
+#   - TPL: Template/Variable Errors
+#   - CLI: Azure CLI Errors
+#   - RES: Azure Resource Errors
+#   - AUTH: Authentication/Permission Errors
+#   - VM: VM/Compute Errors
+#   - PS: PowerShell Errors
+#   - IDP: Identity/Entra ID Errors
+#   - NET: Network Errors
+#   - STG: Storage Errors
+#   - AVD: Azure Virtual Desktop Errors
+#   - CERT: Certificate/TLS Errors
+#   - RATE: Rate Limiting/Throttling Errors
+#   - GEN: Generic/Fallback Errors
+#
+# ==============================================================================
+
+patterns:
+
+  # ===========================================================================
+  # Template/Variable Errors (ERR-TPL-###)
+  # ===========================================================================
+
+  - code: "ERR-TPL-001"
+    id: "template-var-unresolved"
+    category: "template"
+    regex: "\\{\\{[A-Z_]+\\}\\}"
+    description: "Template variable not substituted before execution"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The YAML file has unresolved {{VARIABLE}} placeholders in the output.
+      Steps to fix:
+      1. Identify which variable(s) are unresolved from the error output
+      2. Check if the variable exists in standards.yaml under .defaults.*
+      3. If missing, add the variable to standards.yaml with appropriate default
+      4. If exists but wrong path, update core/value-resolver.sh map_var_to_yaml_path()
+      5. Retry the operation
+
+  - code: "ERR-TPL-002"
+    id: "config-not-loaded"
+    category: "template"
+    regex: "AZURE_RESOURCE_GROUP.*unbound|AZURE_SUBSCRIPTION_ID.*unbound"
+    description: "Configuration not loaded before operation"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The operation was run without loading configuration first.
+      Fix: Run the command with config loading prefix:
+        source core/config-manager.sh && load_config && ./core/engine.sh run <operation>
+
+  # ===========================================================================
+  # Azure CLI Errors (ERR-CLI-###)
+  # ===========================================================================
+
+  - code: "ERR-CLI-001"
+    id: "az-cli-arg-unknown"
+    category: "cli"
+    regex: "unrecognized arguments: --yes"
+    description: "Azure CLI version incompatibility with --yes flag"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The --yes flag is not supported by this az command version.
+      Steps to fix:
+      1. Find the YAML operation file that contains this az command
+      2. Remove the --yes flag from the command
+      3. Modern az commands auto-confirm in non-interactive mode
+      4. Retry the operation
+
+  - code: "ERR-CLI-002"
+    id: "az-cli-extension-missing"
+    category: "cli"
+    regex: "extension.*not found|install.*extension|az extension add"
+    description: "Azure CLI extension not installed"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      An Azure CLI extension is required but not installed.
+      Steps to fix:
+      1. Extract the extension name from the error message
+      2. Run: az extension add --name <extension-name>
+      3. Common extensions: desktopvirtualization, account, resource-graph
+      4. Retry the operation
+
+  - code: "ERR-CLI-003"
+    id: "az-cli-not-logged-in"
+    category: "cli"
+    regex: "Please run 'az login'|AADSTS[0-9]+|authentication.*failed|not logged in|login.*required"
+    description: "Not authenticated to Azure CLI"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Azure CLI authentication required.
+      Steps:
+      1. Run: ./core/engine.sh run identity/az-login-service-principal
+      2. This uses service principal credentials from secrets.yaml
+      3. Retry the original operation after authentication succeeds
+
+      If service principal not configured:
+      1. Create SP: az ad sp create-for-rbac --name "claude-code-automation" --role Contributor
+      2. Add credentials to secrets.yaml under service_principal section
+      3. Run authentication operation again
+
+  # ===========================================================================
+  # Azure Resource Errors (ERR-RES-###)
+  # ===========================================================================
+
+  - code: "ERR-RES-001"
+    id: "resource-not-found"
+    category: "resource"
+    regex: "ResourceNotFound|not found in resource group|does not exist"
+    description: "Prerequisite resource doesn't exist"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      The operation requires a resource that doesn't exist.
+      Cannot auto-fix - inform user:
+      1. Identify which resource is missing from the error
+      2. List available prerequisite operations: ./core/engine.sh list
+      3. Run the prerequisite operation first
+      4. Then retry this operation
+
+  - code: "ERR-RES-002"
+    id: "resource-conflict"
+    category: "resource"
+    regex: "Conflict|already exists|duplicate"
+    description: "Resource already exists (idempotency check needed)"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      The resource already exists. This may be safe to ignore if idempotent.
+      Steps:
+      1. Check if the operation is designed to be idempotent
+      2. If yes, mark as success and continue
+      3. If no, inform user the resource exists
+
+  - code: "ERR-RES-003"
+    id: "quota-exceeded"
+    category: "resource"
+    regex: "QuotaExceeded|quota.*limit|exceeded.*quota"
+    description: "Azure subscription quota exceeded"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix quota issues.
+      Inform user:
+      1. Check quota: az vm list-usage -l <location> -o table
+      2. Request quota increase via Azure portal
+      3. Or use a different VM size/region
+
+  - code: "ERR-RES-004"
+    id: "resource-group-not-found"
+    category: "resource"
+    regex: "ResourceGroupNotFound|resource group.*not found"
+    description: "Resource group doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The resource group doesn't exist.
+      Steps:
+      1. Create the resource group first
+      2. Run: az group create -n {{AZURE_RESOURCE_GROUP}} -l {{AZURE_LOCATION}}
+      3. Retry the operation
+
+  - code: "ERR-RES-005"
+    id: "resource-locked"
+    category: "resource"
+    regex: "resource.*locked|ScopeLocked|CannotDelete"
+    description: "Resource has a delete or read-only lock"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix locked resources.
+      Inform user:
+      1. Check locks: az lock list --resource-group <rg>
+      2. Remove lock if authorized: az lock delete --name <lock-name> --resource-group <rg>
+      3. Contact administrator if you don't have permission to remove locks
+
+  # ===========================================================================
+  # Authentication/Permission Errors (ERR-AUTH-###)
+  # ===========================================================================
+
+  - code: "ERR-AUTH-001"
+    id: "auth-failed"
+    category: "auth"
+    regex: "AuthorizationFailed|Forbidden|does not have authorization|access.*denied"
+    description: "Insufficient Azure permissions"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix permission issues.
+      Inform user:
+      1. Check current role: az role assignment list --assignee <user> -o table
+      2. Required roles depend on operation (typically Contributor + User Access Admin)
+      3. Contact Azure administrator to grant permissions
+
+  - code: "ERR-AUTH-002"
+    id: "token-expired"
+    category: "auth"
+    regex: "token.*expired|AADSTS70043|TokenExpired"
+    description: "Authentication token has expired"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Authentication token expired.
+      Steps:
+      1. Re-authenticate: ./core/engine.sh run identity/az-login-service-principal
+      2. If using Graph: ./core/engine.sh run identity/mggraph-connect-certificate
+      3. Retry the operation
+
+  - code: "ERR-AUTH-003"
+    id: "invalid-client-secret"
+    category: "auth"
+    regex: "invalid_client|AADSTS7000215|client secret.*invalid|client secret.*expired"
+    description: "Service principal client secret is invalid or expired"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix invalid credentials.
+      Inform user:
+      1. Generate new client secret in Azure portal
+      2. Update secrets.yaml with new client_secret
+      3. Re-run authentication operation
+
+  # ===========================================================================
+  # VM Run-Command Errors (ERR-VM-###)
+  # ===========================================================================
+
+  - code: "ERR-VM-001"
+    id: "vm-run-command-busy"
+    category: "vm"
+    regex: "Run command extension execution is in progress"
+    description: "VM busy with another run-command"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      The VM is still processing a previous run-command.
+      Do NOT modify any YAML files.
+      Steps:
+      1. Wait 30 seconds
+      2. Retry the exact same operation
+      Note: This is transient - the operation should succeed after waiting.
+
+  - code: "ERR-VM-002"
+    id: "vm-not-running"
+    category: "vm"
+    regex: "VM.*not running|PowerState.*deallocated|VM.*stopped"
+    description: "VM is not in running state"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The target VM is not running.
+      Steps:
+      1. Start the VM: az vm start -g {{AZURE_RESOURCE_GROUP}} -n <vm-name>
+      2. Wait for VM to be ready (60 seconds)
+      3. Retry the operation
+
+  - code: "ERR-VM-003"
+    id: "vm-extension-failed"
+    category: "vm"
+    regex: "VMExtension.*failed|extension.*provisioning.*failed"
+    description: "VM extension installation failed"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      A VM extension failed to install.
+      Steps:
+      1. Check the VM extension status in Azure portal
+      2. Delete the failed extension if stuck
+      3. Retry the operation
+
+  - code: "ERR-VM-004"
+    id: "vm-agent-not-ready"
+    category: "vm"
+    regex: "VM agent.*not ready|GuestAgent.*not ready"
+    description: "VM guest agent not responding"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      VM guest agent is not ready.
+      Steps:
+      1. Wait 2-3 minutes for VM agent to initialize
+      2. Verify VM is fully booted
+      3. Check VM diagnostics for agent status
+      4. Retry the operation
+
+  - code: "ERR-VM-005"
+    id: "vm-size-not-available"
+    category: "vm"
+    regex: "requested VM size.*not available|VM size.*not supported"
+    description: "VM size not available in region"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix VM size availability.
+      Inform user:
+      1. Check available sizes: az vm list-sizes -l {{AZURE_LOCATION}}
+      2. Choose different VM size in standards.yaml
+      3. Or deploy to different region
+
+  # ===========================================================================
+  # PowerShell Errors (ERR-PS-###)
+  # ===========================================================================
+
+  - code: "ERR-PS-001"
+    id: "ps-cmdlet-not-found"
+    category: "powershell"
+    regex: "is not recognized as.*cmdlet|CommandNotFoundException"
+    description: "PowerShell cmdlet not available"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The PowerShell script uses a cmdlet not available in the environment.
+      Steps:
+      1. Identify which cmdlet is missing from the error
+      2. Common replacements:
+         - Get-AzContext → az account show
+         - Get-AzVM → az vm show
+         - Get-AzStorageAccount → az storage account show
+      3. Edit the YAML operation to use az CLI equivalent
+      4. Retry the operation
+
+  - code: "ERR-PS-002"
+    id: "ps-module-not-found"
+    category: "powershell"
+    regex: "module.*not.*loaded|Import-Module.*failed"
+    description: "PowerShell module not available"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The PowerShell script requires a module that isn't installed.
+      Steps:
+      1. If using Az module, switch to az CLI commands instead
+      2. az CLI is more reliable in run-command scenarios
+      3. Edit the YAML operation to remove module dependency
+      4. Retry the operation
+
+  - code: "ERR-PS-003"
+    id: "ps-syntax-error"
+    category: "powershell"
+    regex: "ParseException|unexpected token|syntax error"
+    description: "PowerShell syntax error"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      PowerShell script has syntax errors.
+      Steps:
+      1. Review the PowerShell code in the YAML operation
+      2. Check for common issues: unmatched quotes, missing braces, line continuation
+      3. Test syntax locally: pwsh -Command "& { <script> }"
+      4. Fix the YAML operation
+      5. Retry the operation
+
+  # ===========================================================================
+  # Identity/Entra ID Errors (ERR-IDP-###)
+  # ===========================================================================
+
+  - code: "ERR-IDP-001"
+    id: "dynamic-rule-syntax"
+    category: "identity"
+    regex: "DynamicGroupQueryParseError|Invalid.*membership.*rule"
+    description: "Invalid characters in dynamic group membership rule"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The dynamic membership rule has syntax errors (usually escaping issues).
+      Steps:
+      1. Find the PowerShell code that sets the membership rule
+      2. Fix escaping - use single quotes in PowerShell:
+         WRONG: $rule = "(device.displayName -startsWith ""$prefix"")"
+         RIGHT: $rule = '(device.displayName -startsWith "' + $prefix + '")'
+      3. Edit the YAML operation with corrected escaping
+      4. Retry the operation
+
+  - code: "ERR-IDP-002"
+    id: "mggraph-not-connected"
+    category: "identity"
+    regex: "Connect-MgGraph|Get-MgContext.*null|Microsoft\\.Graph.*not connected|authentication_required|MgGraph.*not.*authenticated"
+    description: "Not authenticated to Microsoft Graph"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Microsoft Graph authentication required.
+      Steps:
+      1. Run: ./core/engine.sh run identity/mggraph-connect-certificate
+      2. This uses certificate credentials from secrets.yaml
+      3. Retry the original operation after authentication succeeds
+
+      If certificate not configured:
+      1. Generate cert: openssl req -x509 -newkey rsa:4096 -keyout claude.key -out claude.crt -days 365 -nodes
+      2. Upload to Azure AD: az ad app credential reset --id "CLIENT_ID" --cert "@claude.crt" --append
+      3. Install locally: pwsh -Command "Import-PfxCertificate -FilePath ./claude.pfx -CertStoreLocation Cert:\CurrentUser\My"
+      4. Add thumbprint to secrets.yaml under service_principal.certificate_thumbprint
+
+  - code: "ERR-IDP-003"
+    id: "service-principal-not-found"
+    category: "identity"
+    regex: "service principal.*not found|application.*not found"
+    description: "Service principal or app registration not found"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      The required service principal doesn't exist.
+      Inform user:
+      1. Check if the app registration exists in Entra ID
+      2. May need to create the service principal first
+      3. Run prerequisite identity operations
+
+  - code: "ERR-IDP-004"
+    id: "managed-identity-not-found"
+    category: "identity"
+    regex: "managed identity.*not found|user assigned identity.*not found"
+    description: "Managed identity doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Managed identity not found.
+      Steps:
+      1. Create the managed identity first
+      2. Run: ./core/engine.sh run identity/managed-identity-create
+      3. Retry the operation
+
+  - code: "ERR-IDP-005"
+    id: "rbac-assignment-exists"
+    category: "identity"
+    regex: "role assignment.*already exists|RoleAssignmentExists"
+    description: "RBAC role assignment already exists"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      RBAC assignment already exists - this is safe to ignore.
+      Steps:
+      1. Verify the existing assignment has correct role and scope
+      2. Mark operation as success
+      3. Continue with workflow
+
+  - code: "ERR-IDP-006"
+    id: "rbac-propagation-delay"
+    category: "identity"
+    regex: "principal.*does not exist|PrincipalNotFound"
+    description: "RBAC principal not yet propagated in Azure AD"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Azure AD principal not yet visible (propagation delay).
+      Steps:
+      1. Wait 30-60 seconds for Azure AD replication
+      2. This is common after creating service principals or managed identities
+      3. Retry the operation
+
+  - code: "ERR-IDP-007"
+    id: "group-member-exists"
+    category: "identity"
+    regex: "member.*already exists|MemberAlreadyExists"
+    description: "Group member already exists"
+    severity: "INFO"
+    auto_fix: true
+    fix_action: |
+      Group member already exists - this is idempotent and safe.
+      Steps:
+      1. Mark operation as success
+      2. Continue with workflow
+
+  # ===========================================================================
+  # Network Errors (ERR-NET-###)
+  # ===========================================================================
+
+  - code: "ERR-NET-001"
+    id: "subnet-not-found"
+    category: "network"
+    regex: "subnet.*not found|SubnetNotFound"
+    description: "Subnet doesn't exist in the VNet"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      The specified subnet doesn't exist.
+      Inform user:
+      1. Check VNet configuration: az network vnet subnet list -g <rg> --vnet-name <vnet>
+      2. Verify subnet name in config.yaml matches actual subnet
+      3. Create subnet if missing: ./core/engine.sh run networking/subnet-create
+
+  - code: "ERR-NET-002"
+    id: "private-endpoint-conflict"
+    category: "network"
+    regex: "private.*endpoint.*already.*configured|PrivateEndpointCannotBeCreated"
+    description: "Private endpoint configuration conflict"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      A private endpoint already exists or conflicts.
+      Steps:
+      1. This is often safe to ignore if the endpoint exists
+      2. Verify the existing endpoint is correct
+      3. Mark operation as success if endpoint serves the purpose
+
+  - code: "ERR-NET-003"
+    id: "nsg-rule-conflict"
+    category: "network"
+    regex: "security rule.*already exists|SecurityRuleAlreadyExists"
+    description: "NSG rule with same priority already exists"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      NSG rule conflict detected.
+      Steps:
+      1. Check existing rules: az network nsg rule list -g <rg> --nsg-name <nsg>
+      2. If rule serves same purpose, mark as success
+      3. If different rule needed, change priority in YAML
+      4. Retry the operation
+
+  - code: "ERR-NET-004"
+    id: "vnet-peering-exists"
+    category: "network"
+    regex: "peering.*already exists|VNetPeeringAlreadyExists"
+    description: "VNet peering already configured"
+    severity: "INFO"
+    auto_fix: true
+    fix_action: |
+      VNet peering already exists - this is idempotent.
+      Steps:
+      1. Verify peering status is Connected
+      2. Mark operation as success
+      3. Continue with workflow
+
+  - code: "ERR-NET-005"
+    id: "dns-resolution-failed"
+    category: "network"
+    regex: "failed to resolve|dns.*resolution.*failed|Name or service not known"
+    description: "DNS resolution failure"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      DNS resolution failed for Azure endpoint.
+      Steps:
+      1. Check network connectivity: ping 8.8.8.8
+      2. Verify DNS settings: cat /etc/resolv.conf
+      3. Wait 30 seconds and retry (may be transient)
+      4. If persistent, check VNet DNS configuration
+
+  - code: "ERR-NET-006"
+    id: "network-connectivity-failed"
+    category: "network"
+    regex: "connection.*timed out|connection refused|no route to host"
+    description: "Network connectivity failure"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Network connectivity issue detected.
+      Steps:
+      1. Check NSG rules allow outbound HTTPS (443)
+      2. Verify route table configuration
+      3. Check if VPN/ExpressRoute is down
+      4. Wait and retry - may be transient network issue
+
+  - code: "ERR-NET-007"
+    id: "ip-address-in-use"
+    category: "network"
+    regex: "IP address.*in use|PrivateIPAddressIsBeingUsed"
+    description: "Private IP address already allocated"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      IP address conflict detected.
+      Steps:
+      1. Choose different IP from subnet range
+      2. Or use dynamic IP allocation instead of static
+      3. Update YAML operation with new IP
+      4. Retry the operation
+
+  # ===========================================================================
+  # Storage Errors (ERR-STG-###)
+  # ===========================================================================
+
+  - code: "ERR-STG-001"
+    id: "storage-key-failed"
+    category: "storage"
+    regex: "storage.*key.*failed|SAS.*invalid|storage.*auth"
+    description: "Storage account authentication failed"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix storage authentication.
+      Inform user:
+      1. Check storage account exists and is accessible
+      2. Verify RBAC permissions on storage account
+      3. May need to regenerate storage keys
+
+  - code: "ERR-STG-002"
+    id: "storage-account-name-taken"
+    category: "storage"
+    regex: "storage account name.*not available|StorageAccountAlreadyTaken"
+    description: "Storage account name already taken globally"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Storage account name must be globally unique.
+      Steps:
+      1. Check availability: az storage account check-name -n <name>
+      2. Generate new unique name (add random suffix)
+      3. Update YAML operation with new name
+      4. Retry the operation
+
+  - code: "ERR-STG-003"
+    id: "file-share-not-found"
+    category: "storage"
+    regex: "file share.*not found|ShareNotFound"
+    description: "Azure file share doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      File share not found.
+      Steps:
+      1. Create the file share first
+      2. Run: az storage share create --account-name <acct> --name <share>
+      3. Retry the operation
+
+  - code: "ERR-STG-004"
+    id: "storage-quota-exceeded"
+    category: "storage"
+    regex: "storage quota.*exceeded|ShareQuotaExceeded"
+    description: "File share quota exceeded"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot auto-fix storage quota.
+      Inform user:
+      1. Check current usage: az storage share stats
+      2. Increase quota: az storage share update --quota <size-gb>
+      3. Or clean up old files
+
+  # ===========================================================================
+  # Azure Virtual Desktop Errors (ERR-AVD-###)
+  # ===========================================================================
+
+  - code: "ERR-AVD-001"
+    id: "hostpool-not-found"
+    category: "avd"
+    regex: "host pool.*not found|HostPoolNotFound"
+    description: "AVD host pool doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Host pool not found.
+      Steps:
+      1. Create the host pool first
+      2. Run: ./core/engine.sh run avd/hostpool-create
+      3. Retry the operation
+
+  - code: "ERR-AVD-002"
+    id: "registration-token-expired"
+    category: "avd"
+    regex: "registration token.*expired|TokenExpired"
+    description: "Host pool registration token expired"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Registration token expired.
+      Steps:
+      1. Generate new token: ./core/engine.sh run avd/hostpool-token-generate
+      2. Retry the session host registration
+      3. Tokens are valid for 24 hours by default
+
+  - code: "ERR-AVD-003"
+    id: "sessionhost-not-found"
+    category: "avd"
+    regex: "session host.*not found|SessionHostNotFound"
+    description: "Session host not registered in host pool"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Session host not found in host pool.
+      Inform user:
+      1. Verify VM is running and AVD agent installed
+      2. Check registration token was used correctly
+      3. Review AVD agent logs on the session host
+      4. May need to re-register session host
+
+  - code: "ERR-AVD-004"
+    id: "appgroup-not-found"
+    category: "avd"
+    regex: "application group.*not found|ApplicationGroupNotFound"
+    description: "AVD application group doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Application group not found.
+      Steps:
+      1. Create the application group first
+      2. Run: ./core/engine.sh run avd/appgroup-create
+      3. Ensure it's associated with correct host pool
+      4. Retry the operation
+
+  - code: "ERR-AVD-005"
+    id: "workspace-not-found"
+    category: "avd"
+    regex: "workspace.*not found|WorkspaceNotFound"
+    description: "AVD workspace doesn't exist"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Workspace not found.
+      Steps:
+      1. Create the workspace first
+      2. Run: ./core/engine.sh run avd/workspace-create
+      3. Retry the operation
+
+  - code: "ERR-AVD-006"
+    id: "sessionhost-unavailable"
+    category: "avd"
+    regex: "session host.*unavailable|SessionHostUnavailable"
+    description: "Session host is in unavailable state"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Session host unavailable.
+      Steps:
+      1. Check VM power state: az vm get-instance-view
+      2. Start VM if stopped: az vm start
+      3. Check AVD agent health on the session host
+      4. Wait 2-3 minutes for agent to report healthy
+      5. Retry the operation
+
+  - code: "ERR-AVD-007"
+    id: "scaling-plan-conflict"
+    category: "avd"
+    regex: "scaling plan.*already.*assigned|ScalingPlanAlreadyAssigned"
+    description: "Host pool already has scaling plan assigned"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Scaling plan already assigned to host pool.
+      Steps:
+      1. Check existing scaling plan configuration
+      2. If correct, mark operation as success
+      3. If different plan needed, remove old plan first
+      4. Retry the operation
+
+  # ===========================================================================
+  # Certificate/TLS Errors (ERR-CERT-###)
+  # ===========================================================================
+
+  - code: "ERR-CERT-001"
+    id: "certificate-not-found"
+    category: "certificate"
+    regex: "certificate.*not found|CertificateNotFound"
+    description: "Certificate not found in certificate store"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Certificate not found.
+      Inform user:
+      1. Verify certificate thumbprint in secrets.yaml
+      2. Check certificate installation: pwsh -Command "Get-ChildItem Cert:\CurrentUser\My"
+      3. Re-import certificate if needed
+      4. Ensure certificate hasn't expired
+
+  - code: "ERR-CERT-002"
+    id: "certificate-expired"
+    category: "certificate"
+    regex: "certificate.*expired|CertificateExpired"
+    description: "Certificate has expired"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Certificate expired.
+      Inform user:
+      1. Generate new certificate
+      2. Upload to Azure AD app registration
+      3. Update secrets.yaml with new thumbprint
+      4. Re-run authentication operation
+
+  - code: "ERR-CERT-003"
+    id: "tls-handshake-failed"
+    category: "certificate"
+    regex: "TLS handshake.*failed|SSL.*error|certificate verify failed"
+    description: "TLS/SSL handshake failure"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      TLS handshake failed.
+      Steps:
+      1. Check system date/time is correct
+      2. Update CA certificates: apt-get update && apt-get install ca-certificates
+      3. Verify network allows HTTPS (443)
+      4. Retry the operation
+
+  - code: "ERR-CERT-004"
+    id: "certificate-permission-denied"
+    category: "certificate"
+    regex: "certificate.*permission denied|cannot access private key"
+    description: "Insufficient permissions to access certificate private key"
+    severity: "ERROR"
+    auto_fix: false
+    fix_action: |
+      Cannot access certificate private key.
+      Inform user:
+      1. Check file permissions on certificate
+      2. Ensure current user can read certificate store
+      3. May need to re-import with correct permissions
+
+  # ===========================================================================
+  # Rate Limiting/Throttling Errors (ERR-RATE-###)
+  # ===========================================================================
+
+  - code: "ERR-RATE-001"
+    id: "rate-limit-exceeded"
+    category: "rate-limit"
+    regex: "Too many requests|TooManyRequests|rate limit exceeded|429"
+    description: "Azure API rate limit exceeded"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Azure API rate limit exceeded.
+      Steps:
+      1. Wait 60 seconds for rate limit to reset
+      2. Retry the operation
+      3. If persistent, add delays between operations in workflow
+
+  - code: "ERR-RATE-002"
+    id: "throttling-detected"
+    category: "rate-limit"
+    regex: "throttled|ThrottlingException|request rate.*exceeded"
+    description: "Request throttling detected"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Request throttling detected.
+      Steps:
+      1. Wait 30-60 seconds
+      2. Implement exponential backoff
+      3. Retry the operation
+      4. Consider batching requests if doing bulk operations
+
+  - code: "ERR-RATE-003"
+    id: "concurrent-operations-limit"
+    category: "rate-limit"
+    regex: "concurrent operations limit|ConcurrentOperationsLimitExceeded"
+    description: "Too many concurrent operations"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Too many concurrent operations on resource.
+      Steps:
+      1. Wait for current operations to complete (check portal)
+      2. Retry after 2-3 minutes
+      3. Serialize operations instead of running in parallel
+
+  # ===========================================================================
+  # Generic/Fallback Errors (ERR-GEN-###)
+  # ===========================================================================
+
+  - code: "ERR-GEN-001"
+    id: "timeout"
+    category: "generic"
+    regex: "timeout|timed out|deadline exceeded"
+    description: "Operation timed out"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      The operation timed out.
+      Steps:
+      1. Check if the operation has a timeout setting in the YAML
+      2. If timeout is too short, increase it in duration.timeout
+      3. Retry the operation (may succeed on retry)
+
+  - code: "ERR-GEN-002"
+    id: "json-parse-error"
+    category: "generic"
+    regex: "JSON.*parse|invalid.*json|unexpected.*token"
+    description: "JSON parsing error in output"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      The command output contains invalid JSON.
+      Steps:
+      1. Add -o json flag to az commands to ensure JSON output
+      2. Check for Write-Host statements polluting JSON output
+      3. Edit YAML to fix output handling
+      4. Retry the operation
+
+  - code: "ERR-GEN-003"
+    id: "internal-server-error"
+    category: "generic"
+    regex: "Internal Server Error|InternalServerError|500"
+    description: "Azure service internal error"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Azure service encountered an internal error.
+      Steps:
+      1. This is usually transient
+      2. Wait 30-60 seconds
+      3. Retry the operation
+      4. If persistent, check Azure status page
+
+  - code: "ERR-GEN-004"
+    id: "service-unavailable"
+    category: "generic"
+    regex: "Service Unavailable|ServiceUnavailable|503"
+    description: "Azure service temporarily unavailable"
+    severity: "WARNING"
+    auto_fix: true
+    fix_action: |
+      Azure service temporarily unavailable.
+      Steps:
+      1. Wait 1-2 minutes
+      2. Check Azure status: https://status.azure.com
+      3. Retry the operation
+      4. If persistent, may be regional outage
+
+  - code: "ERR-GEN-005"
+    id: "bad-request"
+    category: "generic"
+    regex: "Bad Request|BadRequest|InvalidParameter|400"
+    description: "Invalid request parameters"
+    severity: "ERROR"
+    auto_fix: true
+    fix_action: |
+      Request has invalid parameters.
+      Steps:
+      1. Review error details for specific parameter issues
+      2. Check parameter format and values in YAML
+      3. Verify required parameters are provided
+      4. Fix the YAML operation
+      5. Retry the operation

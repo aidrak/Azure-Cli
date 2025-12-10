@@ -11,11 +11,17 @@
 #   validate_workflow "path/to/workflow.yaml"
 #   get_workflow_status "workflow-id"
 #
+# Architecture:
+#   - This engine orchestrates multi-step workflows
+#   - Delegates individual operation execution to executor.sh (UNIFIED PATH)
+#   - Maintains workflow-level state and progress tracking
+#   - Supports continue-on-error for resilient workflows
+#
 # Features:
 #   - Sequential step execution
 #   - Dependency resolution (future enhancement)
 #   - Comprehensive logging and state tracking
-#   - Error handling and rollback support
+#   - Error handling via executor.sh rollback
 #   - Variable substitution from config
 #
 # Workflow YAML Format:
@@ -26,6 +32,7 @@
 #     steps:
 #       - name: "Step Name"
 #         operation: "operation-file.yaml"
+#         continue_on_error: false
 #         parameters:
 #           param1: "value1"
 #           param2: "value2"
@@ -338,7 +345,12 @@ execute_workflow() {
                 update_step_state "$workflow_exec_id" "$step_index" "$step_name" "skipped" "Operation file not found"
             fi
         else
-            # Execute operation
+            # Execute operation via UNIFIED executor.sh
+            # The executor handles:
+            # - Prerequisite validation
+            # - Step execution
+            # - Automatic rollback on failure
+            # - State tracking
             if execute_operation "$operation_file" "$force_mode"; then
                 log_success "Step completed: $step_name" "$workflow_exec_id"
                 update_step_state "$workflow_exec_id" "$step_index" "$step_name" "completed"

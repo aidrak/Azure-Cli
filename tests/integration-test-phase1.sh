@@ -242,7 +242,11 @@ fi
 test_start "Update Operation Status"
 
 if update_operation_status "$operation_id" "running" 2>/dev/null; then
-    status=$(sqlite3 "$TEST_DB" "SELECT status FROM operations WHERE operation_id = '$operation_id';")
+    # Escape operation_id for SQL
+    local escaped_operation_id
+    escaped_operation_id=$(echo "$operation_id" | sed "s/'/''/g")
+
+    status=$(sqlite3 "$TEST_DB" "SELECT status FROM operations WHERE operation_id = '$escaped_operation_id';")
 
     if [[ "$status" == "running" ]]; then
         test_pass
@@ -260,7 +264,11 @@ fi
 test_start "Update Operation Progress"
 
 if update_operation_progress "$operation_id" 3 10 "Installing applications" 2>/dev/null; then
-    progress=$(sqlite3 "$TEST_DB" "SELECT current_step || '/' || total_steps FROM operations WHERE operation_id = '$operation_id';")
+    # Escape operation_id for SQL
+    local escaped_operation_id
+    escaped_operation_id=$(echo "$operation_id" | sed "s/'/''/g")
+
+    progress=$(sqlite3 "$TEST_DB" "SELECT current_step || '/' || total_steps FROM operations WHERE operation_id = '$escaped_operation_id';")
 
     if [[ "$progress" == "3/10" ]]; then
         test_pass
@@ -278,7 +286,11 @@ fi
 test_start "Log Operation Message"
 
 if log_operation "$operation_id" "INFO" "Test log message" 2>/dev/null; then
-    log_count=$(sqlite3 "$TEST_DB" "SELECT COUNT(*) FROM operation_logs WHERE operation_id = '$operation_id';")
+    # Escape operation_id for SQL
+    local escaped_operation_id
+    escaped_operation_id=$(echo "$operation_id" | sed "s/'/''/g")
+
+    log_count=$(sqlite3 "$TEST_DB" "SELECT COUNT(*) FROM operation_logs WHERE operation_id = '$escaped_operation_id';")
 
     if [[ "$log_count" -eq 1 ]]; then
         test_pass

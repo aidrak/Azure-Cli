@@ -197,6 +197,25 @@ When an Azure operation fails, the `PostToolUse` hook will block with context. F
    - **If `auto_fix: true`**: Follow `fix_action` instructions, edit YAML, retry
    - **If `auto_fix: false`**: Inform user what manual action is needed
 
+### Error Pattern System (58 patterns with structured codes)
+
+All errors have structured codes in format `ERR-CATEGORY-NUM`:
+
+| Category | Examples | Auto-Fix Rate |
+|----------|----------|---------------|
+| AVD | ERR-AVD-001 (host pool not found) | 71% |
+| Network | ERR-NET-001 (DNS resolution failed) | 75% |
+| Identity | ERR-ID-001 (managed identity not found) | 50% |
+| Certificate | ERR-CERT-001 (certificate expired) | 75% |
+| Rate-Limit | ERR-RATE-001 (API throttled) | 100% |
+
+**To look up error codes:**
+```bash
+source core/error-handler.sh
+list_error_codes                    # Show all 58 error codes
+get_error_details "error message"   # Match error to pattern
+```
+
 ### Self-Healing Rules
 
 - **NEVER create new scripts** - Always fix the existing YAML operation
@@ -211,12 +230,69 @@ Hook blocks with: "Azure operation failed. Apply self-healing..."
 Error output: "unrecognized arguments: --yes"
 
 1. Read error-patterns.yaml
-2. Match pattern: "az-cli-arg-unknown" (regex: "unrecognized arguments: --yes")
+2. Match pattern: "az-cli-arg-unknown" (ERR-CLI-002)
 3. auto_fix: true
 4. fix_action: Remove --yes flag from the az command in the YAML
 5. Edit the YAML operation file
 6. Retry: ./core/engine.sh run <operation-id>
 ```
+
+---
+
+## Testing & Validation
+
+### Run Tests Before Changes
+
+```bash
+# Run all tests
+bash tests/test-value-resolver.sh      # Value resolution tests
+bash tests/test-template-engine.sh     # Template engine tests
+bash tests/test-naming-analyzer.sh     # Naming analyzer tests
+bash tests/test-dependency-resolver.sh # Dependency resolver tests
+bash tests/test-executor.sh            # Executor tests
+bash tests/integration-test-operations.sh  # Full integration tests
+```
+
+### Pre-Flight Validation
+
+**ALWAYS validate before running operations:**
+
+```bash
+source core/config-manager.sh && load_config
+
+# Check system readiness
+preflight_check "operation-id"
+
+# Validate operation config without executing
+validate_operation_config "operation-id"
+
+# Preview what will happen (no changes made)
+dry_run_operation "operation-id"
+```
+
+---
+
+## Observability & Metrics
+
+Track operation performance with the metrics module:
+
+```bash
+source core/metrics.sh
+
+# Record metrics during operations
+record_operation_performance "op-id" "completed" 45.2
+
+# Analyze performance
+get_success_rate "networking"           # Success rate by capability
+get_slowest_operations 10               # Find bottlenecks
+get_failure_trends 7                    # Failure trends (last 7 days)
+
+# Generate reports
+export_metrics_report "report.json"     # JSON export
+print_metrics_summary                   # Console summary
+```
+
+**Full guide:** `docs/observability/METRICS.md`
 
 ---
 
@@ -236,6 +312,8 @@ Error output: "unrecognized arguments: --yes"
 4. **ALWAYS use `az vm run-command invoke`** for remote PowerShell
 5. **NEVER use RDP, WinRM, or PowerShell remoting**
 6. **Legacy modules (01-12) are archived** - DO NOT use
+7. **RUN TESTS after making changes** - use test suite in `tests/`
+8. **VALIDATE before executing** - use `preflight_check` and `dry_run_operation`
 
 ### Dynamic Config Workflow
 

@@ -3,7 +3,9 @@
 # test-value-resolver.sh - Test Suite for Value Resolver
 # ==============================================================================
 
-set -uo pipefail
+# IMPORTANT: Not using -e or -u flags because we need to test failure cases and undefined variables
+# The sourced modules use set -euo pipefail, but we override for testing
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -13,6 +15,10 @@ export PROJECT_ROOT
 export INTERACTIVE_MODE="false"  # Disable prompts during testing
 export DISCOVERY_ENABLED="true"
 export DEBUG="false"
+
+# Disable exit on error and nounset for test script (modules will re-enable for themselves)
+set +e
+set +u
 
 # Create test config files
 TEST_DIR="${PROJECT_ROOT}/tests/test-data/value-resolver"
@@ -133,10 +139,13 @@ source "${PROJECT_ROOT}/core/value-resolver.sh"
 # ==============================================================================
 
 test_resolve_from_environment_success() {
+    echo "[DEBUG 1.1] Starting test"
     export TEST_VAR_123="test_value_123"
 
+    echo "[DEBUG 1.2] About to resolve"
     local result
     result=$(resolve_from_environment "TEST_VAR_123")
+    echo "[DEBUG 1.3] Resolved: $result"
 
     if [[ "$result" == "test_value_123" ]]; then
         test_pass "resolve_from_environment (success)"
@@ -144,7 +153,9 @@ test_resolve_from_environment_success() {
         test_fail "resolve_from_environment (success)" "Expected 'test_value_123', got '$result'"
     fi
 
+    echo "[DEBUG 1.4] About to unset"
     unset TEST_VAR_123
+    echo "[DEBUG 1.5] Function returning"
 }
 
 test_resolve_from_environment_missing() {
@@ -490,7 +501,9 @@ setup_test_files
 
 echo "Testing Environment Resolution..."
 test_resolve_from_environment_success
+echo "[DEBUG] About to run test_resolve_from_environment_missing..."
 test_resolve_from_environment_missing
+echo "[DEBUG] test_resolve_from_environment_missing completed"
 
 echo ""
 echo "Testing Standards Resolution..."

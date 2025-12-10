@@ -1,11 +1,14 @@
 #!/bin/bash
 # ==============================================================================
-# Main Engine - Orchestrates Capability Operation Execution
+# Main Engine - Thin Wrapper for Executor (Unified Execution Path)
 # ==============================================================================
 #
-# Purpose: Main entry point for executing capability operations
+# Purpose: Main CLI entry point that delegates to executor.sh for all operations
+# Status: REFACTORED - Now uses unified execution path via executor.sh
+#
 # Usage:
 #   ./core/engine.sh run <operation-id>
+#   ./core/engine.sh workflow <workflow-id>
 #   ./core/engine.sh resume
 #   ./core/engine.sh status
 #   ./core/engine.sh list
@@ -14,9 +17,16 @@
 #   ./core/engine.sh run golden-image-install-apps           # Run golden image app installation
 #   ./core/engine.sh run vnet-create                         # Run VNet creation operation
 #   ./core/engine.sh run storage-account-create              # Run storage account creation
+#   ./core/engine.sh workflow full-deployment                # Run multi-step workflow
 #   ./core/engine.sh resume                                  # Resume from failure
 #   ./core/engine.sh status                                  # Show current state
 #   ./core/engine.sh list                                    # List all capability operations
+#
+# Architecture:
+#   - This script is a THIN WRAPPER for backward CLI compatibility
+#   - All operation execution is delegated to core/executor.sh
+#   - Workflow execution is delegated to core/workflow-engine.sh
+#   - Legacy module-based execution is DEPRECATED
 #
 # ==============================================================================
 
@@ -26,9 +36,42 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PROJECT_ROOT
 
+# Legacy state.json - DEPRECATED, kept only for migration
 STATE_FILE="${PROJECT_ROOT}/state.json"
+
+# Current directories
 CAPABILITIES_DIR="${PROJECT_ROOT}/capabilities"
 LOGS_DIR="${PROJECT_ROOT}/artifacts/logs"
+
+# ==============================================================================
+# UNIFIED EXECUTION ARCHITECTURE
+# ==============================================================================
+# This engine.sh provides CLI backward compatibility while delegating all
+# execution to the unified executor.sh:
+#
+# EXECUTION FLOW:
+#   1. engine.sh (THIS FILE) - CLI wrapper, state management, operation discovery
+#      └─> Delegates to executor.sh for ALL operation execution
+#
+#   2. executor.sh - Unified operation execution engine
+#      - Prerequisite validation
+#      - Step execution with rollback
+#      - State tracking
+#      - Resource queries
+#
+#   3. workflow-engine.sh - Multi-step orchestration
+#      └─> Calls executor.sh for individual operation execution
+#
+# DEPRECATED PATHS (Backward Compatibility Only):
+#   - Module-based execution (execute_module)
+#   - Parallel group execution (execute_parallel_group)
+#   - Legacy operation formats
+#
+# RECOMMENDED USAGE:
+#   - Direct operation: ./core/engine.sh run <operation-id>
+#   - Multi-step workflow: ./core/engine.sh workflow <workflow-id>
+#   - All new operations should use capability format
+# ==============================================================================
 
 # Source core components
 source "${PROJECT_ROOT}/core/config-manager.sh"
@@ -36,7 +79,7 @@ source "${PROJECT_ROOT}/core/template-engine.sh"
 source "${PROJECT_ROOT}/core/progress-tracker.sh"
 source "${PROJECT_ROOT}/core/error-handler.sh"
 source "${PROJECT_ROOT}/core/logger.sh"
-source "${PROJECT_ROOT}/core/executor.sh"  # Include the executor for command tracking helpers
+source "${PROJECT_ROOT}/core/executor.sh"  # UNIFIED EXECUTION ENGINE (primary execution path)
 source "${PROJECT_ROOT}/core/state-manager.sh"  # SQLite-based state management
 
 # ==============================================================================
@@ -373,7 +416,12 @@ create_checkpoint() {
 }
 
 # ==============================================================================
-# Execute Single Operation
+# Execute Single Operation (UNIFIED - Delegates to executor.sh)
+# ==============================================================================
+# REFACTORED: This function now delegates ALL execution to executor.sh
+# - Provides backward compatibility for legacy CLI calls
+# - Maintains state tracking for resume functionality
+# - Supports both capability and legacy operation formats
 # ==============================================================================
 execute_single_operation() {
     local module_dir="$1"
@@ -390,86 +438,45 @@ execute_single_operation() {
     operation_format=$(detect_operation_format "$yaml_file")
     log_info "Found operation file: $yaml_file (format: $operation_format)" "engine"
 
-    # If Capability Format, use the new Executor directly if possible
-    if [[ "$operation_format" == "capability" ]]; then
-        # Use the new Executor logic (imported from core/executor.sh)
-        # But we need to wrap it to match the engine's state tracking
-        
-        update_state "current_operation" "$operation_id"
-        update_state "status" "running"
-        
-        local start_time=$(date +%s)
-        
-        # Call execute_operation from core/executor.sh
-        if execute_operation "$yaml_file" "false"; then
-             local duration=$(($(date +%s) - start_time))
-             update_operation_state "$operation_id" "completed" "$duration"
-             create_checkpoint "$operation_id" "completed" "$duration" ""
-             return 0
-        else
-             local duration=$(($(date +%s) - start_time))
-             update_operation_state "$operation_id" "failed" "$duration"
-             create_checkpoint "$operation_id" "failed" "$duration" ""
-             return 1
-        fi
+    # DEPRECATED WARNING for legacy module-based operations
+    if [[ "$operation_format" == "legacy" ]]; then
+        log_warn "DEPRECATED: Legacy module-based operation format detected" "engine"
+        log_warn "Consider migrating to capability-based operations for better maintainability" "engine"
+        log_warn "See docs/guides/migration.md for migration guide" "engine"
     fi
 
-    # --- LEGACY EXECUTION PATH ---
-
-    # Parse operation to get metadata
-    parse_operation_yaml "$yaml_file" || return 1
-
+    # Update global state tracking (for resume functionality)
     update_state "current_operation" "$operation_id"
     update_state "status" "running"
 
-    # Validate prerequisites
-    log_info "Validating prerequisites..." "engine"
-    if ! validate_prerequisites "$yaml_file"; then
-        log_error "Prerequisites not met for: $operation_id" "engine"
-        update_operation_state "$operation_id" "blocked" 0
-        return 1
-    fi
+    local start_time=$(date +%s)
 
-    # Render executable command
-    log_info "Rendering command template..." "engine"
-    local command
-    command=$(render_command "$yaml_file") || return 1
-
-    # Execute with progress tracking
-    log_operation_start "$operation_id" "$OPERATION_NAME" "$OPERATION_DURATION_EXPECTED"
-
-    local start_time
-    start_time=$(date +%s)
-
-    if track_operation \
-        "$operation_id" \
-        "$command" \
-        "$OPERATION_DURATION_EXPECTED" \
-        "$OPERATION_DURATION_TIMEOUT" \
-        "$OPERATION_DURATION_TYPE"; then
-
-        local end_time
-        end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-
-        log_operation_complete "$operation_id" "$duration" "0" "$OPERATION_DURATION_EXPECTED"
-        update_operation_state "$operation_id" "completed" "$duration"
-        reset_retry_counter "$operation_id"
-        return 0
+    # UNIFIED EXECUTION: Delegate to executor.sh for ALL operations
+    # The executor handles:
+    # - Prerequisite validation
+    # - Step execution
+    # - Rollback on failure
+    # - State tracking
+    # - Resource queries
+    if execute_operation "$yaml_file" "false"; then
+         local duration=$(($(date +%s) - start_time))
+         update_operation_state "$operation_id" "completed" "$duration"
+         create_checkpoint "$operation_id" "completed" "$duration" ""
+         return 0
     else
-        local exit_code=$?
-        local end_time
-        end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-
-        log_operation_error "$operation_id" "Operation failed" "$exit_code" "$duration"
-        update_operation_state "$operation_id" "failed" "$duration"
-        return $exit_code
+         local duration=$(($(date +%s) - start_time))
+         update_operation_state "$operation_id" "failed" "$duration"
+         create_checkpoint "$operation_id" "failed" "$duration" ""
+         return 1
     fi
 }
 
 # ==============================================================================
-# Execute Operations in Parallel Group
+# Execute Operations in Parallel Group (DEPRECATED)
+# ==============================================================================
+# DEPRECATED: Module-based parallel execution is deprecated
+# - Use workflow-engine.sh with parallel steps instead
+# - Maintained for backward compatibility only
 # ==============================================================================
 execute_parallel_group() {
     local module_dir="$1"
@@ -478,6 +485,9 @@ execute_parallel_group() {
     local pids=()
     local results=()
     local op_count=${#operations[@]}
+
+    log_warn "DEPRECATED: Parallel group execution via modules is deprecated" "engine"
+    log_warn "Use workflow-engine.sh with parallel execution for new implementations" "engine"
 
     echo ""
     echo "========================================================================"
@@ -529,11 +539,20 @@ execute_parallel_group() {
 }
 
 # ==============================================================================
-# Execute Module
+# Execute Module (DEPRECATED - Legacy Module-Based Execution)
+# ==============================================================================
+# DEPRECATED: Module-based execution is deprecated in favor of:
+# - Direct operation execution via capabilities/
+# - Multi-step workflows via workflow-engine.sh
+# - Maintained for backward compatibility only
 # ==============================================================================
 execute_module() {
     local module_name="$1"
     local module_dir="${MODULES_DIR}/${module_name}"
+
+    log_warn "DEPRECATED: Module-based execution is deprecated" "engine"
+    log_warn "Migrate to capability operations or workflows for new implementations" "engine"
+    log_warn "See docs/guides/migration.md for migration guidance" "engine"
 
     if [[ ! -d "$module_dir" ]]; then
         log_error "Module directory not found: $module_dir" "engine"
