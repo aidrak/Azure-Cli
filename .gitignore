@@ -147,6 +147,7 @@ artifacts/logs/*
 artifacts/temp/*
 artifacts/workflow-logs/*
 artifacts/workflow-state/*
+artifacts/certs/*
 artifacts/*.jsonl
 artifacts/*.json
 
