@@ -1,0 +1,175 @@
+# ==============================================================================
+# Capability Operation: Install AADLoginForWindows Extension (Entra ID Join)
+# Atomic operation for configuring Entra ID join on a Windows VM
+# ==============================================================================
+
+operation:
+  id: "vm-extension-entra-join"
+  name: "Install Entra ID Join Extension"
+  description: "Install AADLoginForWindows extension to enable Entra ID join and optionally Intune MDM enrollment"
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines/extensions"
+
+  dependencies:
+    operations:
+      - id: "vm-create-from-gallery"
+        status: "completed"
+        description: "VM must exist with SystemAssigned identity"
+    resources:
+      - type: "Microsoft.Compute/virtualMachines"
+        name: "{{SESSION_HOST_VM_NAME}}"
+        must_exist: true
+
+  duration:
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the VM"
+        default: "{{SESSION_HOST_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "enable_intune"
+        type: "boolean"
+        description: "Enable Intune MDM enrollment"
+        default: "{{SESSION_HOST_ENABLE_INTUNE}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "extension_state"
+        extension_name: "AADLoginForWindows"
+        expected: "Succeeded"
+        description: "AADLoginForWindows extension succeeded"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm extension show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --vm-name "{{SESSION_HOST_VM_NAME}}" \
+        --name AADLoginForWindows \
+        --query "provisioningState" -o tsv 2>/dev/null | grep -q "Succeeded"
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete AADLoginForWindows Extension"
+        description: "Remove the Entra ID join extension"
+        command: |
+          az vm extension delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vm-name "{{SESSION_HOST_VM_NAME}}" \
+            --name AADLoginForWindows \
+            --no-wait
+        continue_on_error: true
+
+  fixes:
+    - error_pattern: "0x801c002d|GetTenantId failed|DsrCmdAzureHelper"
+      description: "AAD Join fails because VM has no system-assigned managed identity"
+      cause: |
+        The AADLoginForWindows extension queries Azure Instance Metadata Service (IMDS)
+        to discover tenant information. IMDS only returns identity info if the VM has
+        a system-assigned managed identity.
+      solution: |
+        1. Assign system-assigned managed identity to the VM:
+           az vm identity assign -g {{AZURE_RESOURCE_GROUP}} -n {{SESSION_HOST_VM_NAME}}
+        2. Delete the failed extension and retry this operation
+      auto_fix: false
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Installing Entra ID join extension: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $vmName = "{{SESSION_HOST_VM_NAME}}"
+      $enableIntune = "{{SESSION_HOST_ENABLE_INTUNE}}"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  VM: $vmName"
+      Write-Host "  Intune MDM: $enableIntune"
+
+      # Step 1: Verify VM has SystemAssigned identity
+      Write-Host "[PROGRESS] Verifying VM identity..."
+      $identity = az vm show -g $resourceGroup -n $vmName --query "identity.type" -o tsv 2>$null
+
+      if ($identity -ne "SystemAssigned") {
+        Write-Host "[ERROR] VM does not have SystemAssigned identity"
+        Write-Host "[ERROR] Run: az vm identity assign -g $resourceGroup -n $vmName"
+        exit 1
+      }
+      Write-Host "[v] VM has SystemAssigned identity"
+
+      # Step 2: Check if extension already exists
+      Write-Host "[PROGRESS] Checking existing extension..."
+      $extState = az vm extension show -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --query "provisioningState" -o tsv 2>$null
+
+      if ($extState -eq "Succeeded") {
+        Write-Host "[SUCCESS] AADLoginForWindows extension already installed and succeeded"
+        exit 0
+      }
+
+      if ($extState -eq "Failed") {
+        Write-Host "[!] Extension in Failed state, deleting and recreating..."
+        az vm extension delete -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --no-wait 2>$null
+        Start-Sleep -Seconds 30
+      }
+
+      # Step 3: Install extension
+      Write-Host "[PROGRESS] Installing AADLoginForWindows extension..."
+
+      # Build settings JSON
+      if ($enableIntune -eq "true") {
+        $settings = '{"mdmId": "0000000a-0000-0000-c000-000000000000"}'
+        Write-Host "[i] Intune MDM enrollment enabled"
+      } else {
+        $settings = '{}'
+        Write-Host "[i] Intune MDM enrollment disabled"
+      }
+
+      $result = az vm extension set `
+        --resource-group $resourceGroup `
+        --vm-name $vmName `
+        --name AADLoginForWindows `
+        --publisher Microsoft.Azure.ActiveDirectory `
+        --version 2.0 `
+        --settings $settings `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to install AADLoginForWindows extension"
+        Write-Host $result
+        exit 1
+      }
+
+      # Step 4: Verify installation
+      Write-Host "[PROGRESS] Verifying extension installation..."
+      Start-Sleep -Seconds 10
+
+      $extState = az vm extension show -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --query "provisioningState" -o tsv 2>$null
+
+      if ($extState -eq "Succeeded") {
+        Write-Host "[SUCCESS] AADLoginForWindows extension installed successfully"
+        Write-Host "[v] Entra ID join configured"
+        if ($enableIntune -eq "true") {
+          Write-Host "[v] Intune MDM enrollment configured"
+        }
+        exit 0
+      } else {
+        Write-Host "[ERROR] Extension provisioning state: $extState"
+        exit 1
+      }
