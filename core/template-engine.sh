@@ -18,6 +18,80 @@ set -euo pipefail
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # ==============================================================================
+# Pre-Parse Configuration Values from YAML
+# ==============================================================================
+# This function extracts values from config.yaml BEFORE PowerShell execution,
+# eliminating the need to call yq from within PowerShell scripts.
+# Values are exported as environment variables for template substitution.
+#
+# Usage in operation YAML:
+#   operation:
+#     template:
+#       pre_parse:
+#         - source: ".networking.private_dns.enabled"
+#           variable: "PRIVATE_DNS_ENABLED"
+#         - source: ".networking.private_dns.zones"
+#           variable: "DNS_ZONES_JSON"
+#           format: "json"
+#
+preparse_config_values() {
+    local yaml_file="$1"
+    local config_file="${PROJECT_ROOT}/config.yaml"
+
+    # Check if pre_parse section exists
+    local preparse_count
+    preparse_count=$(yq e '.operation.template.pre_parse | length' "$yaml_file" 2>/dev/null || echo "0")
+
+    if [[ "$preparse_count" == "0" || "$preparse_count" == "null" ]]; then
+        # No pre_parse section, nothing to do
+        return 0
+    fi
+
+    if [[ ! -f "$config_file" ]]; then
+        echo "[!] WARNING: Config file not found for pre-parsing: $config_file" >&2
+        return 0
+    fi
+
+    echo "[*] Pre-parsing $preparse_count config values..." >&2
+
+    local i=0
+    while [[ $i -lt $preparse_count ]]; do
+        local source
+        local variable
+        local format
+
+        source=$(yq e ".operation.template.pre_parse[$i].source" "$yaml_file")
+        variable=$(yq e ".operation.template.pre_parse[$i].variable" "$yaml_file")
+        format=$(yq e ".operation.template.pre_parse[$i].format // \"string\"" "$yaml_file")
+
+        if [[ -z "$source" || "$source" == "null" || -z "$variable" || "$variable" == "null" ]]; then
+            echo "[!] WARNING: Invalid pre_parse entry at index $i" >&2
+            ((i++))
+            continue
+        fi
+
+        local value
+        if [[ "$format" == "json" ]]; then
+            # Extract as JSON (for arrays/objects)
+            value=$(yq e "$source" "$config_file" -o=json 2>/dev/null || echo "null")
+        else
+            # Extract as string
+            value=$(yq e "$source" "$config_file" 2>/dev/null || echo "")
+        fi
+
+        # Export for template substitution
+        export "$variable"="$value"
+
+        echo "[v] Pre-parsed: $variable = ${value:0:50}$([ ${#value} -gt 50 ] && echo '...')" >&2
+
+        ((i++))
+    done
+
+    echo "[v] Pre-parsing complete" >&2
+    return 0
+}
+
+# ==============================================================================
 # Parse Operation YAML
 # ==============================================================================
 parse_operation_yaml() {
@@ -29,6 +103,9 @@ parse_operation_yaml() {
     fi
 
     echo "[*] Parsing operation: $yaml_file" >&2
+
+    # Pre-parse config values FIRST (before any substitution)
+    preparse_config_values "$yaml_file"
 
     # Extract key fields using yq (works for both legacy and capability formats)
     OPERATION_ID=$(yq e '.operation.id' "$yaml_file")
