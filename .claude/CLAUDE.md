@@ -14,6 +14,41 @@ source core/config-manager.sh && load_config   # Load configuration
 
 ---
 
+## Authentication (Pre-Configured)
+
+This environment has automated authentication configured. You can use these tools directly:
+
+| Tool | Status | Usage |
+|------|--------|-------|
+| **Azure CLI** | Authenticated via service principal | `az` commands work directly |
+| **Microsoft Graph** | Certificate-based auth configured | `pwsh` with `Connect-MgGraph` |
+| **PowerShell Core** | Installed | `pwsh -Command '...'` or `pwsh -File script.ps1` |
+
+### Authenticate Before Operations
+
+```bash
+source core/config-manager.sh && load_config   # Loads credentials to env vars
+./core/engine.sh run identity/az-login-service-principal    # Azure CLI
+./core/engine.sh run identity/mggraph-connect-certificate   # MS Graph
+```
+
+### Available Environment Variables (after load_config)
+
+- `AZURE_CLIENT_ID` - Service principal app ID
+- `AZURE_CLIENT_SECRET` - Client secret for Azure CLI
+- `AZURE_TENANT_ID` - Entra ID tenant
+- `AZURE_SUBSCRIPTION_ID` - Target subscription
+- `AZURE_CERTIFICATE_PATH` - Path to PFX for MS Graph
+- `AZURE_CERTIFICATE_THUMBPRINT` - Certificate thumbprint
+
+### When to Use Each
+
+- **Azure CLI (`az`)**: Resource management, deployments, queries
+- **MS Graph (`Connect-MgGraph`)**: Entra ID operations (groups, app registrations, RBAC)
+- **PowerShell (`pwsh`)**: Complex logic, MS Graph SDK, Windows-style scripting
+
+---
+
 ## Dynamic Configuration (NEW)
 
 Values are resolved at runtime, not pre-configured. Priority pipeline:
@@ -145,7 +180,8 @@ operation:
 | "Config not loaded" | `source core/config-manager.sh && load_config` |
 | "Variable not found" | Check standards.yaml, then config.yaml |
 | "Operation not found" | `./core/engine.sh list` |
-| "Permission denied" | `az login` |
+| "Permission denied" | `./core/engine.sh run identity/az-login-service-principal` |
+| "Not connected to Graph" | `./core/engine.sh run identity/mggraph-connect-certificate` |
 
 ---
 
