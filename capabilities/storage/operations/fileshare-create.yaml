@@ -73,14 +73,23 @@ operation:
         continue_on_error: false
   # Self-healing: Previous fixes applied to this template
   fixes: []
+
+  # Dependencies: Requires storage account to exist
+  dependencies:
+    operations:
+      - id: "account-create"
+        status: "completed"
+        optional: true
+        description: "Storage account should be created first (may be pre-existing)"
+
   powershell:
     content: |
-      # Get storage account name (from previous operation or config)
-      if (Test-Path /tmp/storage-account-name.txt) {
-        $storageName = Get-Content /tmp/storage-account-name.txt
-      } else {
-        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
-      }
+      # Get storage account name from template variable
+      # The STORAGE_ACCOUNT_NAME is resolved by the engine from:
+      # 1. Environment variable (if set)
+      # 2. state.db (from account-create operation output)
+      # 3. config.yaml
+      $storageName = "{{STORAGE_ACCOUNT_NAME}}"
 
       $fileShareName = "{{STORAGE_FILE_SHARE_NAME}}"
       $quotaGb = "{{STORAGE_QUOTA_GB}}"

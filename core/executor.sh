@@ -495,6 +495,38 @@ execute_step() {
         log_success "Step completed successfully: $step_name" "$operation_exec_id"
         log_info "Output saved to: $step_log" "$operation_exec_id"
 
+        # Parse [OUTPUT] lines for inter-operation data passing
+        # Format: [OUTPUT] {"key": "value", "key2": "value2"}
+        local output_lines
+        output_lines=$(echo "$output" | grep '^\[OUTPUT\]' || true)
+        if [[ -n "$output_lines" ]]; then
+            # Extract operation ID from exec ID (remove timestamp suffix)
+            local base_operation_id="${operation_exec_id%%_[0-9]*}"
+
+            while IFS= read -r line; do
+                # Remove [OUTPUT] prefix
+                local json_data="${line#\[OUTPUT\] }"
+
+                # Parse JSON and store each key-value pair
+                if echo "$json_data" | jq empty 2>/dev/null; then
+                    local keys
+                    keys=$(echo "$json_data" | jq -r 'keys[]')
+                    for key in $keys; do
+                        local value
+                        value=$(echo "$json_data" | jq -r --arg k "$key" '.[$k]')
+                        if [[ -n "$value" && "$value" != "null" ]]; then
+                            store_operation_output "$base_operation_id" "$key" "$value" 2>/dev/null || {
+                                log_warn "Failed to store operation output: $key" "$operation_exec_id"
+                            }
+                        fi
+                    done
+                    log_info "Stored operation outputs from [OUTPUT] line" "$operation_exec_id"
+                else
+                    log_warn "Invalid JSON in [OUTPUT] line: $json_data" "$operation_exec_id"
+                fi
+            done <<< "$output_lines"
+        fi
+
         # Log to operation logs in database
         log_operation "$operation_exec_id" "INFO" "Step completed: $step_name" "{\"log_file\": \"$step_log\"}"
 

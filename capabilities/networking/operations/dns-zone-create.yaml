@@ -56,6 +56,14 @@ operation:
   # Template command (variables substituted at runtime)
   template:
     type: "powershell-direct"
+    # Pre-parse config values in bash BEFORE PowerShell execution
+    # This eliminates the need to call yq from within PowerShell
+    pre_parse:
+      - source: ".networking.private_dns.enabled"
+        variable: "PRIVATE_DNS_ENABLED"
+      - source: ".networking.private_dns.zones"
+        variable: "PRIVATE_DNS_ZONES_JSON"
+        format: "json"
   # Rollback: Delete created DNS zones
   rollback:
     enabled: true
@@ -80,19 +88,35 @@ operation:
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
 
-      # Check if private DNS is enabled
-      $dnsEnabled = (yq e '.networking.private_dns.enabled' config.yaml)
+      # Use pre-parsed config values (parsed by bash template engine, not yq in PowerShell)
+      # These values are extracted from config.yaml BEFORE PowerShell execution
+      $dnsEnabled = "{{PRIVATE_DNS_ENABLED}}"
+      $zonesJson = '{{PRIVATE_DNS_ZONES_JSON}}'
 
       if ($dnsEnabled -ne "true") {
         Write-Host "[INFO] Private DNS disabled - skipping"
         exit 0
       }
 
-      $zoneCount = [int](yq e '.networking.private_dns.zones | length' config.yaml)
+      # Parse the pre-parsed JSON array of zones
+      try {
+        $zones = $zonesJson | ConvertFrom-Json
+      } catch {
+        Write-Host "[ERROR] Failed to parse DNS zones configuration"
+        Write-Host "[ERROR] JSON: $zonesJson"
+        exit 1
+      }
+
+      if ($null -eq $zones -or $zones.Count -eq 0) {
+        Write-Host "[INFO] No DNS zones configured - skipping"
+        exit 0
+      }
+
+      $zoneCount = $zones.Count
       Write-Host "[PROGRESS] Creating $zoneCount private DNS zone(s)..."
 
-      for ($i = 0; $i -lt $zoneCount; $i++) {
-        $zoneName = (yq e ".networking.private_dns.zones[$i].name" config.yaml)
+      foreach ($zone in $zones) {
+        $zoneName = $zone.name
 
         Write-Host "[PROGRESS] Processing zone: $zoneName"
 
@@ -106,16 +130,14 @@ operation:
           continue
         }
 
-        $safeZoneName = $zoneName -replace '\.', '-'
-        $outputFile = "artifacts/outputs/networking-dns-zone-$safeZoneName.json"
-
-        az network private-dns zone create `
+        $result = az network private-dns zone create `
           --resource-group $resourceGroup `
           --name $zoneName `
-          --output json > $outputFile
+          --output json 2>&1
 
         if ($LASTEXITCODE -ne 0) {
           Write-Host "[ERROR] Failed to create zone: $zoneName"
+          Write-Host $result
           exit 1
         }
 
