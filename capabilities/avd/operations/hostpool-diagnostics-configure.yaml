@@ -1,0 +1,168 @@
+# ==============================================================================
+# Capability Operation: Configure Host Pool Diagnostic Settings
+# ==============================================================================
+
+operation:
+  id: "hostpool-diagnostics-configure"
+  name: "Configure Host Pool Diagnostics"
+  description: "Enable diagnostic settings to send AVD logs to Log Analytics workspace"
+  capability: "avd"
+  operation_mode: "configure"
+  resource_type: "Microsoft.DesktopVirtualization/hostPools"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "host_pool_name"
+        type: "string"
+        description: "Name of the host pool"
+        default: "{{AVD_HOST_POOL_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group containing the host pool"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "workspace_name"
+        type: "string"
+        description: "Log Analytics workspace name"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "diagnostic_setting_name"
+        type: "string"
+        description: "Name for the diagnostic setting"
+        default: "{{DIAGNOSTIC_SETTING_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "custom"
+        description: "Diagnostic settings configured successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az monitor diagnostic-settings show \
+        --name "{{DIAGNOSTIC_SETTING_NAME}}" \
+        --resource "{{AVD_HOST_POOL_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --resource-type "Microsoft.DesktopVirtualization/hostPools" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Diagnostic Settings"
+        description: "Remove diagnostic settings"
+        command: |
+          az monitor diagnostic-settings delete \
+            --name "{{DIAGNOSTIC_SETTING_NAME}}" \
+            --resource "{{AVD_HOST_POOL_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --resource-type "Microsoft.DesktopVirtualization/hostPools"
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Host pool diagnostics configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $hostPoolName = "{{AVD_HOST_POOL_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $workspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $diagnosticSettingName = "{{DIAGNOSTIC_SETTING_NAME}}"
+
+      Write-Host "[PROGRESS] Checking if diagnostic settings already exist..."
+
+      $existingSettings = az monitor diagnostic-settings show `
+        --name $diagnosticSettingName `
+        --resource $hostPoolName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/hostPools" `
+        --output json 2>$null
+
+      if ($existingSettings) {
+        Write-Host "[INFO] Diagnostic settings already exist: $diagnosticSettingName"
+        Write-Host "[SUCCESS] Diagnostic settings verified"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Getting Log Analytics workspace ID..."
+      $workspaceInfo = az monitor log-analytics workspace show `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find Log Analytics workspace: $workspaceName"
+        Write-Host "[ERROR] Please create the workspace first"
+        Write-Host $workspaceInfo
+        exit 1
+      }
+
+      $workspace = $workspaceInfo | ConvertFrom-Json
+      $workspaceId = $workspace.id
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+
+      Write-Host "[PROGRESS] Configuring diagnostic settings..."
+      Write-Host "[PROGRESS]   Host Pool: $hostPoolName"
+      Write-Host "[PROGRESS]   Workspace: $workspaceName"
+      Write-Host "[PROGRESS]   Setting Name: $diagnosticSettingName"
+
+      # Enable all available log categories for AVD host pool
+      $logCategories = @(
+        "Checkpoint",
+        "Error",
+        "Management",
+        "Connection",
+        "HostRegistration",
+        "AgentHealthStatus"
+      )
+
+      Write-Host "[PROGRESS] Enabling log categories:"
+      foreach ($category in $logCategories) {
+        Write-Host "[INFO]   - $category"
+      }
+
+      # Build the logs parameter
+      $logsParam = ($logCategories | ForEach-Object { @{ category = $_; enabled = $true } } | ConvertTo-Json -Compress -AsArray)
+
+      Write-Host "[PROGRESS] Creating diagnostic settings..."
+
+      $createOutput = az monitor diagnostic-settings create `
+        --name $diagnosticSettingName `
+        --resource $hostPoolName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/hostPools" `
+        --workspace $workspaceId `
+        --logs $logsParam `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create diagnostic settings"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying configuration..."
+      $settings = $createOutput | ConvertFrom-Json
+
+      Write-Host "[INFO] Diagnostic Setting ID: $($settings.id)"
+      Write-Host "[INFO] Enabled Logs:"
+      foreach ($log in $settings.logs) {
+        if ($log.enabled) {
+          Write-Host "[INFO]   - $($log.category): enabled"
+        }
+      }
+
+      Write-Host "[SUCCESS] Diagnostic settings configured successfully"
+      Write-Host "[INFO] Logs will now be sent to Log Analytics workspace: $workspaceName"
+      Write-Host "[INFO] It may take 5-10 minutes for logs to start appearing"
+      exit 0

@@ -1,0 +1,205 @@
+# ==============================================================================
+# Capability Operation: Create SSO Dynamic Device Group
+# ==============================================================================
+
+operation:
+  id: "sso-dynamic-group-create"
+  name: "Create SSO Dynamic Device Group"
+  description: "Create dynamic Entra ID group containing all AVD session hosts for SSO configuration"
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/groups"
+
+  duration:
+    expected: 120 # 2 minutes
+    timeout: 300  # 5 minutes
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "group_name"
+        type: "string"
+        description: "Name of the dynamic device group"
+        default: "AVD-SessionHosts-SSO"
+      - name: "device_name_prefix"
+        type: "string"
+        description: "Prefix for session host device names"
+        default: "avd-"
+    optional:
+      - name: "group_description"
+        type: "string"
+        description: "Description of the group"
+        default: "Dynamic group for all AVD session hosts - used for SSO configuration"
+
+  # Prerequisites
+  requires:
+    - operation: "groups-validate"
+      status: "completed"
+      optional: true
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "bash_command"
+        command: |
+          GROUP_NAME="{{group_name}}"
+          GROUP_ID=$(az ad group show --group "$GROUP_NAME" --query 'id' -o tsv 2>/dev/null)
+          if [ -n "$GROUP_ID" ]; then
+            echo "[VALIDATE] Dynamic group exists: $GROUP_NAME ($GROUP_ID)"
+            exit 0
+          else
+            echo "[ERROR] Dynamic group not found: $GROUP_NAME"
+            exit 1
+          fi
+        description: "Verify dynamic group was created"
+
+  # Idempotency: Check if group already exists
+  idempotency:
+    enabled: true
+    check_command: |
+      GROUP_NAME="{{group_name}}"
+      az ad group show --group "$GROUP_NAME" --query 'id' -o tsv 2>/dev/null
+    skip_if_exists: true
+
+  # Template command
+  template:
+    type: "bash-script"
+
+  # Rollback: Delete the group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete SSO Dynamic Group"
+        description: "Remove the dynamic device group"
+        command: |
+          GROUP_NAME="{{group_name}}"
+          GROUP_ID=$(az ad group show --group "$GROUP_NAME" --query 'id' -o tsv 2>/dev/null)
+          if [ -n "$GROUP_ID" ]; then
+            az rest --method DELETE \
+              --uri "https://graph.microsoft.com/v1.0/groups/$GROUP_ID" 2>/dev/null || true
+          fi
+        continue_on_error: true
+
+  # Self-healing
+  fixes: []
+
+  bash:
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "[START] Creating SSO Dynamic Device Group: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # Configuration
+      GROUP_NAME="{{group_name}}"
+      GROUP_DESCRIPTION="{{group_description}}"
+      DEVICE_PREFIX="{{device_name_prefix}}"
+      MEMBERSHIP_RULE="(device.displayName -startsWith \"$DEVICE_PREFIX\")"
+
+      # Step 1: Check if group already exists
+      echo "[PROGRESS] Step 1/4: Checking if group already exists..."
+      EXISTING_GROUP=$(az ad group list --filter "displayName eq '$GROUP_NAME'" --query '[0].id' -o tsv 2>/dev/null || echo "")
+
+      if [ -n "$EXISTING_GROUP" ]; then
+        echo "[SUCCESS] Dynamic group already exists: $GROUP_NAME"
+        echo "[i] Group ID: $EXISTING_GROUP"
+        GROUP_ID="$EXISTING_GROUP"
+      else
+        # Step 2: Create the dynamic group using Microsoft Graph REST API
+        echo "[PROGRESS] Step 2/4: Creating dynamic group: $GROUP_NAME"
+
+        # Create JSON payload
+        cat > /tmp/sso-group-payload.json <<EOF
+{
+  "displayName": "$GROUP_NAME",
+  "description": "$GROUP_DESCRIPTION",
+  "mailEnabled": false,
+  "mailNickname": "$(echo $GROUP_NAME | tr -d '- ' | tr '[:upper:]' '[:lower:]')",
+  "securityEnabled": true,
+  "groupTypes": ["DynamicMembership"],
+  "membershipRule": "$MEMBERSHIP_RULE",
+  "membershipRuleProcessingState": "On"
+}
+EOF
+
+        # Create the group
+        GROUP_ID=$(az rest --method POST \
+          --uri "https://graph.microsoft.com/v1.0/groups" \
+          --headers "Content-Type=application/json" \
+          --body @/tmp/sso-group-payload.json \
+          --query 'id' -o tsv)
+
+        if [ -n "$GROUP_ID" ]; then
+          echo "[SUCCESS] Dynamic group created successfully"
+          echo "[i] Group ID: $GROUP_ID"
+          echo "[i] Membership Rule: $MEMBERSHIP_RULE"
+          echo "[!] Note: Dynamic group membership will update within 5-10 minutes"
+        else
+          echo "[ERROR] Failed to create dynamic group"
+          exit 1
+        fi
+
+        # Clean up temp file
+        rm -f /tmp/sso-group-payload.json
+      fi
+
+      # Step 3: Verify group members
+      echo "[PROGRESS] Step 3/4: Checking dynamic group membership..."
+      MEMBER_COUNT=$(az ad group member list --group "$GROUP_ID" --query 'length(@)' -o tsv 2>/dev/null || echo "0")
+
+      if [ "$MEMBER_COUNT" -gt 0 ]; then
+        echo "[SUCCESS] Group has $MEMBER_COUNT member(s):"
+        az ad group member list --group "$GROUP_ID" -o json | \
+          jq -r '.[] | "  - \(.displayName)"' 2>/dev/null || true
+      else
+        echo "[i] Group has no members yet (expected for new groups)"
+        echo "[i] Members will be added automatically as devices match the rule"
+      fi
+
+      # Step 4: Save group ID for next operations
+      echo "[PROGRESS] Step 4/4: Saving group information..."
+      mkdir -p artifacts/outputs
+      echo "$GROUP_ID" > artifacts/outputs/sso-group-id.txt
+      echo "$GROUP_NAME" > artifacts/outputs/sso-group-name.txt
+
+      # Create summary report
+      cat > artifacts/outputs/sso-dynamic-group-create.txt <<EOF
+SSO Dynamic Device Group Created
+=================================
+Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+Group Details:
+  Name: $GROUP_NAME
+  ID: $GROUP_ID
+  Type: Dynamic Membership
+
+Membership Rule:
+  $MEMBERSHIP_RULE
+
+Matching Devices:
+  All devices with display names starting with "$DEVICE_PREFIX"
+
+Current Members:
+  $MEMBER_COUNT device(s)
+
+Next Steps:
+  1. Wait 5-10 minutes for dynamic membership to populate
+  2. Add this group to Windows Cloud Login SSO configuration
+  3. Run: ./core/engine.sh run sso-service-principal-configure
+
+Purpose:
+  This group will be added to the Windows Cloud Login service principal
+  to hide consent prompts when users connect to AVD session hosts.
+EOF
+
+      echo "[SUCCESS] SSO dynamic device group configuration completed"
+      echo ""
+      echo "Group Name: $GROUP_NAME"
+      echo "Group ID: $GROUP_ID"
+      echo "Membership Rule: $MEMBERSHIP_RULE"
+      echo ""
+      echo "Next: Run ./core/engine.sh run sso-service-principal-configure"
+      echo ""
+
+      exit 0

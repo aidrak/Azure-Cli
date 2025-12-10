@@ -1,0 +1,153 @@
+# ==============================================================================
+# Capability Operation: Configure Workspace Diagnostic Settings
+# ==============================================================================
+
+operation:
+  id: "workspace-diagnostics-configure"
+  name: "Configure Workspace Diagnostics"
+  description: "Enable diagnostic settings to send AVD workspace logs to Log Analytics"
+  capability: "avd"
+  operation_mode: "configure"
+  resource_type: "Microsoft.DesktopVirtualization/workspaces"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "workspace_name"
+        type: "string"
+        description: "Name of the AVD workspace"
+        default: "{{AVD_WORKSPACE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group containing the workspace"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "log_workspace_name"
+        type: "string"
+        description: "Log Analytics workspace name"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "diagnostic_setting_name"
+        type: "string"
+        description: "Name for the diagnostic setting"
+        default: "{{DIAGNOSTIC_SETTING_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "custom"
+        description: "Diagnostic settings configured successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az monitor diagnostic-settings show \
+        --name "{{DIAGNOSTIC_SETTING_NAME}}" \
+        --resource "{{AVD_WORKSPACE_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --resource-type "Microsoft.DesktopVirtualization/workspaces" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Workspace diagnostics configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $workspaceName = "{{AVD_WORKSPACE_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $logWorkspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $diagnosticSettingName = "{{DIAGNOSTIC_SETTING_NAME}}"
+
+      Write-Host "[PROGRESS] Checking if diagnostic settings already exist..."
+
+      $existingSettings = az monitor diagnostic-settings show `
+        --name $diagnosticSettingName `
+        --resource $workspaceName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/workspaces" `
+        --output json 2>$null
+
+      if ($existingSettings) {
+        Write-Host "[INFO] Diagnostic settings already exist: $diagnosticSettingName"
+        Write-Host "[SUCCESS] Diagnostic settings verified"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Getting Log Analytics workspace ID..."
+      $workspaceInfo = az monitor log-analytics workspace show `
+        --workspace-name $logWorkspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find Log Analytics workspace: $logWorkspaceName"
+        Write-Host $workspaceInfo
+        exit 1
+      }
+
+      $workspace = $workspaceInfo | ConvertFrom-Json
+      $workspaceId = $workspace.id
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+
+      Write-Host "[PROGRESS] Configuring diagnostic settings..."
+      Write-Host "[PROGRESS]   AVD Workspace: $workspaceName"
+      Write-Host "[PROGRESS]   Log Workspace: $logWorkspaceName"
+      Write-Host "[PROGRESS]   Setting Name: $diagnosticSettingName"
+
+      # Enable all available log categories for AVD workspace
+      $logCategories = @(
+        "Checkpoint",
+        "Error",
+        "Management",
+        "Feed"
+      )
+
+      Write-Host "[PROGRESS] Enabling log categories:"
+      foreach ($category in $logCategories) {
+        Write-Host "[INFO]   - $category"
+      }
+
+      $logsParam = ($logCategories | ForEach-Object { @{ category = $_; enabled = $true } } | ConvertTo-Json -Compress -AsArray)
+
+      Write-Host "[PROGRESS] Creating diagnostic settings..."
+
+      $createOutput = az monitor diagnostic-settings create `
+        --name $diagnosticSettingName `
+        --resource $workspaceName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/workspaces" `
+        --workspace $workspaceId `
+        --logs $logsParam `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create diagnostic settings"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying configuration..."
+      $settings = $createOutput | ConvertFrom-Json
+
+      Write-Host "[INFO] Diagnostic Setting ID: $($settings.id)"
+      Write-Host "[INFO] Enabled Logs:"
+      foreach ($log in $settings.logs) {
+        if ($log.enabled) {
+          Write-Host "[INFO]   - $($log.category): enabled"
+        }
+      }
+
+      Write-Host "[SUCCESS] Diagnostic settings configured successfully"
+      Write-Host "[INFO] Logs will now be sent to Log Analytics workspace: $logWorkspaceName"
+      exit 0

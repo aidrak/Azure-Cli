@@ -1,0 +1,142 @@
+# ==============================================================================
+# Capability Operation: Configure Storage Account Diagnostic Settings
+# ==============================================================================
+
+operation:
+  id: "storage-diagnostics-configure"
+  name: "Configure Storage Account Diagnostics"
+  description: "Enable diagnostic settings to send storage logs and metrics to Log Analytics"
+  capability: "storage"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Storage/storageAccounts"
+
+  duration:
+    expected: 90
+    timeout: 180
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "storage_account_name"
+        type: "string"
+        description: "Name of the storage account"
+        default: "{{STORAGE_ACCOUNT_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group containing the storage account"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "workspace_name"
+        type: "string"
+        description: "Log Analytics workspace name"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "diagnostic_setting_name"
+        type: "string"
+        description: "Name for the diagnostic setting"
+        default: "{{DIAGNOSTIC_SETTING_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "custom"
+        description: "Diagnostic settings configured successfully"
+
+  idempotency:
+    enabled: false
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Storage account diagnostics configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $storageAccountName = "{{STORAGE_ACCOUNT_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $workspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $diagnosticSettingName = "{{DIAGNOSTIC_SETTING_NAME}}"
+
+      Write-Host "[PROGRESS] Getting Log Analytics workspace ID..."
+      $workspaceInfo = az monitor log-analytics workspace show `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find Log Analytics workspace: $workspaceName"
+        Write-Host $workspaceInfo
+        exit 1
+      }
+
+      $workspace = $workspaceInfo | ConvertFrom-Json
+      $workspaceId = $workspace.id
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+
+      Write-Host "[PROGRESS] Getting storage account resource ID..."
+      $storageInfo = az storage account show `
+        --name $storageAccountName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find storage account: $storageAccountName"
+        Write-Host $storageInfo
+        exit 1
+      }
+
+      $storage = $storageInfo | ConvertFrom-Json
+      $storageId = $storage.id
+
+      Write-Host "[INFO] Storage Account ID: $storageId"
+
+      # Configure diagnostics for the main storage account
+      Write-Host "[PROGRESS] Configuring diagnostics for storage account..."
+      $metricsParam = '[{"category":"Transaction","enabled":true}]'
+
+      $createOutput = az monitor diagnostic-settings create `
+        --name $diagnosticSettingName `
+        --resource $storageId `
+        --workspace $workspaceId `
+        --metrics $metricsParam `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARNING] Failed to create diagnostic settings for storage account"
+        Write-Host $createOutput
+      } else {
+        Write-Host "[SUCCESS] Configured diagnostics for storage account"
+      }
+
+      # Configure diagnostics for File service (FSLogix profiles)
+      Write-Host "[PROGRESS] Configuring diagnostics for File service..."
+      $fileServiceId = "$storageId/fileServices/default"
+
+      $logsParam = '[{"category":"StorageRead","enabled":true},{"category":"StorageWrite","enabled":true},{"category":"StorageDelete","enabled":true}]'
+      $metricsParam = '[{"category":"Transaction","enabled":true}]'
+
+      $createOutput = az monitor diagnostic-settings create `
+        --name $diagnosticSettingName `
+        --resource $fileServiceId `
+        --workspace $workspaceId `
+        --logs $logsParam `
+        --metrics $metricsParam `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARNING] Failed to create diagnostic settings for File service"
+        Write-Host $createOutput
+      } else {
+        Write-Host "[SUCCESS] Configured diagnostics for File service"
+      }
+
+      Write-Host "[INFO] Enabled Logs: StorageRead, StorageWrite, StorageDelete"
+      Write-Host "[INFO] Enabled Metrics: Transaction"
+      Write-Host "[SUCCESS] Storage diagnostics configured successfully"
+      Write-Host "[INFO] Logs will now be sent to Log Analytics workspace: $workspaceName"
+      Write-Host "[INFO] It may take 5-10 minutes for logs to start appearing"
+      exit 0

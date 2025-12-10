@@ -300,6 +300,9 @@ map_var_to_resource_type() {
         *GALLERY*)
             echo "gallery"
             ;;
+        *LOG_ANALYTICS*WORKSPACE*)
+            echo "log_analytics_workspace"
+            ;;
         *)
             echo ""
             ;;
@@ -382,6 +385,15 @@ map_var_to_yaml_path() {
             # General defaults
             AZURE_LOCATION)
                 echo ".defaults.general.location"
+                return 0
+                ;;
+            # Monitoring defaults
+            LOG_ANALYTICS_SKU)
+                echo ".best_practices.monitoring.log_analytics.sku"
+                return 0
+                ;;
+            LOG_ANALYTICS_RETENTION_DAYS)
+                echo ".best_practices.monitoring.log_analytics.retention_days"
                 return 0
                 ;;
             *)

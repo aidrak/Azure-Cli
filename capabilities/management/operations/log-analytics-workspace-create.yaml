@@ -1,0 +1,142 @@
+# ==============================================================================
+# Capability Operation: Create Log Analytics Workspace
+# ==============================================================================
+
+operation:
+  id: "log-analytics-workspace-create"
+  name: "Create Log Analytics Workspace"
+  description: "Create Log Analytics workspace for AVD diagnostics and monitoring"
+  capability: "management"
+  operation_mode: "create"
+  resource_type: "Microsoft.OperationalInsights/workspaces"
+
+  duration:
+    expected: 120
+    timeout: 300
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "workspace_name"
+        type: "string"
+        description: "Name of the Log Analytics workspace"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group for the workspace"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the workspace"
+        default: "{{AZURE_LOCATION}}"
+      - name: "sku"
+        type: "string"
+        description: "Pricing tier (PerGB2018 recommended)"
+        default: "{{LOG_ANALYTICS_SKU}}"
+      - name: "retention_days"
+        type: "integer"
+        description: "Data retention in days"
+        default: "{{LOG_ANALYTICS_RETENTION_DAYS}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.OperationalInsights/workspaces"
+        resource_name: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+        description: "Workspace created successfully"
+      - type: "property_equals"
+        property: "properties.provisioningState"
+        expected: "Succeeded"
+        description: "Workspace provisioning completed"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az monitor log-analytics workspace show \
+        --workspace-name "{{LOG_ANALYTICS_WORKSPACE_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Log Analytics Workspace"
+        description: "Remove the created workspace"
+        command: |
+          az monitor log-analytics workspace delete \
+            --workspace-name "{{LOG_ANALYTICS_WORKSPACE_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes \
+            --no-wait
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Log Analytics workspace creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $workspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $sku = "{{LOG_ANALYTICS_SKU}}"
+      $retentionDays = "{{LOG_ANALYTICS_RETENTION_DAYS}}"
+
+      Write-Host "[PROGRESS] Checking if workspace exists..."
+
+      $existingWorkspace = az monitor log-analytics workspace show `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>$null
+
+      if ($existingWorkspace) {
+        Write-Host "[INFO] Workspace already exists: $workspaceName"
+        $wsInfo = $existingWorkspace | ConvertFrom-Json
+        Write-Host "[INFO] Workspace ID: $($wsInfo.customerId)"
+        Write-Host "[INFO] Location: $($wsInfo.location)"
+        Write-Host "[SUCCESS] Workspace verified: $workspaceName"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Creating Log Analytics workspace..."
+      Write-Host "[PROGRESS]   Name: $workspaceName"
+      Write-Host "[PROGRESS]   Resource Group: $resourceGroup"
+      Write-Host "[PROGRESS]   Location: $location"
+      Write-Host "[PROGRESS]   SKU: $sku"
+      Write-Host "[PROGRESS]   Retention: $retentionDays days"
+
+      $createOutput = az monitor log-analytics workspace create `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --location $location `
+        --sku $sku `
+        --retention-time $retentionDays `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create Log Analytics workspace"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying creation..."
+      $wsInfo = $createOutput | ConvertFrom-Json
+      $workspaceId = $wsInfo.customerId
+      $provisioningState = $wsInfo.provisioningState
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+      Write-Host "[INFO] Provisioning State: $provisioningState"
+
+      if ($provisioningState -eq "Succeeded") {
+        Write-Host "[SUCCESS] Log Analytics workspace created successfully"
+        Write-Host "[INFO] You can now configure diagnostic settings to send logs here"
+        exit 0
+      } else {
+        Write-Host "[ERROR] Unexpected provisioning state: $provisioningState"
+        exit 1
+      }

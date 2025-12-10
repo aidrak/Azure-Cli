@@ -22,6 +22,10 @@ Query the live Azure environment to understand current infrastructure state usin
 
 All queries use the optimized JQ filters in `queries/` for token efficiency (90% reduction).
 
+**CRITICAL**: All commands MUST be run from the project root directory: `/mnt/cache_pool/development/azure-projects/test-01`
+
+The `queries/` directory is located at the project root. Do NOT run commands from subdirectories or the JQ filters will not be found.
+
 ### Load Configuration First
 
 ```bash
@@ -30,6 +34,9 @@ source core/config-manager.sh && load_config
 
 # Verify config loaded
 echo $AZURE_RESOURCE_GROUP
+
+# Verify you're in the project root
+pwd  # Should output: /mnt/cache_pool/development/azure-projects/test-01
 ```
 
 ### Query Azure Resources
