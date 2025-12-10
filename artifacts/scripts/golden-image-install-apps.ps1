@@ -1,0 +1,130 @@
+[CmdletBinding()]
+param(
+    [string]$AppNames,
+    [string]$ManifestB64  # Base64-encoded JSON manifest
+)
+
+# ==============================================================================
+# Main Execution (Sequential Mode)
+# ==============================================================================
+Write-Host "[START] Dynamic Application Installation Engine"
+
+$LogDir = "C:\DeployLogs"
+$TempDir = "C:\Temp"
+if (-not (Test-Path $LogDir)) { New-Item -Path $LogDir -ItemType Directory -Force | Out-Null }
+if (-not (Test-Path $TempDir)) { New-Item -Path $TempDir -ItemType Directory -Force | Out-Null }
+
+try {
+    # Decode and parse manifest from base64 JSON (no external modules needed)
+    if ([string]::IsNullOrWhiteSpace($ManifestB64)) {
+        throw "ManifestB64 parameter is required but was not provided"
+    }
+    Write-Host "[INFO] Decoding manifest from base64 JSON..."
+    $jsonString = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ManifestB64))
+    $manifest = $jsonString | ConvertFrom-Json
+
+    # Parse inputs
+    $selectedAppNames = $AppNames -split ',' | ForEach-Object { $_.Trim() }
+
+    $appsToProcess = $selectedAppNames | ForEach-Object {
+        $appNameKey = $_
+        $appConfig = $manifest.PSObject.Properties | Where-Object { $_.Name -eq $appNameKey } | Select-Object -First 1 -ExpandProperty Value
+        if ($appConfig) {
+            # Add the key name to the object itself for easier reference
+            $appConfig | Add-Member -MemberType NoteProperty -Name "Key" -Value $appNameKey -Force
+            return $appConfig
+        } else {
+            Write-Warning "[SKIP] Application '$appNameKey' not found in manifest."
+        }
+    }
+
+    if ($appsToProcess.Count -eq 0) {
+        Write-Host "[SUCCESS] No applications selected for installation."
+        exit 0
+    }
+
+    Write-Host "[INFO] The following applications will be installed:"
+    $appsToProcess | ForEach-Object { Write-Host "- $($_.name)" }
+
+    # --- STAGE 1: DOWNLOADS (SEQUENTIAL) ---
+    Write-Host "[PROGRESS] Stage 1/3: Starting Downloads (Sequential)..."
+    $failedApps = @()
+    foreach ($app in $appsToProcess) {
+        if (-not $app.source_type -or $app.source_type -ne 'Url') {
+            if ($app.source_type -and $app.source_type -ne 'Url') {
+                Write-Host "[SKIP] $($app.Key): source_type is '$($app.source_type)', skipping download"
+            }
+            continue
+        }
+        try {
+            Write-Host "[$($app.name)] Downloading from $($app.url)..."
+            Invoke-WebRequest -Uri $app.url -OutFile $app.outfile -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
+            Write-Host "[v] $($app.Key) downloaded successfully."
+        } catch {
+            Write-Host "[x] $($app.Key) download failed: $($_.Exception.Message)"
+            $failedApps += $app.Key
+        }
+    }
+
+    # --- STAGE 2: EXTRACTIONS (SEQUENTIAL) ---
+    Write-Host "[PROGRESS] Stage 2/3: Starting Extractions (Sequential)..."
+    foreach ($app in $appsToProcess) {
+        if ($failedApps.Contains($app.Key)) { continue }
+        if (-not $app.source_format -or $app.source_format -ne 'zip') {
+            if ($app.source_format -and $app.source_format -ne 'zip') {
+                Write-Host "[SKIP] $($app.Key): source_format is '$($app.source_format)', skipping extraction"
+            }
+            continue
+        }
+        try {
+            Write-Host "[$($app.name)] Extracting $($app.outfile)..."
+            Expand-Archive -Path $app.outfile -DestinationPath $app.unzip_dir -Force
+            Write-Host "[v] $($app.Key) extracted successfully."
+        } catch {
+            Write-Host "[x] $($app.Key) extraction failed: $($_.Exception.Message)"
+            $failedApps += $app.Key
+        }
+    }
+
+    # --- STAGE 3: INSTALLATIONS (SEQUENTIAL) ---
+    Write-Host "[PROGRESS] Stage 3/3: Starting Installations (Sequential)..."
+    foreach ($app in $appsToProcess) {
+        if ($failedApps.Contains($app.Key)) { continue }
+        try {
+            # Handle null/undefined properties with safe defaults
+            $outfileValue = if ($app.outfile) { $app.outfile } else { "" }
+            $unzipDirValue = if ($app.unzip_dir) { $app.unzip_dir } else { "" }
+
+            $cmd = $app.install_command.Replace('{outfile}', $outfileValue).Replace('{unzip_dir}', $unzipDirValue)
+            $args = $app.install_args.Replace('{outfile}', $outfileValue).Replace('{unzip_dir}', $unzipDirValue).Replace('{logdir}', "C:\DeployLogs")
+
+            Write-Host "[$($app.name)] Installing with command: $cmd $args"
+            $process = Start-Process -FilePath $cmd -ArgumentList $args -Wait -PassThru -ErrorAction Stop
+
+            # Default to success code 0 if not specified
+            $validCodes = if ($app.success_codes) { $app.success_codes } else { @(0) }
+            if ($validCodes -contains $process.ExitCode) {
+                Write-Host "[v] $($app.Key) installed successfully."
+            } else {
+                Write-Host "[x] $($app.Key) installation failed with exit code $($process.ExitCode)"
+                $failedApps += $app.Key
+            }
+        } catch {
+            Write-Host "[x] $($app.Key) installation failed: $($_.Exception.Message)"
+            $failedApps += $app.Key
+        }
+    }
+
+    # Final Summary
+    if ($failedApps.Count -gt 0) {
+        throw "One or more applications failed to install: $($failedApps -join ', ')"
+    }
+
+    Write-Host "[SUCCESS] All selected applications installed successfully."
+    exit 0
+
+} catch {
+    Write-Error "[FATAL] A critical error occurred. $($_.Exception.Message)"
+    exit 1
+}
+

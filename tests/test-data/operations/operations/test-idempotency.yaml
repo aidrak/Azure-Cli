@@ -1,0 +1,18 @@
+operation:
+  id: "test-idempotency"
+  name: "Test Idempotency"
+  capability: "networking"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az network vnet show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{NETWORKING_VNET_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  powershell:
+    content: |
+      Write-Host "[START] Create VNet"
+      exit 0

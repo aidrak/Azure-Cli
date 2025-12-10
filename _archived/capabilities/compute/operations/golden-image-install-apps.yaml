@@ -1,0 +1,128 @@
+# ==============================================================================
+# Capability Operation: Golden Image Install Applications (Orchestrator)
+# Calls individual app operations from capabilities/applications/
+# ==============================================================================
+
+operation:
+  id: "golden-image-install-apps"
+  name: "Install Applications on Golden Image"
+  description: "Orchestrator that runs individual app operations sequentially based on config.yaml"
+
+  capability: "compute"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  duration:
+    expected: 1800  # 30 minutes (depends on number of apps)
+    timeout: 3600   # 60 minutes
+    type: "WAIT"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "app_names_csv"
+        type: "string"
+        description: "Comma-separated list of applications to install"
+        default: "{{GOLDEN_IMAGE_APPLICATIONS_CSV}}"
+    optional: []
+
+  validation:
+    enabled: false
+    checks: []
+
+  idempotency:
+    enabled: false
+    check_command: ""
+    skip_if_exists: false
+
+  # Orchestrator template - calls individual app operations
+  template:
+    type: "bash-orchestrator"
+    command: |
+      #!/bin/bash
+      set -euo pipefail
+
+      # ==============================================================================
+      # Application Installation Orchestrator
+      # Reads app list from config and runs each app-{name} operation
+      # ==============================================================================
+
+      echo "[START] Application Installation Orchestrator"
+      echo "[i] Apps to install: {{GOLDEN_IMAGE_APPLICATIONS_CSV}}"
+
+      # Parse comma-separated app list
+      APPS="{{GOLDEN_IMAGE_APPLICATIONS_CSV}}"
+
+      if [[ -z "$APPS" ]]; then
+          echo "[i] No applications specified in config.yaml"
+          echo "[SUCCESS] Orchestrator complete (no apps to install)"
+          exit 0
+      fi
+
+      # Convert to array
+      IFS=',' read -ra APP_ARRAY <<< "$APPS"
+      TOTAL=${#APP_ARRAY[@]}
+      CURRENT=0
+      FAILED=0
+
+      echo "[i] Installing $TOTAL application(s)..."
+      echo ""
+
+      for app in "${APP_ARRAY[@]}"; do
+          # Trim whitespace
+          app=$(echo "$app" | xargs)
+          CURRENT=$((CURRENT + 1))
+
+          echo "=============================================="
+          echo "[PROGRESS] Application $CURRENT/$TOTAL: $app"
+          echo "=============================================="
+
+          # Run the individual app operation
+          OPERATION_ID="app-${app}"
+
+          if ./core/engine.sh run "$OPERATION_ID"; then
+              echo "[v] $app installed successfully"
+          else
+              echo "[x] $app installation FAILED"
+              FAILED=$((FAILED + 1))
+              # Fail-fast: stop on first failure
+              echo "[!] Stopping due to failure (fail-fast mode)"
+              exit 1
+          fi
+
+          echo ""
+      done
+
+      # Summary
+      echo "=============================================="
+      echo "[SUMMARY] Application Installation Complete"
+      echo "=============================================="
+      echo "Total: $TOTAL"
+      echo "Succeeded: $((TOTAL - FAILED))"
+      echo "Failed: $FAILED"
+
+      if [[ $FAILED -gt 0 ]]; then
+          echo "[x] Some applications failed to install"
+          exit 1
+      fi
+
+      echo "[SUCCESS] All applications installed successfully"
+      exit 0
+
+  # No embedded PowerShell - individual app operations handle that
+  powershell:
+    file: ""
+    content: ""
+
+  rollback:
+    enabled: false
+    steps: []
+
+  fixes: []

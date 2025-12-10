@@ -1,23 +1,27 @@
 name: Validate Operations
 
-# Trigger only on manual dispatch (automatic validation disabled to avoid CI bottlenecks)
-# To run validations: gh workflow run validate-operations.yml
+# Automatic validation enabled for push and PR
 on:
-  # Automatic triggers disabled - uncomment to re-enable
-  # push:
-  #   paths:
-  #     - 'capabilities/*/operations/*.yaml'
-  #     - 'scripts/validate-*.sh'
-  #     - 'scripts/validate-*.py'
-  #     - '.github/workflows/validate-operations.yml'
-  # pull_request:
-  #   paths:
-  #     - 'capabilities/*/operations/*.yaml'
-  #     - 'scripts/validate-*.sh'
-  #     - 'scripts/validate-*.py'
-  #     - '.github/workflows/validate-operations.yml'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'capabilities/*/operations/*.yaml'
+      - 'workflows/*.yaml'
+      - 'core/**/*.sh'
+      - 'scripts/validate-*.sh'
+      - 'scripts/validate-*.py'
+      - '.github/workflows/validate-operations.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'capabilities/*/operations/*.yaml'
+      - 'workflows/*.yaml'
+      - 'core/**/*.sh'
+      - 'scripts/validate-*.sh'
+      - 'scripts/validate-*.py'
+      - '.github/workflows/validate-operations.yml'
 
-  # Manual triggering only
+  # Manual triggering still available
   workflow_dispatch:
 
 jobs:

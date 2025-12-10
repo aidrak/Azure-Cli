@@ -1,0 +1,171 @@
+# ==============================================================================
+# Capability Operation: Create Dynamic Entra ID Device Group
+# ==============================================================================
+
+operation:
+  id: "dynamic-device-group-create"
+  name: "Create Dynamic Entra ID Device Group"
+  description: "Create or update Entra ID dynamic device group with membership rules"
+  capability: "identity"
+  operation_mode: "create"
+  resource_type: "Microsoft.Graph/groups"
+  # Duration expectations
+  duration:
+    expected: 30 # 30 seconds
+    timeout: 60 # 1 minute
+    type: "FAST"
+  # Parameters
+  parameters:
+    required:
+      - name: "GROUP_NAME"
+        type: "string"
+        description: "Display name for the device group"
+      - name: "GROUP_DESCRIPTION"
+        type: "string"
+        description: "Description for the device group"
+      - name: "DEVICE_NAME_PREFIX"
+        type: "string"
+        description: "Device name prefix for dynamic membership rule (e.g., 'avd-pool')"
+    optional:
+      - name: "MAIL_NICKNAME"
+        type: "string"
+        description: "Mail nickname for the group (auto-derived from name if not provided)"
+        default: ""
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "group_exists"
+        description: "Device group exists in Entra ID"
+      - type: "group_type"
+        expected: "Security"
+        description: "Group is a security group"
+      - type: "dynamic_membership"
+        expected: true
+        description: "Group has dynamic membership enabled"
+  # Idempotency: Update if exists, create if not
+  idempotency:
+    enabled: true
+    check_command: |
+      az ad group list \
+        --filter "displayName eq '{{GROUP_NAME}}'" \
+        --query "[0].id" -o tsv 2>/dev/null
+    skip_if_exists: false  # Always run to update to dynamic
+  # Template command
+  template:
+    type: "powershell-direct"
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Device Group"
+        description: "Remove the Entra ID device group"
+        command: |
+          az ad group delete \
+            --group "{{GROUP_NAME}}"
+        continue_on_error: false
+  # Self-healing
+  fixes: []
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating/updating dynamic device group: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Configuration
+      $groupName = "{{GROUP_NAME}}"
+      $groupDescription = "{{GROUP_DESCRIPTION}}"
+      $devicePrefix = "{{DEVICE_NAME_PREFIX}}"
+
+      # Generate mail nickname (lowercase, no spaces)
+      $mailNickname = if ("{{MAIL_NICKNAME}}" -ne "") {
+        "{{MAIL_NICKNAME}}"
+      } else {
+        $groupName -replace ' ', '-' | % { $_.ToLower() }
+      }
+
+      # Build dynamic membership rule
+      # Rule: (device.displayName -startsWith "prefix")
+      $membershipRule = "(device.displayName -startsWith ""$devicePrefix"")"
+
+      Write-Host "[INFO] Group configuration:"
+      Write-Host "[INFO]   Name: $groupName"
+      Write-Host "[INFO]   Description: $groupDescription"
+      Write-Host "[INFO]   Mail nickname: $mailNickname"
+      Write-Host "[INFO]   Membership rule: $membershipRule"
+
+      # Check if group already exists
+      Write-Host "[PROGRESS] Checking if group exists..."
+
+      $existingGroupId = az ad group list `
+        --filter "displayName eq '$groupName'" `
+        --query "[0].id" -o tsv 2>$null
+
+      if ([string]::IsNullOrEmpty($existingGroupId) -eq $false -and $existingGroupId -ne "None") {
+        Write-Host "[INFO] Group already exists: $existingGroupId"
+        Write-Host "[PROGRESS] Converting to dynamic device group..."
+
+        # Delete existing group (Azure CLI doesn't support updating to dynamic)
+        Write-Host "[PROGRESS] Deleting existing static group..."
+        az ad group delete --group $existingGroupId --yes 2>$null
+
+        Start-Sleep -Seconds 5  # Wait for deletion to propagate
+      }
+
+      # Create dynamic device group using Microsoft Graph API
+      Write-Host "[PROGRESS] Creating dynamic device group..."
+
+      # Use Microsoft Graph REST API via az rest
+      $body = @{
+        displayName = $groupName
+        mailNickname = $mailNickname
+        description = $groupDescription
+        groupTypes = @("DynamicMembership")
+        mailEnabled = $false
+        securityEnabled = $true
+        membershipRule = $membershipRule
+        membershipRuleProcessingState = "On"
+      } | ConvertTo-Json -Compress
+
+      try {
+        $response = az rest `
+          --method POST `
+          --uri "https://graph.microsoft.com/v1.0/groups" `
+          --headers "Content-Type=application/json" `
+          --body $body 2>&1
+
+        $groupDetails = $response | ConvertFrom-Json
+        $groupId = $groupDetails.id
+      } catch {
+        Write-Host "[ERROR] Failed to create dynamic device group"
+        Write-Host $response
+        exit 1
+      }
+
+      if ([string]::IsNullOrEmpty($groupId)) {
+        Write-Host "[ERROR] Failed to create dynamic device group - no group ID returned"
+        exit 1
+      }
+
+      # Validate creation
+      Write-Host "[VALIDATE] Verifying group creation..."
+      Start-Sleep -Seconds 3  # Wait for creation to propagate
+
+      $verifyGroup = az ad group show --group $groupId --output json 2>$null | ConvertFrom-Json
+
+      if ([string]::IsNullOrEmpty($verifyGroup.id)) {
+        Write-Host "[ERROR] Group verification failed"
+        exit 1
+      }
+
+      Write-Host "[SUCCESS] Dynamic device group created successfully"
+      Write-Host "[SUCCESS]   Name: $groupName"
+      Write-Host "[SUCCESS]   ID: $groupId"
+      Write-Host "[SUCCESS]   Mail nickname: $mailNickname"
+      Write-Host "[SUCCESS]   Membership rule: $membershipRule"
+      Write-Host "[SUCCESS]   Dynamic membership: Enabled"
+      Write-Host ""
+      Write-Host "[INFO] Device membership will be automatically updated based on the rule"
+      Write-Host "[INFO] Devices with names starting with '$devicePrefix' will be added automatically"
+
+      exit 0

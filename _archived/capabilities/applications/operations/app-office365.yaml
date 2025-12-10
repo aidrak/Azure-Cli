@@ -1,0 +1,226 @@
+# ==============================================================================
+# Application Operation: Microsoft Office 365
+# Migrated from: capabilities/compute/operations/golden-image-install-office.yaml
+# ==============================================================================
+
+operation:
+  id: "app-office365"
+  name: "Install Microsoft Office 365"
+  description: "Download and install Microsoft Office 365 using ODT with shared computer licensing for VDI"
+
+  capability: "applications"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  duration:
+    expected: 1800  # 30 minutes
+    timeout: 3600   # 60 minutes
+    type: "WAIT"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "office_edition"
+        type: "string"
+        description: "Office edition to install"
+        default: "O365ProPlusEEANoTeamsRetail"
+      - name: "channel"
+        type: "string"
+        description: "Office update channel"
+        default: "Current"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "if (Test-Path 'C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE') { exit 0 } else { exit 1 }" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
+        description: "Word executable installed"
+      - type: "file_exists"
+        path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+        description: "Excel executable installed"
+      - type: "file_exists"
+        path: "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE"
+        description: "Outlook executable installed"
+
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/app-office365-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/app-office365-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/app-office365-wrapper.ps1
+      rm -f /tmp/app-office365-wrapper.ps1
+
+  powershell:
+    file: "app-office365.ps1"
+    content: |
+      # ==============================================================================
+      # Install Microsoft Office 365 with Shared Computer Licensing
+      # Optimized for Azure Virtual Desktop (AVD) environments
+      # ==============================================================================
+
+      Write-Host "[START] Installing Microsoft Office 365: $(Get-Date -Format 'HH:mm:ss')"
+
+      $odtUrl = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_17328-20162.exe"
+      $tempPath = "C:\Temp"
+      $officePath = "$tempPath\Office"
+      $odtExe = "$officePath\ODT.exe"
+
+      try {
+          # ==========================================
+          # STAGE 1: Create directories
+          # ==========================================
+          Write-Host "[STAGE 1/6] Creating Office directory..."
+
+          if (-not (Test-Path $officePath)) {
+              New-Item -Path $officePath -ItemType Directory -Force | Out-Null
+          }
+          Write-Host "[v] Directory ready"
+
+          # ==========================================
+          # STAGE 2: Download ODT
+          # ==========================================
+          Write-Host "[STAGE 2/6] Downloading Office Deployment Tool..."
+
+          if (Test-Path $odtExe) {
+              Write-Host "[i] ODT already cached, skipping download"
+          } else {
+              Invoke-WebRequest -Uri $odtUrl -OutFile $odtExe -UseBasicParsing -TimeoutSec 180
+
+              if (-not (Test-Path $odtExe)) {
+                  throw "Download failed: ODT not found"
+              }
+              $fileSize = [math]::Round((Get-Item $odtExe).Length / 1MB, 2)
+              Write-Host "[v] Download complete: $fileSize MB"
+          }
+
+          # ==========================================
+          # STAGE 3: Extract ODT
+          # ==========================================
+          Write-Host "[STAGE 3/6] Extracting Office Deployment Tool..."
+
+          $proc = Start-Process -FilePath $odtExe `
+              -ArgumentList "/quiet /extract:`"$officePath`"" `
+              -Wait -PassThru
+
+          if ($proc.ExitCode -ne 0) {
+              throw "ODT extraction failed with exit code $($proc.ExitCode)"
+          }
+          Write-Host "[v] Extraction complete"
+
+          # ==========================================
+          # STAGE 4: Create configuration XML
+          # ==========================================
+          Write-Host "[STAGE 4/6] Creating Office configuration..."
+
+          # VDI-optimized configuration:
+          # - SharedComputerLicensing=1 (required for AVD)
+          # - Updates disabled (managed via image updates)
+          # - Exclude unnecessary apps for VDI
+          $configXml = @"
+      <Configuration ID="avd-office365-config">
+        <Add OfficeClientEdition="64" Channel="Current">
+          <Product ID="O365ProPlusEEANoTeamsRetail">
+            <Language ID="en-us" />
+            <ExcludeApp ID="Groove" />
+            <ExcludeApp ID="Lync" />
+            <ExcludeApp ID="OneDrive" />
+            <ExcludeApp ID="OneNote" />
+            <ExcludeApp ID="OutlookForWindows" />
+          </Product>
+        </Add>
+        <Property Name="SharedComputerLicensing" Value="1" />
+        <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
+        <Property Name="DeviceBasedLicensing" Value="0" />
+        <Property Name="SCLCacheOverride" Value="0" />
+        <Updates Enabled="FALSE" />
+        <RemoveMSI />
+        <Display Level="None" AcceptEULA="TRUE" />
+      </Configuration>
+      "@
+
+          $configPath = "$officePath\Configuration.xml"
+          $configXml | Out-File -FilePath $configPath -Encoding UTF8
+          Write-Host "[v] Configuration created"
+
+          # ==========================================
+          # STAGE 5: Install Office
+          # ==========================================
+          Write-Host "[STAGE 5/6] Installing Office 365 (this may take 15-30 minutes)..."
+          Write-Host "[i] Please wait, no output during installation..."
+
+          $setupPath = "$officePath\setup.exe"
+          if (-not (Test-Path $setupPath)) {
+              throw "setup.exe not found at $setupPath"
+          }
+
+          $proc = Start-Process -FilePath $setupPath `
+              -ArgumentList "/configure `"$configPath`"" `
+              -Wait -PassThru -WorkingDirectory $officePath
+
+          if ($proc.ExitCode -ne 0) {
+              throw "Office installation failed with exit code $($proc.ExitCode)"
+          }
+          Write-Host "[v] Installation complete"
+
+          # ==========================================
+          # STAGE 6: Validate
+          # ==========================================
+          Write-Host "[STAGE 6/6] Validating installation..."
+
+          $apps = @{
+              "Word"    = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+              "Excel"   = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+              "Outlook" = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+          }
+
+          foreach ($app in $apps.GetEnumerator()) {
+              if (-not (Test-Path $app.Value)) {
+                  throw "Validation failed: $($app.Key) not found"
+              }
+              Write-Host "[v] $($app.Key) verified"
+          }
+
+          # Keep ODT cached for potential reuse, cleanup config only
+          Remove-Item $configPath -Force -ErrorAction SilentlyContinue
+
+          Write-Host "[v] Microsoft Office 365 installed successfully"
+          Write-Host "[i] Shared Computer Licensing enabled for AVD"
+          exit 0
+
+      } catch {
+          Write-Host "[x] Error: $($_.Exception.Message)"
+          Write-Host "[x] Stack: $($_.ScriptStackTrace)"
+          exit 1
+      }
+
+  rollback:
+    enabled: false
+    steps: []
+
+  fixes: []

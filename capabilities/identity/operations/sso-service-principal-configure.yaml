@@ -7,17 +7,14 @@ operation:
   id: "sso-service-principal-configure"
   name: "Configure Windows Cloud Login Service Principal"
   description: "Enable RDP protocol on Windows Cloud Login service principal and configure trusted device groups"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Graph/servicePrincipals"
-
   # Duration expectations
   duration:
-    expected: 180   # 3 minutes
-    timeout: 600    # 10 minutes
+    expected: 180 # 3 minutes
+    timeout: 600 # 10 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -30,12 +27,10 @@ operation:
         type: "string"
         description: "Entra ID device group for trusted SSO devices"
         default: "{{ENTRA_GROUP_DEVICES_SSO}}"
-
   # Prerequisites
   requires:
     - operation: "sso-hostpool-configure"
       status: "completed"
-
   # Validation checks
   validation:
     enabled: true
@@ -50,7 +45,6 @@ operation:
             exit 1
           }
         description: "Verify service principal configuration completed"
-
   # Idempotency: Check for existing RDP enablement
   idempotency:
     enabled: true
@@ -64,12 +58,34 @@ operation:
         exit 1
       " 2>/dev/null
     skip_if_exists: true
-
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/sso-sp-configure-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disable RDP on Windows Cloud Login Service Principal"
+        description: "Disable RDP protocol on the Windows Cloud Login service principal"
+        command: |
+          pwsh -NoProfile -NonInteractive -Command "
+            \$appId = '270efc09-cd0d-444b-a71f-39af4910ec45'
+            \$context = Get-MgContext -ErrorAction SilentlyContinue
+            if (\$null -eq \$context) {
+              Connect-MgGraph -Scopes 'Application.ReadWrite.All' -NoWelcome 2>/dev/null || exit 1
+            }
+            \$sp = Get-MgServicePrincipal -Filter \"appId eq '\$appId'\" -ErrorAction SilentlyContinue
+            if (\$sp) {
+              \$body = @{ '@odata.type' = '#microsoft.graph.remoteDesktopSecurityConfiguration'; isRemoteDesktopProtocolEnabled = \$false }
+              Update-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId \$sp.Id -BodyParameter \$body -ErrorAction SilentlyContinue
+            }
+            Disconnect-MgGraph 2>/dev/null
+          " 2>/dev/null || true
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Windows Cloud Login Service Principal Configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -228,31 +244,3 @@ operation:
 
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/sso-sp-configure-wrapper.ps1
-      rm -f /tmp/sso-sp-configure-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Disable RDP on Windows Cloud Login Service Principal"
-        description: "Disable RDP protocol on the Windows Cloud Login service principal"
-        command: |
-          pwsh -NoProfile -NonInteractive -Command "
-            \$appId = '270efc09-cd0d-444b-a71f-39af4910ec45'
-            \$context = Get-MgContext -ErrorAction SilentlyContinue
-            if (\$null -eq \$context) {
-              Connect-MgGraph -Scopes 'Application.ReadWrite.All' -NoWelcome 2>/dev/null || exit 1
-            }
-            \$sp = Get-MgServicePrincipal -Filter \"appId eq '\$appId'\" -ErrorAction SilentlyContinue
-            if (\$sp) {
-              \$body = @{ '@odata.type' = '#microsoft.graph.remoteDesktopSecurityConfiguration'; isRemoteDesktopProtocolEnabled = \$false }
-              Update-MgServicePrincipalRemoteDesktopSecurityConfiguration -ServicePrincipalId \$sp.Id -BodyParameter \$body -ErrorAction SilentlyContinue
-            }
-            Disconnect-MgGraph 2>/dev/null
-          " 2>/dev/null || true
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

@@ -1,0 +1,150 @@
+# ==============================================================================
+# Capability Operation: Register Private Endpoint with DNS Zone
+# ==============================================================================
+
+operation:
+  id: "private-endpoint-dns-register"
+  name: "Register Private Endpoint with DNS Zone"
+  description: "Create DNS zone group on private endpoint to auto-register A records"
+  capability: "storage"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/privateEndpoints/privateDnsZoneGroups"
+  # Duration expectations
+  duration:
+    expected: 30 # 30 seconds
+    timeout: 90 # 1.5 minutes
+    type: "FAST"
+  # Prerequisites
+  requires:
+    - "private-endpoint-create"
+    - "private-dns-zone-link"
+  # Parameters
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "private_endpoint_name"
+        type: "string"
+        description: "Private endpoint name"
+        default: "pe-fslogix-files"
+    optional:
+      - name: "dns_zone_name"
+        type: "string"
+        description: "DNS zone name (privatelink.file.core.windows.net)"
+        default: "privatelink.file.core.windows.net"
+  # Validation checks (run after operation completes)
+  validation:
+    enabled: true
+    checks:
+      - type: "dns_zone_group_exists"
+        endpoint_name: "pe-fslogix-files"
+        description: "DNS zone group exists on private endpoint"
+  # Idempotency: Check if DNS zone group already exists
+  idempotency:
+    enabled: true
+    check_command: |
+      az network private-endpoint dns-zone-group list \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --endpoint-name "pe-fslogix-files" \
+        --query "length(@)" -o tsv 2>/dev/null | grep -q "^[1-9]"
+    skip_if_exists: true
+  # Template command (variables substituted at runtime)
+  template:
+    type: "powershell-direct"
+  # Rollback: Delete DNS zone group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete DNS Zone Group"
+        description: "Remove the DNS zone group from private endpoint"
+        command: |
+          az network private-endpoint dns-zone-group delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --endpoint-name "pe-fslogix-files" \
+            --name "default" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
+      $dnsZoneName = "privatelink.file.core.windows.net"
+      $endpointName = "pe-fslogix-files"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+
+      Write-Host "[START] Registering private endpoint with DNS zone at $(Get-Date -Format 'HH:mm:ss')"
+      Write-Host "  Endpoint: $endpointName"
+      Write-Host "  DNS zone: $dnsZoneName"
+
+      # Check if DNS zone group already exists
+      Write-Host "[PROGRESS] Checking if DNS zone group exists..."
+
+      $existingGroups = az network private-endpoint dns-zone-group list `
+        --resource-group $resourceGroup `
+        --endpoint-name $endpointName `
+        --query "length(@)" -o tsv 2>$null
+
+      if ($existingGroups -gt 0) {
+        Write-Host "[SUCCESS] DNS zone group already exists on endpoint"
+        exit 0
+      }
+
+      # Get DNS zone ID
+      Write-Host "[PROGRESS] Getting DNS zone ID..."
+
+      $dnsZoneId = az network private-dns zone show `
+        --resource-group $resourceGroup `
+        --name $dnsZoneName `
+        --query id -o tsv
+
+      if ([string]::IsNullOrEmpty($dnsZoneId)) {
+        Write-Host "[ERROR] DNS zone not found: $dnsZoneName"
+        Write-Host "[INFO] Run 'private-dns-zone-create' first"
+        exit 1
+      }
+
+      # Create DNS zone group
+      Write-Host "[PROGRESS] Creating DNS zone group..."
+
+      az network private-endpoint dns-zone-group create `
+        --resource-group $resourceGroup `
+        --endpoint-name $endpointName `
+        --name "default" `
+        --private-dns-zone $dnsZoneId `
+        --zone-name $dnsZoneName `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create DNS zone group"
+        exit 1
+      }
+
+      # Verify A record was created
+      Write-Host "[PROGRESS] Verifying DNS A record..."
+
+      Start-Sleep -Seconds 5
+
+      $records = az network private-dns record-set a list `
+        --resource-group $resourceGroup `
+        --zone-name $dnsZoneName `
+        --output json 2>$null | ConvertFrom-Json
+
+      if ($records -and $records.Count -gt 0) {
+        Write-Host "[SUCCESS] DNS zone group created and A record registered"
+        foreach ($record in $records) {
+          Write-Host "  Name: $($record.name)"
+          Write-Host "  FQDN: $($record.fqdn)"
+          if ($record.aRecords) {
+            foreach ($aRecord in $record.aRecords) {
+              Write-Host "  IP: $($aRecord.ipv4Address)"
+            }
+          }
+        }
+        exit 0
+      } else {
+        Write-Host "[WARN] DNS zone group created but A record not yet visible"
+        Write-Host "[INFO] Record may take a moment to propagate"
+        exit 0
+      }

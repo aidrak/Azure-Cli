@@ -933,6 +933,171 @@ get_running_operations() {
 }
 
 # ==============================================================================
+# OPERATION OUTPUTS (Inter-Operation State Passing)
+# ==============================================================================
+# These functions replace file-based state passing (e.g., /tmp/storage-account-name.txt)
+# with persistent SQLite storage for passing values between operations.
+
+# Store operation output value
+# Args: operation_id, output_key, output_value
+# Example: store_operation_output "account-create" "storage_account_name" "stfslogix001"
+store_operation_output() {
+    local operation_id="$1"
+    local output_key="$2"
+    local output_value="$3"
+
+    if [[ -z "$operation_id" ]] || [[ -z "$output_key" ]]; then
+        log_error "operation_id and output_key are required"
+        return 1
+    fi
+
+    # Escape for SQL
+    operation_id=$(sql_escape "$operation_id")
+    output_key=$(sql_escape "$output_key")
+    output_value=$(sql_escape "$output_value")
+
+    local now=$(get_timestamp)
+
+    # First ensure the operation_outputs table exists
+    local create_table_sql="
+CREATE TABLE IF NOT EXISTS operation_outputs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation_id TEXT NOT NULL,
+    output_key TEXT NOT NULL,
+    output_value TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    UNIQUE(operation_id, output_key)
+);
+CREATE INDEX IF NOT EXISTS idx_operation_outputs_op ON operation_outputs(operation_id);
+CREATE INDEX IF NOT EXISTS idx_operation_outputs_key ON operation_outputs(output_key);
+"
+    execute_sql "$create_table_sql" "Failed to create operation_outputs table" 2>/dev/null || true
+
+    local sql="
+INSERT INTO operation_outputs (operation_id, output_key, output_value, created_at)
+VALUES ('$operation_id', '$output_key', '$output_value', $now)
+ON CONFLICT(operation_id, output_key) DO UPDATE SET
+    output_value = excluded.output_value,
+    updated_at = $now;
+"
+
+    execute_sql "$sql" "Failed to store operation output" || return 1
+
+    log_info "Stored output: $operation_id.$output_key = $output_value" "state-manager"
+    return 0
+}
+
+# Get operation output value
+# Args: operation_id, output_key
+# Returns: output_value (or empty if not found)
+# Example: storage_name=$(get_operation_output "account-create" "storage_account_name")
+get_operation_output() {
+    local operation_id="$1"
+    local output_key="$2"
+
+    if [[ -z "$operation_id" ]] || [[ -z "$output_key" ]]; then
+        log_error "operation_id and output_key are required"
+        return 1
+    fi
+
+    # Escape for SQL
+    operation_id=$(sql_escape "$operation_id")
+    output_key=$(sql_escape "$output_key")
+
+    local sql="
+SELECT output_value FROM operation_outputs
+WHERE operation_id = '$operation_id' AND output_key = '$output_key';
+"
+
+    local result
+    result=$(execute_sql "$sql" "Failed to get operation output" 2>/dev/null)
+
+    if [[ -n "$result" ]]; then
+        echo "$result"
+        return 0
+    else
+        # Not found, return empty
+        return 1
+    fi
+}
+
+# Get all outputs for an operation
+# Args: operation_id
+# Returns: JSON array of outputs
+get_operation_outputs() {
+    local operation_id="$1"
+
+    if [[ -z "$operation_id" ]]; then
+        log_error "operation_id is required"
+        return 1
+    fi
+
+    operation_id=$(sql_escape "$operation_id")
+
+    local sql="
+SELECT output_key, output_value, datetime(created_at, 'unixepoch') as created_at
+FROM operation_outputs
+WHERE operation_id = '$operation_id';
+"
+
+    execute_sql_json "$sql" "Failed to get operation outputs"
+}
+
+# Get output by key (any operation)
+# Useful when you know the key but not which operation created it
+# Args: output_key
+# Returns: most recent output_value for that key
+get_output_by_key() {
+    local output_key="$1"
+
+    if [[ -z "$output_key" ]]; then
+        log_error "output_key is required"
+        return 1
+    fi
+
+    output_key=$(sql_escape "$output_key")
+
+    local sql="
+SELECT output_value FROM operation_outputs
+WHERE output_key = '$output_key'
+ORDER BY COALESCE(updated_at, created_at) DESC
+LIMIT 1;
+"
+
+    local result
+    result=$(execute_sql "$sql" "Failed to get output by key" 2>/dev/null)
+
+    if [[ -n "$result" ]]; then
+        echo "$result"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Delete operation outputs (cleanup)
+# Args: operation_id (optional - if not provided, deletes all old outputs)
+delete_operation_outputs() {
+    local operation_id="${1:-}"
+
+    if [[ -n "$operation_id" ]]; then
+        operation_id=$(sql_escape "$operation_id")
+        local sql="DELETE FROM operation_outputs WHERE operation_id = '$operation_id';"
+        execute_sql "$sql" "Failed to delete operation outputs" || return 1
+        log_info "Deleted outputs for operation: $operation_id" "state-manager"
+    else
+        # Delete outputs older than 7 days
+        local cutoff=$(($(get_timestamp) - 604800))
+        local sql="DELETE FROM operation_outputs WHERE created_at < $cutoff;"
+        execute_sql "$sql" "Failed to delete old operation outputs" || return 1
+        log_info "Deleted operation outputs older than 7 days" "state-manager"
+    fi
+
+    return 0
+}
+
+# ==============================================================================
 # CACHE MANAGEMENT
 # ==============================================================================
 
@@ -1042,6 +1207,7 @@ export -f query_azure_resource tag_resource_in_azure
 export -f add_dependency get_dependencies get_dependents check_dependencies_satisfied
 export -f create_operation update_operation_status update_operation_progress
 export -f log_operation get_operation_status get_failed_operations get_running_operations
+export -f store_operation_output get_operation_output get_operation_outputs get_output_by_key delete_operation_outputs
 export -f invalidate_cache clean_expired_cache
 export -f get_operation_stats get_managed_resources_count get_resources_by_type
 export -f sql_escape execute_sql execute_sql_json

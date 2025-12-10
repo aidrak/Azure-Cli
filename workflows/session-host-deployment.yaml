@@ -1,0 +1,185 @@
+# ==============================================================================
+# Workflow: AVD Session Host Deployment
+# ==============================================================================
+#
+# Purpose: Complete end-to-end workflow for deploying AVD session hosts with
+#          all prerequisites including host pool, workspace, application group,
+#          and session host VM registration.
+#
+# Usage:
+#   source core/config-manager.sh && load_config
+#   source core/workflow-engine.sh
+#   execute_workflow "workflows/session-host-deployment.yaml"
+#   preview_workflow "workflows/session-host-deployment.yaml"
+#
+# Prerequisites:
+#   - Azure subscription and credentials configured
+#   - Resource group already exists
+#   - VNet and subnet provisioned (if using existing networking)
+#   - Entra ID tenant ID and service principal credentials
+#
+# Execution Time: Approximately 30-40 minutes (sequential steps)
+# State Tracking: Automatic via workflow-engine.sh with execution logs
+#
+# ==============================================================================
+
+workflow:
+  # Unique workflow identifier used for logging and state tracking
+  id: "session-host-deployment"
+
+  # Human-readable workflow name displayed during execution
+  name: "AVD Session Host Deployment"
+
+  # Detailed description of workflow purpose and scope
+  description: |
+    Complete workflow to deploy session hosts including host pool, workspace,
+    application group, and session host VM registration. Steps execute sequentially
+    with dependency validation at each stage.
+
+  # Runtime variables that can be overridden via environment or CLI
+  # These values are injected into operation templates during execution
+  variables:
+    # Number of session host VMs to create
+    # Default resolved from config, can be overridden: SESSION_HOST_VM_COUNT=2
+    vm_count: "{{SESSION_HOST_VM_COUNT}}"
+
+    # Azure VM size (SKU) for session hosts
+    # Examples: Standard_D2s_v3, Standard_D4s_v3, Standard_B2s
+    # Default resolved from standards.yaml or config.yaml
+    vm_size: "{{SESSION_HOST_VM_SIZE}}"
+
+    # Session host naming prefix for VM names
+    # Will be combined with index: prefix-0, prefix-1, etc.
+    vm_name_prefix: "{{SESSION_HOST_NAME_PREFIX}}"
+
+    # CPU architecture for image selection (e.g., "x64", "x86")
+    arch: "{{SESSION_HOST_ARCHITECTURE}}"
+
+    # Image offering/version (e.g., "Windows-10", "Windows-11")
+    image_offer: "{{GOLDEN_IMAGE_OFFER}}"
+
+  # Sequential step execution with error handling
+  # Steps are processed in order; use continue_on_error to allow partial failures
+  steps:
+
+    # Step 1: Create Host Pool
+    # Duration: ~2 minutes
+    # This is the foundational resource - all session hosts join this pool
+    # Failure: Blocks all subsequent steps (continue_on_error: false)
+    - name: "Create Host Pool"
+      operation: "capabilities/avd/operations/hostpool-create.yaml"
+      continue_on_error: false
+      description: |
+        Creates the AVD host pool with configured type (pooled/personal),
+        load balancing algorithm, and session limit settings.
+        Must exist before session hosts can be registered.
+
+    # Step 2: Create Workspace
+    # Duration: ~1-2 minutes
+    # Container for application groups that users connect to
+    # Prerequisite: Host Pool (Step 1)
+    - name: "Create Workspace"
+      operation: "capabilities/avd/operations/workspace-create.yaml"
+      continue_on_error: false
+      description: |
+        Creates the AVD workspace resource. Users will connect to the workspace
+        to access applications. The workspace must exist before associating
+        application groups.
+
+    # Step 3: Create Application Group
+    # Duration: ~1-2 minutes
+    # Associates resources with the workspace for user access
+    # Prerequisite: Host Pool (Step 1)
+    - name: "Create Application Group"
+      operation: "capabilities/avd/operations/appgroup-create.yaml"
+      continue_on_error: false
+      description: |
+        Creates the desktop application group associated with the host pool.
+        The application group determines which resources (session hosts) users
+        can access.
+
+    # Step 4: Associate Workspace
+    # Duration: ~1 minute
+    # Links the application group to the workspace for user visibility
+    # Prerequisite: Workspace (Step 2), Application Group (Step 3)
+    - name: "Associate Workspace"
+      operation: "capabilities/avd/operations/workspace-associate.yaml"
+      continue_on_error: false
+      description: |
+        Associates the application group with the workspace. This step
+        makes the application group visible to users connecting to the
+        workspace.
+
+    # Step 5: Create Session Host VM
+    # Duration: ~20-30 minutes (longest step - image customization)
+    # Creates VM(s) from golden image with Entra join and Intune enrollment
+    # Prerequisite: Host Pool (Step 1)
+    - name: "Create Session Host VM"
+      operation: "capabilities/avd/operations/session-host-create.yaml"
+      continue_on_error: false
+      parameters:
+        # Pass dynamic parameters from workflow variables
+        vm_count: "{{vm_count}}"
+        vm_size: "{{vm_size}}"
+        vm_name_prefix: "{{vm_name_prefix}}"
+        arch: "{{arch}}"
+        image_offer: "{{image_offer}}"
+      description: |
+        Creates session host VM(s) from golden image with:
+        - Entra ID domain join
+        - Intune enrollment
+        - Windows updates
+        - GPU drivers (if applicable)
+
+        Number of VMs controlled by vm_count parameter.
+        This is the longest step due to image deployment and configuration.
+
+    # Step 6: Register with Host Pool
+    # Duration: ~2-5 minutes (per host)
+    # Joins session hosts to the host pool and installs RDAgent
+    # Prerequisite: Session Host VM (Step 5), Host Pool (Step 1)
+    - name: "Register Session Hosts with Host Pool"
+      operation: "capabilities/avd/operations/sessionhost-add.yaml"
+      continue_on_error: false
+      parameters:
+        vm_count: "{{vm_count}}"
+      description: |
+        Registers created session hosts with the host pool by:
+        - Installing AVD RD Agent via run-command
+        - Configuring WebSocket Reverse Proxy
+        - Validating host pool registration
+
+        Waits for all hosts to complete registration before proceeding.
+
+# ==============================================================================
+# Workflow State and Logging
+# ==============================================================================
+#
+# The workflow engine automatically:
+# 1. Creates execution ID: wf_session-host-deployment_YYYYMMDD_HHMMSS_XXXX
+# 2. Stores state in: artifacts/workflow-state/{execution-id}.json
+# 3. Logs output to: artifacts/workflow-logs/{execution-id}.log
+# 4. Tracks step completion, failures, and timing
+# 5. Supports resume from failures (future enhancement)
+#
+# Query workflow status:
+#   source core/workflow-engine.sh
+#   get_workflow_status "wf_session-host-deployment_20251208_120000_abc1"
+#
+# ==============================================================================
+# Error Handling and Recovery
+# ==============================================================================
+#
+# If a step fails:
+#
+# 1. Check logs: tail -f artifacts/workflow-logs/{execution-id}.log
+# 2. Review state: cat artifacts/workflow-state/{execution-id}.json | jq
+# 3. Fix underlying issue (Azure resources, permissions, etc.)
+# 4. Resume workflow (future enhancement):
+#    source core/workflow-engine.sh
+#    resume_workflow "wf_session-host-deployment_20251208_120000_abc1"
+#
+# Current behavior: Stops at failure (continue_on_error controls this)
+# Failed operations don't require cleanup - operations are idempotent
+#
+# ==============================================================================

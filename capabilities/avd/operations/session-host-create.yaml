@@ -1,0 +1,303 @@
+# ==============================================================================
+# Capability Operation: Create AVD Session Host VM (Orchestration)
+# Orchestrates atomic operations for complete session host deployment
+# ==============================================================================
+#
+# This operation orchestrates the following atomic operations:
+#   1. vm-create-from-gallery - Create VM with managed identity
+#   2. vm-extension-entra-join - Configure Entra ID join
+#   3. vm-extension-avd-dsc - Register with host pool
+#
+# For fine-grained control, run the atomic operations individually.
+# ==============================================================================
+
+operation:
+  id: "session-host-create"
+  name: "Create AVD Session Host VM"
+  description: "Create session host VM from gallery image with Entra ID join, Intune enrollment, and host pool registration"
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  # Note: This operation composes the atomic operations below
+  composed_of:
+    - "vm-create-from-gallery"
+    - "vm-extension-entra-join"
+    - "vm-extension-avd-dsc"
+
+  dependencies:
+    operations:
+      - id: "hostpool-create"
+        status: "completed"
+        description: "Host pool must exist before creating session hosts"
+      - id: "vnet-create"
+        status: "completed"
+        optional: true
+        description: "VNet should exist (may be pre-existing)"
+    resources:
+      - type: "Microsoft.DesktopVirtualization/hostpools"
+        name: "{{HOST_POOL_NAME}}"
+        must_exist: true
+
+  duration:
+    expected: 600 # 10 minutes
+    timeout: 1200 # 20 minutes
+    type: "WAIT"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the session host VM"
+        default: "{{SESSION_HOST_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "admin_username"
+        type: "string"
+        description: "Local administrator username"
+        default: "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+      - name: "admin_password"
+        type: "string"
+        description: "Local administrator password"
+        default: "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+        sensitive: true
+    optional:
+      - name: "vm_size"
+        type: "string"
+        description: "VM size"
+        default: "{{SESSION_HOST_VM_SIZE}}"
+      - name: "os_disk_size_gb"
+        type: "integer"
+        description: "OS disk size in GB"
+        default: "{{SESSION_HOST_OS_DISK_SIZE_GB}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/virtualMachines"
+        resource_name: "{{SESSION_HOST_VM_NAME}}"
+        description: "Session host VM exists"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "VM provisioned successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      # Full idempotency check - VM must exist with all required components
+      RG="{{AZURE_RESOURCE_GROUP}}"
+      VM="{{SESSION_HOST_VM_NAME}}"
+      HP="{{HOST_POOL_NAME}}"
+
+      # Check VM exists with identity
+      IDENTITY=$(az vm show -g "$RG" -n "$VM" --query "identity.type" -o tsv 2>/dev/null)
+      [[ "$IDENTITY" != "SystemAssigned" ]] && exit 1
+
+      # Check extensions
+      AAD_STATE=$(az vm extension show -g "$RG" --vm-name "$VM" -n AADLoginForWindows --query "provisioningState" -o tsv 2>/dev/null)
+      [[ "$AAD_STATE" != "Succeeded" ]] && exit 1
+
+      DSC_STATE=$(az vm extension show -g "$RG" --vm-name "$VM" -n DSC --query "provisioningState" -o tsv 2>/dev/null)
+      [[ "$DSC_STATE" != "Succeeded" ]] && exit 1
+
+      echo "All components verified"
+      exit 0
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Session Host VM"
+        description: "Remove the VM and associated resources"
+        command: |
+          az vm delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{SESSION_HOST_VM_NAME}}" \
+            --force-deletion yes \
+            --yes
+        continue_on_error: false
+
+  fixes:
+    - error_pattern: "0x801c002d|GetTenantId failed"
+      description: "AAD Join fails - VM has no system-assigned managed identity"
+      cause: "AADLoginForWindows requires SystemAssigned identity for IMDS queries"
+      solution: "az vm identity assign -g {{AZURE_RESOURCE_GROUP}} -n {{SESSION_HOST_VM_NAME}}"
+      auto_fix: false
+
+  # Operation outputs (stored in state.db)
+  outputs:
+    - name: "vm_name"
+      type: "string"
+      description: "Name of the session host VM"
+    - name: "vm_resource_id"
+      type: "string"
+      description: "Azure resource ID of the VM"
+    - name: "vm_private_ip"
+      type: "string"
+      description: "Private IP address"
+    - name: "vm_public_ip"
+      type: "string"
+      description: "Public IP address"
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating AVD Session Host: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Parameters
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $vmName = "{{SESSION_HOST_VM_NAME}}"
+      $vmSize = "{{SESSION_HOST_VM_SIZE}}"
+      $adminUsername = "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+      $adminPassword = "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+      $osDiskSizeGb = "{{SESSION_HOST_OS_DISK_SIZE_GB}}"
+      $publicIpName = "{{SESSION_HOST_PUBLIC_IP_NAME}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      $hostPoolName = "{{HOST_POOL_NAME}}"
+      $imageDefinitionName = "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $subnetName = "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}"
+      $enableIntune = "{{SESSION_HOST_ENABLE_INTUNE}}"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  VM: $vmName | Size: $vmSize | Disk: ${osDiskSizeGb}GB"
+      Write-Host "  Host Pool: $hostPoolName | Intune: $enableIntune"
+
+      # Check if already complete
+      $identity = az vm show -g $resourceGroup -n $vmName --query "identity.type" -o tsv 2>$null
+      $aadState = az vm extension show -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --query "provisioningState" -o tsv 2>$null
+      $dscState = az vm extension show -g $resourceGroup --vm-name $vmName -n DSC --query "provisioningState" -o tsv 2>$null
+
+      if ($identity -eq "SystemAssigned" -and $aadState -eq "Succeeded" -and $dscState -eq "Succeeded") {
+        Write-Host "[SUCCESS] Session host already fully configured"
+        $vmDetails = az vm show -g $resourceGroup -n $vmName --show-details -o json | ConvertFrom-Json
+        $vmId = az vm show -g $resourceGroup -n $vmName --query id -o tsv
+        Write-Host "[OUTPUT] {""vm_name"": ""$vmName"", ""vm_resource_id"": ""$vmId"", ""vm_private_ip"": ""$($vmDetails.privateIps)"", ""vm_public_ip"": ""$($vmDetails.publicIps)""}"
+        exit 0
+      }
+
+      # =========================================================================
+      # STEP 1: Create VM from gallery image
+      # =========================================================================
+      Write-Host ""
+      Write-Host "[STEP 1/3] Creating VM from gallery image..."
+
+      $vmExists = az vm show -g $resourceGroup -n $vmName --output none 2>$null
+      if ($LASTEXITCODE -ne 0) {
+        # Create Public IP
+        Write-Host "[PROGRESS] Creating public IP..."
+        az network public-ip create -g $resourceGroup -n $publicIpName -l $location --sku Standard --allocation-method Static --output none
+
+        # Create NIC
+        $nicName = "$vmName-nic"
+        Write-Host "[PROGRESS] Creating NIC..."
+        az network nic create -g $resourceGroup -n $nicName -l $location --vnet-name $vnetName --subnet $subnetName --public-ip-address $publicIpName --output none
+
+        # Construct image ID
+        $galleryImageId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.Compute/galleries/$galleryName/images/$imageDefinitionName/versions/1.0.0"
+
+        # Create VM
+        Write-Host "[PROGRESS] Creating VM (3-5 minutes)..."
+        az vm create -g $resourceGroup -n $vmName -l $location --size $vmSize --nics $nicName --image $galleryImageId `
+          --admin-username $adminUsername --admin-password $adminPassword --os-disk-size-gb $osDiskSizeGb `
+          --storage-sku Premium_LRS --assign-identity --security-type TrustedLaunch `
+          --enable-secure-boot true --enable-vtpm true --license-type Windows_Client --output none
+
+        if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] VM creation failed"; exit 1 }
+      }
+      Write-Host "[v] VM created with SystemAssigned identity"
+
+      # =========================================================================
+      # STEP 2: Install Entra ID join extension
+      # =========================================================================
+      Write-Host ""
+      Write-Host "[STEP 2/3] Installing Entra ID join extension..."
+
+      $aadState = az vm extension show -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --query "provisioningState" -o tsv 2>$null
+      if ($aadState -ne "Succeeded") {
+        if ($aadState -eq "Failed") {
+          az vm extension delete -g $resourceGroup --vm-name $vmName -n AADLoginForWindows --no-wait 2>$null
+          Start-Sleep -Seconds 30
+        }
+
+        $settings = if ($enableIntune -eq "true") { '{"mdmId": "0000000a-0000-0000-c000-000000000000"}' } else { '{}' }
+        az vm extension set -g $resourceGroup --vm-name $vmName --name AADLoginForWindows `
+          --publisher Microsoft.Azure.ActiveDirectory --version 2.0 --settings $settings --output none
+
+        if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] AAD extension failed"; exit 1 }
+      }
+      Write-Host "[v] Entra ID join configured"
+
+      # =========================================================================
+      # STEP 3: Install AVD DSC extension
+      # =========================================================================
+      Write-Host ""
+      Write-Host "[STEP 3/3] Installing AVD DSC extension..."
+
+      $dscState = az vm extension show -g $resourceGroup --vm-name $vmName -n DSC --query "provisioningState" -o tsv 2>$null
+      if ($dscState -ne "Succeeded") {
+        # Get registration token
+        $token = az desktopvirtualization hostpool show -g $resourceGroup -n $hostPoolName --query "registrationInfo.token" -o tsv 2>$null
+        if ([string]::IsNullOrEmpty($token) -or $token -eq "null") {
+          $exp = (Get-Date).ToUniversalTime().AddHours(24).ToString('yyyy-MM-ddTHH:mm:ss.000Z')
+          az desktopvirtualization hostpool update -g $resourceGroup -n $hostPoolName --registration-info "expiration-time=$exp" "registration-token-operation=Update" --output none
+          $token = az desktopvirtualization hostpool show -g $resourceGroup -n $hostPoolName --query "registrationInfo.token" -o tsv
+        }
+
+        if ($dscState -eq "Failed") {
+          az vm extension delete -g $resourceGroup --vm-name $vmName -n DSC --no-wait 2>$null
+          Start-Sleep -Seconds 30
+        }
+
+        # DSC settings
+        $mdmId = if ($enableIntune -eq "true") { "0000000a-0000-0000-c000-000000000000" } else { "" }
+        $dscUrl = "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.02797.442.zip"
+
+        $settings = @{modulesUrl=$dscUrl; configurationFunction="Configuration.ps1\AddSessionHost"; properties=@{
+          hostPoolName=$hostPoolName; aadJoin=$true; UseAgentDownloadEndpoint=$true; mdmId=$mdmId
+          registrationInfoTokenCredential=@{UserName="YOURTOKEN"; Password="PrivateSettingsRef:RegistrationInfoToken"}
+        }} | ConvertTo-Json -Depth 5 -Compress
+
+        $protected = @{Items=@{RegistrationInfoToken=$token}} | ConvertTo-Json -Depth 3 -Compress
+
+        $sFile = "/tmp/dsc-s-$vmName.json"; $pFile = "/tmp/dsc-p-$vmName.json"
+        $settings | Out-File $sFile -Encoding utf8; $protected | Out-File $pFile -Encoding utf8
+
+        az vm extension set -g $resourceGroup --vm-name $vmName -n DSC --publisher Microsoft.Powershell --version 2.73 `
+          --settings "@$sFile" --protected-settings "@$pFile" --output none
+
+        Remove-Item $sFile, $pFile -Force -ErrorAction SilentlyContinue
+        if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] DSC extension failed"; exit 1 }
+      }
+      Write-Host "[v] AVD agent installed"
+
+      # =========================================================================
+      # Verification
+      # =========================================================================
+      Write-Host ""
+      Write-Host "[PROGRESS] Verifying deployment..."
+
+      $vmDetails = az vm show -g $resourceGroup -n $vmName --show-details -o json | ConvertFrom-Json
+      $vmId = az vm show -g $resourceGroup -n $vmName --query id -o tsv
+
+      Write-Host "[SUCCESS] Session host deployment complete:"
+      Write-Host "  [v] VM: $vmName ($vmSize)"
+      Write-Host "  [v] Private IP: $($vmDetails.privateIps)"
+      Write-Host "  [v] Public IP: $($vmDetails.publicIps)"
+      Write-Host "  [v] Entra ID join: Configured"
+      Write-Host "  [v] Intune MDM: $enableIntune"
+      Write-Host "  [v] AVD agent: Installed"
+      Write-Host ""
+      Write-Host "[INFO] Host pool registration may take 2-5 minutes"
+
+      Write-Host "[OUTPUT] {""vm_name"": ""$vmName"", ""vm_resource_id"": ""$vmId"", ""vm_private_ip"": ""$($vmDetails.privateIps)"", ""vm_public_ip"": ""$($vmDetails.publicIps)""}"
+      exit 0

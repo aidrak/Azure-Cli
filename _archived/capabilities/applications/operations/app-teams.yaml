@@ -1,0 +1,160 @@
+# ==============================================================================
+# Application Operation: Microsoft Teams for VDI
+# ==============================================================================
+
+operation:
+  id: "app-teams"
+  name: "Install Microsoft Teams for VDI"
+  description: "Download and install Microsoft Teams machine-wide installer optimized for VDI"
+
+  capability: "applications"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  duration:
+    expected: 180
+    timeout: 360
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the target VM"
+        default: "{{GOLDEN_IMAGE_TEMP_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional: []
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm run-command invoke \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
+        --command-id RunPowerShellScript \
+        --scripts "if (Test-Path 'C:\Program Files (x86)\Microsoft\Teams\current\Teams.exe') { exit 0 } else { exit 1 }" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  validation:
+    enabled: true
+    checks:
+      - type: "file_exists"
+        path: "C:\\Program Files (x86)\\Microsoft\\Teams\\current\\Teams.exe"
+        description: "Teams executable installed"
+
+  template:
+    type: "powershell-vm-command"
+    command: |
+      cat > /tmp/app-teams-wrapper.ps1 << 'PSWRAPPER'
+      $scriptContent = @'
+      {{POWERSHELL_CONTENT}}
+      '@
+      $tempScript = "/tmp/app-teams-$([guid]::NewGuid()).ps1"
+      $scriptContent | Out-File -FilePath $tempScript -Encoding UTF8
+      az vm run-command invoke --resource-group "{{AZURE_RESOURCE_GROUP}}" --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" --command-id RunPowerShellScript --scripts "@$tempScript" --output json
+      if (Test-Path $tempScript) { Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue }
+      PSWRAPPER
+      pwsh -NoProfile -NonInteractive -File /tmp/app-teams-wrapper.ps1
+      rm -f /tmp/app-teams-wrapper.ps1
+
+  powershell:
+    file: "app-teams.ps1"
+    content: |
+      # ==============================================================================
+      # Install Microsoft Teams for VDI (Machine-Wide Installer)
+      # ==============================================================================
+
+      Write-Host "[START] Installing Microsoft Teams for VDI: $(Get-Date -Format 'HH:mm:ss')"
+
+      $tempDir = "C:\Temp"
+      $installer = "$tempDir\Teams_windows_x64.msi"
+      # Official FWLink for VDI machine-wide installer
+      $url = "https://go.microsoft.com/fwlink/?linkid=2196106"
+
+      try {
+          # Ensure temp directory exists
+          if (-not (Test-Path $tempDir)) {
+              New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
+          }
+
+          # ==========================================
+          # STAGE 1: Pre-install VDI Configuration
+          # ==========================================
+          Write-Host "[STAGE 1/3] Configuring VDI mode..."
+
+          # Set Teams VDI registry key (required for AVD/VDI optimization)
+          $teamsRegPath = "HKLM:\SOFTWARE\Microsoft\Teams"
+          if (-not (Test-Path $teamsRegPath)) {
+              New-Item -Path $teamsRegPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $teamsRegPath -Name "IsWVDEnvironment" -Value 1 -Type DWord -Force
+          Write-Host "[v] VDI mode registry key set"
+
+          # ==========================================
+          # STAGE 2: Download and Install
+          # ==========================================
+          Write-Host "[STAGE 2/3] Downloading Teams installer..."
+          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -TimeoutSec 300
+
+          if (-not (Test-Path $installer)) {
+              throw "Download failed: installer not found"
+          }
+
+          $fileSize = [math]::Round((Get-Item $installer).Length / 1MB, 2)
+          Write-Host "[v] Download complete: $fileSize MB"
+
+          Write-Host "[i] Installing Teams..."
+          # ALLUSERS=1 - Machine-wide install
+          # ALLUSER=1 - Per-machine mode (different from ALLUSERS)
+          $proc = Start-Process -FilePath "msiexec.exe" `
+              -ArgumentList "/i `"$installer`" /quiet /norestart ALLUSERS=1 ALLUSER=1" `
+              -Wait -PassThru
+
+          if ($proc.ExitCode -notin @(0, 3010)) {
+              throw "Installation failed with exit code $($proc.ExitCode)"
+          }
+
+          Write-Host "[v] Installation complete"
+
+          # ==========================================
+          # STAGE 3: Validate
+          # ==========================================
+          Write-Host "[STAGE 3/3] Validating installation..."
+
+          $teamsPath = "C:\Program Files (x86)\Microsoft\Teams\current\Teams.exe"
+          if (-not (Test-Path $teamsPath)) {
+              throw "Validation failed: Teams executable not found"
+          }
+
+          # Verify VDI registry is still set
+          $vdiMode = Get-ItemProperty -Path $teamsRegPath -Name "IsWVDEnvironment" -ErrorAction SilentlyContinue
+          if ($vdiMode.IsWVDEnvironment -ne 1) {
+              Write-Host "[!] Warning: VDI mode registry key may not be set correctly"
+          }
+
+          # Cleanup
+          Remove-Item $installer -Force -ErrorAction SilentlyContinue
+
+          Write-Host "[v] Microsoft Teams for VDI installed successfully"
+          exit 0
+
+      } catch {
+          Write-Host "[x] Error: $($_.Exception.Message)"
+          exit 1
+      }
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Uninstall Teams"
+        command: |
+          $app = Get-WmiObject Win32_Product | Where-Object { $_.Name -like "*Teams*" }
+          if ($app) { $app.Uninstall() }
+          # Remove VDI registry key
+          Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Teams" -Name "IsWVDEnvironment" -ErrorAction SilentlyContinue
+
+  fixes: []

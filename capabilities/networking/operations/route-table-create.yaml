@@ -7,17 +7,14 @@ operation:
   id: "route-table-create"
   name: "Create Route Table"
   description: "Create Azure route table for network routing and traffic management"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/routeTables"
-
   # Duration expectations
   duration:
     expected: 45
     timeout: 120
     type: "FAST"
-
   # Parameters extracted from configuration
   parameters:
     required:
@@ -42,7 +39,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -51,11 +47,9 @@ operation:
         resource_type: "Microsoft.Network/routeTables"
         resource_name: "{{NETWORKING_ROUTE_TABLE_NAME}}"
         description: "Route table exists"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Route table provisioned successfully"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -65,12 +59,25 @@ operation:
         --name "{{NETWORKING_ROUTE_TABLE_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-route-table-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Route Table"
+        description: "Remove the route table and associated routes"
+        command: |
+          az network route-table delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{NETWORKING_ROUTE_TABLE_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Route table creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $routeTableName = "{{NETWORKING_ROUTE_TABLE_NAME}}"
@@ -142,22 +149,3 @@ operation:
       Write-Host "[SUCCESS]   ID: $routeTableId"
       Write-Host "[SUCCESS]   State: $provisioningState"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-route-table-create-wrapper.ps1
-      rm -f /tmp/networking-route-table-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Route Table"
-        description: "Remove the route table and associated routes"
-        command: |
-          az network route-table delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{NETWORKING_ROUTE_TABLE_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

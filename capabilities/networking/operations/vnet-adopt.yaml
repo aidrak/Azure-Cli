@@ -6,17 +6,14 @@ operation:
   id: "vnet-adopt"
   name: "Adopt Existing Virtual Network"
   description: "Import existing VNet into toolkit management by tagging and importing to state database"
-
   capability: "networking"
   operation_mode: "adopt"
   resource_type: "Microsoft.Network/virtualNetworks"
-
   # Duration expectations
   duration:
-    expected: 45        # 45 seconds
-    timeout: 120        # 2 minutes
+    expected: 45 # 45 seconds
+    timeout: 120 # 2 minutes
     type: "NORMAL"
-
   # Parameters for adoption
   parameters:
     required:
@@ -33,7 +30,6 @@ operation:
         type: "string"
         description: "Additional tags to apply during adoption (key=value pairs)"
         default: "environment={{AZURE_ENVIRONMENT}}"
-
   # Validation checks (pre-checks for adopt operations)
   validation:
     enabled: true
@@ -42,11 +38,9 @@ operation:
         resource_type: "Microsoft.Network/virtualNetworks"
         resource_name: "{{vnet_name}}"
         description: "VNet exists and is accessible"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "VNet is in ready state"
-
   # Idempotency: Check if already adopted
   idempotency:
     enabled: true
@@ -57,12 +51,31 @@ operation:
         --query "tags.\"managed-by-toolkit\"" \
         --output tsv 2>/dev/null | grep -q "true"
     skip_if_exists: true
-
   # Template command (tag and import to state db)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-vnet-adopt-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Remove adoption tag and state record
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Adoption Tag"
+        description: "Remove the managed-by-toolkit tag from VNet"
+        command: |
+          az network vnet update \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{vnet_name}}" \
+            --remove tags."managed-by-toolkit" tags."adoption-date" tags."adoption-timestamp" \
+            --output none
+        continue_on_error: false
+      - name: "Remove State Records"
+        description: "Remove adoption record from state database"
+        command: |
+          rm -f artifacts/state/vnet-adopt-{{vnet_name}}.json
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] VNet adoption: {{vnet_name}} at $(Get-Date -Format 'HH:mm:ss')"
 
       $vnetName = "{{vnet_name}}"
@@ -156,29 +169,3 @@ operation:
       Write-Host "[INFO] Resource ID: $vnetId"
       Write-Host "[INFO] Address Space: $addressSpace"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-vnet-adopt-wrapper.ps1
-      rm -f /tmp/networking-vnet-adopt-wrapper.ps1
-
-  # Rollback: Remove adoption tag and state record
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove Adoption Tag"
-        description: "Remove the managed-by-toolkit tag from VNet"
-        command: |
-          az network vnet update \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{vnet_name}}" \
-            --remove tags."managed-by-toolkit" tags."adoption-date" tags."adoption-timestamp" \
-            --output none
-        continue_on_error: false
-
-      - name: "Remove State Records"
-        description: "Remove adoption record from state database"
-        command: |
-          rm -f artifacts/state/vnet-adopt-{{vnet_name}}.json
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

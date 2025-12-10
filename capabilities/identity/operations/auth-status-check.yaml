@@ -1,0 +1,128 @@
+# ==============================================================================
+# Authentication Status Check
+# ==============================================================================
+#
+# Purpose: Check current authentication status for Azure CLI and Microsoft Graph
+# Usage: ./core/engine.sh run identity/auth-status-check
+#
+# This operation is read-only and does not modify any authentication state.
+# Use it to verify credentials are working before running other operations.
+#
+# ==============================================================================
+
+operation:
+  id: "auth-status-check"
+  name: "Check Authentication Status"
+  description: "Verify current authentication status for Azure CLI and Microsoft Graph"
+  category: "identity"
+
+  duration:
+    expected: 5
+    timeout: 15
+    type: "QUICK"
+
+  template:
+    type: "bash"
+    command: |
+      set -uo pipefail
+
+      echo "=============================================="
+      echo "  Authentication Status Check"
+      echo "=============================================="
+      echo ""
+
+      AZ_STATUS="NOT_AUTHENTICATED"
+      MG_STATUS="NOT_CONNECTED"
+      EXIT_CODE=0
+
+      # =========================================================================
+      # Azure CLI Authentication Status
+      # =========================================================================
+      echo "=== Azure CLI ==="
+      if az account show --output none 2>/dev/null; then
+        AZ_USER=$(az account show --query "user.name" -o tsv 2>/dev/null)
+        AZ_SUB=$(az account show --query "name" -o tsv 2>/dev/null)
+        AZ_SUB_ID=$(az account show --query "id" -o tsv 2>/dev/null)
+        AZ_TENANT=$(az account show --query "tenantId" -o tsv 2>/dev/null)
+        AZ_TYPE=$(az account show --query "user.type" -o tsv 2>/dev/null)
+
+        echo "[v] Status: Authenticated"
+        echo "    User: $AZ_USER"
+        echo "    Type: $AZ_TYPE"
+        echo "    Subscription: $AZ_SUB"
+        echo "    Subscription ID: $AZ_SUB_ID"
+        echo "    Tenant: $AZ_TENANT"
+        AZ_STATUS="AUTHENTICATED"
+      else
+        echo "[x] Status: Not authenticated"
+        echo "    Run: ./core/engine.sh run identity/az-login-service-principal"
+        EXIT_CODE=1
+      fi
+
+      echo ""
+
+      # =========================================================================
+      # Microsoft Graph Authentication Status
+      # =========================================================================
+      echo "=== Microsoft Graph ==="
+      MG_OUTPUT=$(pwsh -Command '
+        $ctx = Get-MgContext -ErrorAction SilentlyContinue
+        if ($ctx) {
+          Write-Host "[v] Status: Connected"
+          Write-Host "    Client ID: $($ctx.ClientId)"
+          Write-Host "    Tenant ID: $($ctx.TenantId)"
+          Write-Host "    Auth Type: $($ctx.AuthType)"
+          Write-Host "    Scopes: $($ctx.Scopes -join ", ")"
+          exit 0
+        } else {
+          Write-Host "[x] Status: Not connected"
+          Write-Host "    Run: ./core/engine.sh run identity/mggraph-connect-certificate"
+          exit 1
+        }
+      ' 2>&1) || MG_STATUS="NOT_CONNECTED"
+
+      echo "$MG_OUTPUT"
+
+      if echo "$MG_OUTPUT" | grep -q "\[v\] Status: Connected"; then
+        MG_STATUS="CONNECTED"
+      else
+        EXIT_CODE=1
+      fi
+
+      echo ""
+
+      # =========================================================================
+      # Summary
+      # =========================================================================
+      echo "=============================================="
+      echo "  Summary"
+      echo "=============================================="
+      echo "  Azure CLI:       $AZ_STATUS"
+      echo "  Microsoft Graph: $MG_STATUS"
+      echo "=============================================="
+
+      if [[ $EXIT_CODE -eq 0 ]]; then
+        echo ""
+        echo "[v] All authentication checks passed"
+      else
+        echo ""
+        echo "[!] Some authentication checks failed"
+        echo "[i] Run the appropriate authentication operation to fix"
+      fi
+
+      exit $EXIT_CODE
+
+  outputs:
+    - name: "azure_cli_status"
+      description: "Azure CLI authentication status"
+    - name: "mggraph_status"
+      description: "Microsoft Graph connection status"
+
+  on_success:
+    message: "All authentication checks passed"
+
+  on_failure:
+    message: "One or more authentication checks failed"
+    suggestions:
+      - "Run identity/az-login-service-principal for Azure CLI"
+      - "Run identity/mggraph-connect-certificate for Microsoft Graph"

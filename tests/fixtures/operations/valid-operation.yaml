@@ -1,0 +1,56 @@
+# Test fixture: Valid operation YAML
+operation:
+  id: "test-operation"
+  name: "Test Operation"
+  description: "A valid operation for testing"
+  capability: "test"
+  operation_mode: "create"
+  resource_type: "Microsoft.Test/resources"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+    optional:
+      - name: "location"
+        type: "string"
+        description: "Azure location"
+        default: "{{AZURE_LOCATION}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Test/resources"
+        resource_name: "test-resource"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az resource show --name test-resource 2>/dev/null
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Test Resource"
+        command: "az resource delete --name test-resource"
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Test operation"
+      Write-Host "[SUCCESS] Test completed"
+      exit 0

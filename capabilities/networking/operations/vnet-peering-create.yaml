@@ -7,21 +7,17 @@ operation:
   id: "vnet-peering-create"
   name: "Create Virtual Network Peering"
   description: "Establish VNet peering to hub VNet (if configured)"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/virtualNetworks/virtualNetworkPeerings"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 240    # 4 minutes
+    expected: 120 # 2 minutes
+    timeout: 240 # 4 minutes
     type: "FAST"
-
   # Prerequisites
   requires:
-    - "dns-zone-link"  # DNS zones should be linked first
-
+    - "dns-zone-link" # DNS zones should be linked first
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,7 +38,6 @@ operation:
         type: "boolean"
         description: "Whether VNet peering is enabled"
         default: "{{NETWORKING_PEERING_ENABLED|false}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -50,11 +45,9 @@ operation:
       - type: "resource_exists"
         resource_type: "Microsoft.Network/virtualNetworks/virtualNetworkPeerings"
         description: "VNet peering relationship exists"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Peering provisioned successfully"
-
   # Idempotency: Check for existing peering
   idempotency:
     enabled: true
@@ -63,13 +56,32 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --vnet-name "{{NETWORKING_VNET_NAME}}" \
         --query "length(@)" -o tsv
-    skip_if_exists: false  # Check but continue if peering doesn't exist
-
+    skip_if_exists: false # Check but continue if peering doesn't exist
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-vnet-peering-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Delete VNet peering
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Virtual Network Peering"
+        description: "Remove VNet peering relationship"
+        command: |
+          for peering in $(az network vnet peering list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[].name" -o tsv); do
+            az network vnet peering delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$peering" \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] VNet peering creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $vnetName = "{{NETWORKING_VNET_NAME}}"
@@ -124,28 +136,3 @@ operation:
 
       Write-Host "[SUCCESS] VNet peering created: $peeringName"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-vnet-peering-create-wrapper.ps1
-      rm -f /tmp/networking-vnet-peering-create-wrapper.ps1
-
-  # Rollback: Delete VNet peering
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Virtual Network Peering"
-        description: "Remove VNet peering relationship"
-        command: |
-          for peering in $(az network vnet peering list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --vnet-name "{{NETWORKING_VNET_NAME}}" \
-            --query "[].name" -o tsv); do
-            az network vnet peering delete \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --vnet-name "{{NETWORKING_VNET_NAME}}" \
-              --name "$peering" \
-              --yes 2>/dev/null || true
-          done
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

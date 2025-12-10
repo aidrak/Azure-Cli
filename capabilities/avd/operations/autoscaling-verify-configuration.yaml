@@ -7,23 +7,19 @@ operation:
   id: "autoscaling-verify-configuration"
   name: "Verify Autoscaling Configuration"
   description: "Verify autoscaling plan is properly configured and assigned to host pool"
-
   capability: "avd"
   operation_mode: "validate"
   resource_type: "Microsoft.DesktopVirtualization/scalingPlans"
-
   # Duration expectations
   duration:
-    expected: 60    # 1 minute
-    timeout: 180    # 3 minutes
+    expected: 60 # 1 minute
+    timeout: 180 # 3 minutes
     type: "FAST"
-
   # Prerequisites
   prerequisites:
     required:
       - operation: "autoscaling-create-plan"
         status: "completed"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -35,7 +31,6 @@ operation:
         type: "string"
         description: "Name of the host pool"
         default: "{{HOST_POOL_NAME}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -50,7 +45,6 @@ operation:
             exit 1
           }
         description: "Verify autoscaling verification completed"
-
   # Idempotency: Verification is idempotent
   idempotency:
     enabled: true
@@ -60,12 +54,17 @@ operation:
         --name "ScalingPlan-{{HOST_POOL_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: false
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/autoscaling-03-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: No action needed for verification operation
+  rollback:
+    enabled: false
+    steps: []
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Autoscaling Configuration Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -231,14 +230,3 @@ operation:
       }
 
       exit $exitCode
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/autoscaling-03-wrapper.ps1
-      rm -f /tmp/autoscaling-03-wrapper.ps1
-
-  # Rollback: No action needed for verification operation
-  rollback:
-    enabled: false
-    steps: []
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

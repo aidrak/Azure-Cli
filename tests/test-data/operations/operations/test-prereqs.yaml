@@ -1,0 +1,17 @@
+operation:
+  id: "test-prereqs"
+  name: "Test Prerequisites"
+  capability: "compute"
+
+  prerequisites:
+    - resource_type: "Microsoft.Network/virtualNetworks"
+      name: "vnet-test"
+      description: "VNet must exist"
+    - resource_type: "Microsoft.Network/networkSecurityGroups"
+      name: "nsg-test"
+      description: "NSG must exist"
+
+  powershell:
+    content: |
+      Write-Host "[START] VM creation"
+      exit 0

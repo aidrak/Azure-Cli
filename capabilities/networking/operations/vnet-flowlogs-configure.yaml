@@ -1,0 +1,178 @@
+# ==============================================================================
+# Capability Operation: Configure NSG Flow Logs
+# ==============================================================================
+
+operation:
+  id: "vnet-flowlogs-configure"
+  name: "Configure VNet Flow Logs"
+  description: "Enable VNet flow logs for network security monitoring and traffic analysis"
+  capability: "networking"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Network/virtualNetworks"
+
+  duration:
+    expected: 180
+    timeout: 300
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        description: "Name of the virtual network"
+        default: "{{VNET_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group containing the VNet"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "storage_account_name"
+        type: "string"
+        description: "Storage account for flow logs"
+        default: "{{STORAGE_ACCOUNT_NAME}}"
+      - name: "workspace_name"
+        type: "string"
+        description: "Log Analytics workspace name"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region"
+        default: "{{AZURE_LOCATION}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "custom"
+        description: "NSG flow logs configured successfully"
+
+  idempotency:
+    enabled: false
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] VNet flow logs configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $vnetName = "{{VNET_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $storageAccountName = "{{STORAGE_ACCOUNT_NAME}}"
+      $workspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $location = "{{AZURE_LOCATION}}"
+
+      Write-Host "[PROGRESS] Getting VNet resource ID..."
+      $vnetInfo = az network vnet show `
+        --name $vnetName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find VNet: $vnetName"
+        Write-Host $vnetInfo
+        exit 1
+      }
+
+      $vnet = $vnetInfo | ConvertFrom-Json
+      $vnetId = $vnet.id
+
+      Write-Host "[INFO] VNet ID: $vnetId"
+
+      Write-Host "[PROGRESS] Getting storage account resource ID..."
+      $storageInfo = az storage account show `
+        --name $storageAccountName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find storage account: $storageAccountName"
+        Write-Host $storageInfo
+        exit 1
+      }
+
+      $storage = $storageInfo | ConvertFrom-Json
+      $storageId = $storage.id
+
+      Write-Host "[INFO] Storage Account ID: $storageId"
+
+      Write-Host "[PROGRESS] Getting Log Analytics workspace ID..."
+      $workspaceInfo = az monitor log-analytics workspace show `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find Log Analytics workspace: $workspaceName"
+        Write-Host $workspaceInfo
+        exit 1
+      }
+
+      $workspace = $workspaceInfo | ConvertFrom-Json
+      $workspaceId = $workspace.id
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+
+      Write-Host "[PROGRESS] Checking if flow logs already exist..."
+      $flowLogName = "fl-$vnetName"
+
+      $existingFlowLog = az network watcher flow-log show `
+        --location $location `
+        --name $flowLogName `
+        --output json 2>$null
+
+      if ($existingFlowLog) {
+        Write-Host "[INFO] Flow log already exists: $flowLogName"
+        Write-Host "[SUCCESS] Flow log verified"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Enabling Network Watcher (if needed)..."
+      az network watcher configure `
+        --locations $location `
+        --enabled true `
+        --output none 2>&1
+
+      Write-Host "[PROGRESS] Creating VNet flow log..."
+      Write-Host "[PROGRESS]   VNet: $vnetName"
+      Write-Host "[PROGRESS]   Flow Log Name: $flowLogName"
+      Write-Host "[PROGRESS]   Storage Account: $storageAccountName"
+      Write-Host "[PROGRESS]   Log Workspace: $workspaceName"
+
+      $createOutput = az network watcher flow-log create `
+        --location $location `
+        --name $flowLogName `
+        --vnet $vnetId `
+        --storage-account $storageId `
+        --workspace $workspaceId `
+        --enabled true `
+        --retention 7 `
+        --interval 10 `
+        --format JSON `
+        --log-version 2 `
+        --traffic-analytics true `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create VNet flow log"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying flow log creation..."
+      $flowLog = $createOutput | ConvertFrom-Json
+
+      Write-Host "[INFO] Flow Log ID: $($flowLog.id)"
+      Write-Host "[INFO] Enabled: $($flowLog.enabled)"
+      Write-Host "[INFO] Retention Days: $($flowLog.retentionPolicy.days)"
+      Write-Host "[INFO] Traffic Analytics: $($flowLog.flowAnalyticsConfiguration.networkWatcherFlowAnalyticsConfiguration.enabled)"
+
+      Write-Host "[SUCCESS] VNet flow logs configured successfully"
+      Write-Host "[INFO] Flow logs will be sent to:"
+      Write-Host "[INFO]   - Storage Account: $storageAccountName"
+      Write-Host "[INFO]   - Log Analytics: $workspaceName"
+      Write-Host "[INFO] It may take 10-15 minutes for flow logs to start appearing"
+      exit 0

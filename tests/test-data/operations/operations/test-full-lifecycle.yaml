@@ -1,0 +1,44 @@
+operation:
+  id: "test-full-lifecycle"
+  name: "Full Lifecycle Test"
+  description: "Test complete operation flow"
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  idempotency:
+    enabled: true
+    check_command: "az network vnet show --resource-group {{AZURE_RESOURCE_GROUP}} --name {{NETWORKING_VNET_NAME}}"
+    skip_if_exists: true
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks"
+        resource_name: "{{NETWORKING_VNET_NAME}}"
+        description: "VNet exists"
+
+  template:
+    type: "powershell-direct"
+
+  powershell:
+    content: |
+      Write-Host "[START] VNet creation"
+      Write-Host "[PROGRESS] Validating prerequisites"
+      Write-Host "[PROGRESS] Creating VNet"
+      Write-Host "[VALIDATE] Checking provisioning state"
+      Write-Host "[SUCCESS] VNet created successfully"
+      exit 0
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Virtual Network"
+        command: "az network vnet delete --resource-group {{AZURE_RESOURCE_GROUP}} --name {{NETWORKING_VNET_NAME}} --yes"
+        continue_on_error: false

@@ -1,0 +1,139 @@
+# ==============================================================================
+# Capability Operation: Create Azure Compute Gallery
+# ==============================================================================
+
+operation:
+  id: "gallery-create"
+  name: "Create Azure Compute Gallery"
+  description: "Create an Azure Compute Gallery for storing and distributing VM images"
+  capability: "compute"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/galleries"
+
+  # Duration expectations
+  duration:
+    expected: 60  # 1 minute
+    timeout: 300  # 5 minutes
+    type: "NORMAL"
+
+  # Parameters
+  parameters:
+    required:
+      - name: "gallery_name"
+        type: "string"
+        description: "Name of the compute gallery"
+        default: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        description: "Azure region for the gallery"
+        default: "{{AZURE_LOCATION}}"
+    optional:
+      - name: "description"
+        type: "string"
+        description: "Description of the gallery"
+        default: "Azure Virtual Desktop golden images"
+
+  # Validation checks
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/galleries"
+        resource_name: "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+        description: "Gallery created successfully"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Gallery provisioned successfully"
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    check_command: |
+      az sig show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --gallery-name "{{GOLDEN_IMAGE_GALLERY_NAME}}" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  # Template
+  template:
+    type: "powershell-direct"
+    command: "# Generated from powershell.content"
+
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Compute Gallery"
+        description: "Remove the compute gallery"
+        command: |
+          az sig delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --gallery-name "{{GOLDEN_IMAGE_GALLERY_NAME}}" \
+            --yes
+        continue_on_error: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Create Azure Compute Gallery: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+
+      Write-Host "[i] Configuration:"
+      Write-Host "    Gallery Name: $galleryName"
+      Write-Host "    Resource Group: $resourceGroup"
+      Write-Host "    Location: $location"
+
+      # Check if gallery already exists
+      Write-Host "[*] Checking if gallery already exists..."
+      $existingGallery = az sig show `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --output json 2>$null
+
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[v] Gallery already exists: $galleryName"
+        $galleryDetails = $existingGallery | ConvertFrom-Json
+        Write-Host "[i] Gallery ID: $($galleryDetails.id)"
+        exit 0
+      }
+
+      # Create the compute gallery
+      Write-Host "[*] Creating compute gallery..."
+      $createOutput = az sig create `
+        --resource-group $resourceGroup `
+        --gallery-name $galleryName `
+        --location $location `
+        --description "Azure Virtual Desktop golden images" `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[x] Failed to create compute gallery"
+        Write-Host "[x] Error: $createOutput"
+        exit 1
+      }
+
+      $galleryDetails = $createOutput | ConvertFrom-Json
+
+      Write-Host "[v] Compute gallery created successfully"
+      Write-Host "[i] Gallery Name: $($galleryDetails.name)"
+      Write-Host "[i] Gallery ID: $($galleryDetails.id)"
+      Write-Host "[i] Location: $($galleryDetails.location)"
+      Write-Host "[i] Provisioning State: $($galleryDetails.provisioningState)"
+
+      Write-Host ""
+      Write-Host "[i] Next steps:"
+      Write-Host "[i]   1. Create image definition: gallery-image-definition-create"
+      Write-Host "[i]   2. Create image version: gallery-image-version-create"
+
+      exit 0

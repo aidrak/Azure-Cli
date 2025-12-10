@@ -7,17 +7,14 @@ operation:
   id: "nsg-rule-add"
   name: "Add Rule to Network Security Group"
   description: "Add a new security rule to an existing NSG for inbound or outbound traffic control"
-
   capability: "networking"
   operation_mode: "modify"
   resource_type: "Microsoft.Network/networkSecurityGroups/securityRules"
-
   # Duration expectations
   duration:
     expected: 30
     timeout: 120
     type: "WAIT"
-
   # Parameters
   parameters:
     required:
@@ -69,7 +66,6 @@ operation:
       - name: "description"
         type: "string"
         description: "Description of the security rule"
-
   # Validation checks
   validation:
     pre_checks:
@@ -77,12 +73,10 @@ operation:
         resource_type: "Microsoft.Network/networkSecurityGroups"
         resource_name: "{{nsg_name}}"
         error_message: "Network security group '{{nsg_name}}' not found"
-
     post_checks:
       - type: "provisioning_state"
         expected: "Succeeded"
         timeout: 120
-
   # Idempotency
   idempotency:
     enabled: true
@@ -93,12 +87,26 @@ operation:
         --name "{{rule_name}}" \
         --resource-group "{{resource_group}}" \
         --output none 2>/dev/null
-
   # Template command
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/nsg-rule-add-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove NSG Rule"
+        description: "Delete the security rule from NSG"
+        command: |
+          az network nsg rule delete \
+            --nsg-name "{{nsg_name}}" \
+            --name "{{rule_name}}" \
+            --resource-group "{{resource_group}}" \
+            --yes
+        continue_on_error: true
+  # Self-healing
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $nsgName = "{{nsg_name}}"
@@ -193,23 +201,3 @@ operation:
         Write-Host "[ERROR] Failed to create NSG rule"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/nsg-rule-add-wrapper.ps1
-      rm -f /tmp/nsg-rule-add-wrapper.ps1
-
-  # Rollback
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove NSG Rule"
-        description: "Delete the security rule from NSG"
-        command: |
-          az network nsg rule delete \
-            --nsg-name "{{nsg_name}}" \
-            --name "{{rule_name}}" \
-            --resource-group "{{resource_group}}" \
-            --yes
-        continue_on_error: true
-
-  # Self-healing
-  fixes: []

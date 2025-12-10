@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-config.sh",
+            "blocking": false
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write(capabilities/**/*.yaml)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-yaml.sh \"$FILE_PATH\"",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(capabilities/**/*.yaml)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-yaml.sh \"$FILE_PATH\"",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/azure-error-detector.py",
+            "blocking": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

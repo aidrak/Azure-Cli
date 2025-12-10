@@ -1,0 +1,19 @@
+operation:
+  id: "test-missing"
+  name: "Test Missing Variables"
+  capability: "networking"
+
+  parameters:
+    required:
+      - name: "required_var"
+        type: "string"
+        default: "{{NONEXISTENT_VARIABLE}}"
+
+  template:
+    type: "powershell-direct"
+
+  powershell:
+    content: |
+      $var = "{{NONEXISTENT_VARIABLE}}"
+      Write-Host "Variable: $var"
+      exit 0

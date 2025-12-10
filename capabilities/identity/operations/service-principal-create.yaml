@@ -6,17 +6,14 @@ operation:
   id: "service-principal-create"
   name: "Create Service Principal for Automation"
   description: "Create Azure service principal (app registration) for automation and deployment scripts with configurable display name and optional certificate/password credentials"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Graph/applications"
-
   # Duration expectations
   duration:
-    expected: 45    # 45 seconds
-    timeout: 120    # 2 minutes
+    expected: 45 # 45 seconds
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Parameters extracted from automation requirements
   parameters:
     required:
@@ -42,7 +39,6 @@ operation:
         type: "string"
         description: "Homepage URL for the application"
         default: ""
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -50,10 +46,8 @@ operation:
       - type: "resource_exists"
         resource_type: "Microsoft.Graph/applications"
         description: "Service principal created successfully"
-
       - type: "service_principal_exists"
         description: "Service principal exists in tenant"
-
   # Idempotency: Check for existing service principal
   idempotency:
     enabled: true
@@ -62,12 +56,24 @@ operation:
         --filter "displayName eq '{{AUTOMATION_SERVICE_PRINCIPAL_NAME}}'" \
         --query "[0].appId" -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/identity-sp-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Service Principal"
+        description: "Remove the service principal and app registration"
+        command: |
+          az ad app delete \
+            --id "{{AUTOMATION_SERVICE_PRINCIPAL_APP_ID}}" \
+            --yes 2>/dev/null || true
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Creating service principal: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -226,21 +232,3 @@ operation:
       Write-Host "[INFO]   - Use in scripts with: az login --service-principal -u $appId -p '<password>' --tenant {{AZURE_TENANT_ID}}"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/identity-sp-create-wrapper.ps1
-      rm -f /tmp/identity-sp-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Service Principal"
-        description: "Remove the service principal and app registration"
-        command: |
-          az ad app delete \
-            --id "{{AUTOMATION_SERVICE_PRINCIPAL_APP_ID}}" \
-            --yes 2>/dev/null || true
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

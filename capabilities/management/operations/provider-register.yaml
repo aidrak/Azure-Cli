@@ -1,0 +1,191 @@
+# ==============================================================================
+# Capability Operation: Register Resource Providers
+# Registers all required Azure resource providers for AVD deployment
+# ==============================================================================
+
+operation:
+  id: "provider-register"
+  name: "Register Resource Providers"
+  description: "Register all required Azure resource providers for AVD infrastructure"
+  capability: "management"
+  operation_mode: "configure"
+  resource_type: "Microsoft.Resources/subscriptions"
+
+  duration:
+    expected: 120
+    timeout: 300
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "subscription_id"
+        type: "string"
+        description: "Azure subscription ID"
+        default: "{{AZURE_SUBSCRIPTION_ID}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "exit_code"
+        expected: 0
+        description: "All providers registered successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      # Provider registration is idempotent - safe to re-run
+      echo "Provider registration is idempotent"
+    skip_if_exists: false
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Resource provider registration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Define all required providers for AVD deployment
+      $providers = @(
+        # Core infrastructure
+        "Microsoft.Compute",
+        "Microsoft.Storage",
+        "Microsoft.Network",
+        "Microsoft.Resources",
+
+        # AVD specific
+        "Microsoft.DesktopVirtualization",
+        "Microsoft.VirtualMachineImages",
+
+        # Monitoring and management
+        "Microsoft.Insights",
+        "Microsoft.OperationalInsights",
+
+        # Security
+        "Microsoft.Security",
+        "Microsoft.KeyVault",
+
+        # Automation and identity
+        "Microsoft.Automation",
+        "Microsoft.ManagedIdentity",
+        "Microsoft.Authorization",
+
+        # Container services
+        "Microsoft.ContainerInstance",
+
+        # Domain services
+        "Microsoft.AAD",
+
+        # VM management
+        "Microsoft.GuestConfiguration",
+        "Microsoft.Maintenance",
+
+        # Alerting and backup
+        "Microsoft.AlertsManagement",
+        "Microsoft.RecoveryServices"
+      )
+
+      Write-Host "[INFO] Registering $($providers.Count) resource providers..."
+      Write-Host ""
+
+      $failed = @()
+      $registered = @()
+      $alreadyRegistered = @()
+
+      foreach ($provider in $providers) {
+        Write-Host "[PROGRESS] Checking: $provider"
+
+        # Check current state
+        $state = az provider show --namespace $provider --query "registrationState" -o tsv 2>$null
+
+        if ($state -eq "Registered") {
+          Write-Host "[v] Already registered: $provider"
+          $alreadyRegistered += $provider
+          continue
+        }
+
+        Write-Host "[PROGRESS] Registering: $provider"
+        $result = az provider register --namespace $provider 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "[x] Failed to register: $provider"
+          Write-Host "[x] Error: $result"
+          $failed += $provider
+        } else {
+          Write-Host "[v] Registration initiated: $provider"
+          $registered += $provider
+        }
+      }
+
+      Write-Host ""
+      Write-Host "[INFO] Waiting for registrations to complete..."
+
+      # Wait for pending registrations (max 5 minutes)
+      $maxWait = 300
+      $elapsed = 0
+      $interval = 10
+
+      while ($registered.Count -gt 0 -and $elapsed -lt $maxWait) {
+        Start-Sleep -Seconds $interval
+        $elapsed += $interval
+
+        $stillPending = @()
+        foreach ($provider in $registered) {
+          $state = az provider show --namespace $provider --query "registrationState" -o tsv 2>$null
+
+          if ($state -eq "Registered") {
+            Write-Host "[v] Completed: $provider"
+          } elseif ($state -eq "Registering") {
+            $stillPending += $provider
+          } else {
+            Write-Host "[x] Failed state for $provider : $state"
+            $failed += $provider
+          }
+        }
+
+        $registered = $stillPending
+
+        if ($registered.Count -gt 0) {
+          Write-Host "[PROGRESS] Still waiting on $($registered.Count) providers... ($elapsed/$maxWait seconds)"
+        }
+      }
+
+      # Final status
+      Write-Host ""
+      Write-Host "========================================"
+      Write-Host "[SUMMARY] Provider Registration Results"
+      Write-Host "========================================"
+      Write-Host "[i] Already registered: $($alreadyRegistered.Count)"
+      Write-Host "[i] Newly registered: $($providers.Count - $alreadyRegistered.Count - $failed.Count - $registered.Count)"
+
+      if ($registered.Count -gt 0) {
+        Write-Host "[!] Still pending: $($registered.Count)"
+        foreach ($p in $registered) {
+          Write-Host "    - $p"
+        }
+      }
+
+      if ($failed.Count -gt 0) {
+        Write-Host "[x] Failed: $($failed.Count)"
+        foreach ($p in $failed) {
+          Write-Host "    - $p"
+        }
+        Write-Host ""
+        Write-Host "[ERROR] Some providers failed to register"
+        exit 1
+      }
+
+      if ($registered.Count -gt 0) {
+        Write-Host ""
+        Write-Host "[WARNING] Some providers still registering - may need to wait"
+        Write-Host "[INFO] Run 'az provider list --query \"[?registrationState=='Registering']\"' to check status"
+        exit 0
+      }
+
+      Write-Host ""
+      Write-Host "[SUCCESS] All resource providers registered"
+      exit 0

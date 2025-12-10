@@ -1,18 +1,23 @@
 name: Capability System Validation
 
-# Automatic validation disabled to avoid CI bottlenecks
-# To run manually: gh workflow run capability-validation.yml
+# Automatic validation enabled for push and PR
 on:
-  # Automatic triggers disabled - uncomment to re-enable
-  # push:
-  #   paths:
-  #     - 'capabilities/**/*.yaml'
-  #     - 'core/**/*.sh'
-  #     - 'scripts/validate-operations.sh'
-  # pull_request:
-  #   branches: [ main, dev ]
+  push:
+    branches: [main, dev]
+    paths:
+      - 'capabilities/**/*.yaml'
+      - 'core/**/*.sh'
+      - 'scripts/validate-operations.sh'
+      - '.github/workflows/capability-validation.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'capabilities/**/*.yaml'
+      - 'core/**/*.sh'
+      - 'scripts/validate-operations.sh'
+      - '.github/workflows/capability-validation.yml'
 
-  # Manual triggering only
+  # Manual triggering still available
   workflow_dispatch:
 
 jobs:

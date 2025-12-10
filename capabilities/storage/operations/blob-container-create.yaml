@@ -7,17 +7,14 @@ operation:
   id: "blob-container-create"
   name: "Create Blob Storage Container"
   description: "Create blob storage container for storing deployment artifacts and logs"
-
   capability: "storage"
   operation_mode: "create"
   resource_type: "Microsoft.Storage/storageAccounts/blobServices/containers"
-
   # Duration expectations
   duration:
     expected: 30
     timeout: 90
     type: "FAST"
-
   # Parameters extracted from configuration
   parameters:
     required:
@@ -44,7 +41,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -53,12 +49,10 @@ operation:
         resource_type: "Microsoft.Storage/storageAccounts/blobServices/containers"
         resource_name: "{{STORAGE_BLOB_CONTAINER_NAME}}"
         description: "Blob container exists"
-
       - type: "property_equals"
         property: "publicAccess"
         expected: "{{STORAGE_BLOB_PUBLIC_ACCESS}}"
         description: "Public access level is correctly set"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -68,12 +62,25 @@ operation:
         --name "{{STORAGE_BLOB_CONTAINER_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-blob-container-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Blob Container"
+        description: "Remove the blob container and all contained blobs"
+        command: |
+          az storage container delete \
+            --account-name "{{STORAGE_ACCOUNT_NAME}}" \
+            --name "{{STORAGE_BLOB_CONTAINER_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Blob container creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $containerName = "{{STORAGE_BLOB_CONTAINER_NAME}}"
@@ -149,22 +156,3 @@ operation:
       Write-Host "[SUCCESS]   Storage account: $storageAccountName"
       Write-Host "[SUCCESS]   Public access: $publicAccess"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-blob-container-create-wrapper.ps1
-      rm -f /tmp/storage-blob-container-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Blob Container"
-        description: "Remove the blob container and all contained blobs"
-        command: |
-          az storage container delete \
-            --account-name "{{STORAGE_ACCOUNT_NAME}}" \
-            --name "{{STORAGE_BLOB_CONTAINER_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

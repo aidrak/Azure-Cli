@@ -7,17 +7,14 @@ operation:
   id: "nic-create"
   name: "Create Network Interface Card"
   description: "Create a network interface card (NIC) for VM network connectivity"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/networkInterfaces"
-
   # Duration expectations
   duration:
     expected: 45
     timeout: 90
     type: "FAST"
-
   # Parameters extracted from standard NIC creation
   parameters:
     required:
@@ -66,7 +63,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -75,16 +71,13 @@ operation:
         resource_type: "Microsoft.Network/networkInterfaces"
         resource_name: "{{NIC_NAME}}"
         description: "Network interface card created successfully"
-
       - type: "property_equals"
         property: "ipConfigurations[0].subnet.id"
         expected: "{{SUBNET_ID}}"
         description: "NIC is attached to correct subnet"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "NIC provisioning completed successfully"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -94,12 +87,25 @@ operation:
         --name "{{NIC_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-nic-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Network Interface Card"
+        description: "Remove the network interface card"
+        command: |
+          az network nic delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{NIC_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -169,22 +175,3 @@ operation:
       Write-Host "  State: $($nicInfo.provisioningState)"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-nic-create-wrapper.ps1
-      rm -f /tmp/networking-nic-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Network Interface Card"
-        description: "Remove the network interface card"
-        command: |
-          az network nic delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{NIC_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

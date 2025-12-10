@@ -7,21 +7,17 @@ operation:
   id: "route-table-configure"
   name: "Configure Route Tables"
   description: "Create and associate route tables with subnets (if enabled)"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/routeTables"
-
   # Duration expectations
   duration:
-    expected: 90    # 1.5 minutes
-    timeout: 180    # 3 minutes
+    expected: 90 # 1.5 minutes
+    timeout: 180 # 3 minutes
     type: "FAST"
-
   # Prerequisites
   requires:
-    - "vnet-peering-create"  # VNet peering should be created first
-
+    - "vnet-peering-create" # VNet peering should be created first
   # Parameters extracted from old operation
   parameters:
     required:
@@ -46,7 +42,6 @@ operation:
         type: "boolean"
         description: "Whether route tables are enabled"
         default: "{{NETWORKING_ROUTE_TABLES_ENABLED|false}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -55,11 +50,9 @@ operation:
         resource_type: "Microsoft.Network/routeTables"
         min_count: 1
         description: "At least one route table created"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Route tables provisioned successfully"
-
   # Idempotency: Check for existing route tables
   idempotency:
     enabled: true
@@ -67,13 +60,45 @@ operation:
       az network route-table list \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --query "length(@)" -o tsv
-    skip_if_exists: false  # Check count but continue with missing route tables
-
+    skip_if_exists: false # Check count but continue with missing route tables
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-route-table-configure-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Remove route table associations and delete route tables
+  rollback:
+    enabled: true
+    steps:
+      - name: "Disassociate Route Tables from Subnets"
+        description: "Remove route table associations from subnets"
+        command: |
+          for subnet in $(az network vnet subnet list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --query "[?routeTable != null].name" -o tsv); do
+            az network vnet subnet update \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --vnet-name "{{NETWORKING_VNET_NAME}}" \
+              --name "$subnet" \
+              --route-table null \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+      - name: "Delete Route Tables"
+        description: "Remove created route tables"
+        command: |
+          for rt in $(az network route-table list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --query "[].name" -o tsv); do
+            az network route-table delete \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --name "$rt" \
+              --yes 2>/dev/null || true
+          done
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Route table configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $vnetName = "{{NETWORKING_VNET_NAME}}"
@@ -172,41 +197,3 @@ operation:
 
       Write-Host "[SUCCESS] All route tables configured"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-route-table-configure-wrapper.ps1
-      rm -f /tmp/networking-route-table-configure-wrapper.ps1
-
-  # Rollback: Remove route table associations and delete route tables
-  rollback:
-    enabled: true
-    steps:
-      - name: "Disassociate Route Tables from Subnets"
-        description: "Remove route table associations from subnets"
-        command: |
-          for subnet in $(az network vnet subnet list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --vnet-name "{{NETWORKING_VNET_NAME}}" \
-            --query "[?routeTable != null].name" -o tsv); do
-            az network vnet subnet update \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --vnet-name "{{NETWORKING_VNET_NAME}}" \
-              --name "$subnet" \
-              --route-table null \
-              --yes 2>/dev/null || true
-          done
-        continue_on_error: true
-      - name: "Delete Route Tables"
-        description: "Remove created route tables"
-        command: |
-          for rt in $(az network route-table list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --query "[].name" -o tsv); do
-            az network route-table delete \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --name "$rt" \
-              --yes 2>/dev/null || true
-          done
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

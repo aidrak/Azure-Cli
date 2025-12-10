@@ -6,17 +6,14 @@ operation:
   id: "vm-validate"
   name: "Validate Virtual Machine Configuration"
   description: "Validate VM configuration, health status, and compliance with deployment standards"
-
   capability: "compute"
   operation_mode: "validate"
   resource_type: "Microsoft.Compute/virtualMachines"
-
   # Duration expectations
   duration:
-    expected: 60        # 1 minute
-    timeout: 120        # 2 minutes
+    expected: 60 # 1 minute
+    timeout: 120 # 2 minutes
     type: "NORMAL"
-
   # Parameters for validation
   parameters:
     required:
@@ -41,7 +38,6 @@ operation:
         type: "boolean"
         description: "Validate security settings"
         default: true
-
   # Validation checks (pre-checks for validate operations are read-only)
   validation:
     enabled: true
@@ -50,11 +46,9 @@ operation:
         resource_type: "Microsoft.Compute/virtualMachines"
         resource_name: "{{vm_name}}"
         description: "VM exists and is accessible"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "VM provisioning completed successfully"
-
   # Idempotency: Read-only operation, always safe to run
   idempotency:
     enabled: true
@@ -64,12 +58,16 @@ operation:
         --name "{{vm_name}}" \
         --output none 2>/dev/null
     skip_if_exists: false
-
   # Template command (read-only validation)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-vm-validate-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # No rollback needed for validate operations (read-only)
+  rollback:
+    enabled: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] VM validation: {{vm_name}} at $(Get-Date -Format 'HH:mm:ss')"
 
       $vmName = "{{vm_name}}"
@@ -173,13 +171,3 @@ operation:
 
       Write-Host "[SUCCESS] VM validation completed"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-validate-wrapper.ps1
-      rm -f /tmp/compute-vm-validate-wrapper.ps1
-
-  # No rollback needed for validate operations (read-only)
-  rollback:
-    enabled: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

@@ -1,0 +1,12 @@
+{
+  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test-01/providers/Microsoft.Network/virtualNetworks/vnet-test",
+  "location": "eastus",
+  "name": "vnet-test",
+  "properties": {
+    "addressSpace": {
+      "addressPrefixes": ["10.0.0.0/16"]
+    },
+    "provisioningState": "Succeeded"
+  },
+  "type": "Microsoft.Network/virtualNetworks"
+}

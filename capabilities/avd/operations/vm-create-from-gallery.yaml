@@ -1,0 +1,232 @@
+# ==============================================================================
+# Capability Operation: Create VM from Gallery Image
+# Atomic operation for creating a VM with managed identity from a gallery image
+# ==============================================================================
+
+operation:
+  id: "vm-create-from-gallery"
+  name: "Create VM from Gallery Image"
+  description: "Create a VM with SystemAssigned managed identity from an Azure Compute Gallery image"
+  capability: "avd"
+  operation_mode: "create"
+  resource_type: "Microsoft.Compute/virtualMachines"
+
+  dependencies:
+    operations:
+      - id: "vnet-create"
+        status: "completed"
+        optional: true
+        description: "VNet should exist (may be pre-existing)"
+    resources:
+      - type: "Microsoft.Compute/galleries/images"
+        name: "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+        must_exist: true
+
+  duration:
+    expected: 300 # 5 minutes
+    timeout: 600 # 10 minutes
+    type: "NORMAL"
+
+  parameters:
+    required:
+      - name: "vm_name"
+        type: "string"
+        description: "Name of the VM"
+        default: "{{SESSION_HOST_VM_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Azure resource group name"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "admin_username"
+        type: "string"
+        description: "Local administrator username"
+        default: "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+      - name: "admin_password"
+        type: "string"
+        description: "Local administrator password"
+        default: "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+        sensitive: true
+    optional:
+      - name: "vm_size"
+        type: "string"
+        description: "VM size"
+        default: "{{SESSION_HOST_VM_SIZE}}"
+      - name: "os_disk_size_gb"
+        type: "integer"
+        description: "OS disk size in GB"
+        default: "{{SESSION_HOST_OS_DISK_SIZE_GB}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Compute/virtualMachines"
+        resource_name: "{{SESSION_HOST_VM_NAME}}"
+        description: "VM exists"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "VM provisioned successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az vm show \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --name "{{SESSION_HOST_VM_NAME}}" \
+        --query "identity.type" -o tsv 2>/dev/null | grep -q "SystemAssigned"
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete VM"
+        description: "Remove the VM and associated resources"
+        command: |
+          az vm delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{SESSION_HOST_VM_NAME}}" \
+            --force-deletion yes \
+            --yes
+        continue_on_error: false
+
+  fixes: []
+
+  # Operation outputs (stored in state.db)
+  outputs:
+    - name: "vm_name"
+      type: "string"
+      description: "Name of the created VM"
+    - name: "vm_resource_id"
+      type: "string"
+      description: "Azure resource ID of the VM"
+    - name: "vm_private_ip"
+      type: "string"
+      description: "Private IP address of the VM"
+    - name: "vm_public_ip"
+      type: "string"
+      description: "Public IP address of the VM (if created)"
+
+  powershell:
+    content: |
+      $ErrorActionPreference = 'Stop'
+
+      Write-Host "[START] Creating VM from gallery image: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      # Parameters
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $location = "{{AZURE_LOCATION}}"
+      $vmName = "{{SESSION_HOST_VM_NAME}}"
+      $vmSize = "{{SESSION_HOST_VM_SIZE}}"
+      $adminUsername = "{{GOLDEN_IMAGE_ADMIN_USERNAME}}"
+      $adminPassword = "{{GOLDEN_IMAGE_ADMIN_PASSWORD}}"
+      $osDiskSizeGb = "{{SESSION_HOST_OS_DISK_SIZE_GB}}"
+      $publicIpName = "{{SESSION_HOST_PUBLIC_IP_NAME}}"
+      $subscriptionId = "{{AZURE_SUBSCRIPTION_ID}}"
+      $galleryName = "{{GOLDEN_IMAGE_GALLERY_NAME}}"
+      $imageDefinitionName = "{{GOLDEN_IMAGE_DEFINITION_NAME}}"
+      $vnetName = "{{NETWORKING_VNET_NAME}}"
+      $subnetName = "{{NETWORKING_SESSION_HOST_SUBNET_NAME}}"
+
+      # Construct resource IDs
+      $galleryImageId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.Compute/galleries/$galleryName/images/$imageDefinitionName/versions/1.0.0"
+      $subnetId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.Network/virtualNetworks/$vnetName/subnets/$subnetName"
+
+      Write-Host "[PROGRESS] Configuration:"
+      Write-Host "  VM Name: $vmName"
+      Write-Host "  VM Size: $vmSize"
+      Write-Host "  OS Disk: ${osDiskSizeGb}GB"
+
+      # Check if VM already exists
+      Write-Host "[PROGRESS] Checking if VM exists..."
+      $vmCheck = az vm show --resource-group $resourceGroup --name $vmName --output none 2>$null
+      if ($LASTEXITCODE -eq 0) {
+        Write-Host "[INFO] VM '$vmName' already exists"
+        $vmDetails = az vm show --resource-group $resourceGroup --name $vmName --show-details -o json | ConvertFrom-Json
+        $vmId = az vm show --resource-group $resourceGroup --name $vmName --query id -o tsv
+
+        Write-Host "[SUCCESS] Existing VM details:"
+        Write-Host "  Private IP: $($vmDetails.privateIps)"
+        Write-Host "  Public IP: $($vmDetails.publicIps)"
+        Write-Host "  Power State: $($vmDetails.powerState)"
+
+        # Output for state.db
+        Write-Host "[OUTPUT] {""vm_name"": ""$vmName"", ""vm_resource_id"": ""$vmId"", ""vm_private_ip"": ""$($vmDetails.privateIps)"", ""vm_public_ip"": ""$($vmDetails.publicIps)""}"
+        exit 0
+      }
+
+      # Step 1: Create Public IP
+      Write-Host "[PROGRESS] Creating public IP: $publicIpName"
+      az network public-ip create `
+        --resource-group $resourceGroup `
+        --name $publicIpName `
+        --location $location `
+        --sku Standard `
+        --allocation-method Static `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create public IP"
+        exit 1
+      }
+
+      # Step 2: Create NIC
+      $nicName = "$vmName-nic"
+      Write-Host "[PROGRESS] Creating network interface: $nicName"
+      az network nic create `
+        --resource-group $resourceGroup `
+        --name $nicName `
+        --location $location `
+        --vnet-name $vnetName `
+        --subnet $subnetName `
+        --public-ip-address $publicIpName `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create NIC"
+        exit 1
+      }
+
+      # Step 3: Create VM with SystemAssigned identity
+      Write-Host "[PROGRESS] Creating VM: $vmName (this may take 3-5 minutes)"
+      az vm create `
+        --resource-group $resourceGroup `
+        --name $vmName `
+        --location $location `
+        --size $vmSize `
+        --nics $nicName `
+        --image $galleryImageId `
+        --admin-username $adminUsername `
+        --admin-password $adminPassword `
+        --os-disk-size-gb $osDiskSizeGb `
+        --storage-sku Premium_LRS `
+        --assign-identity `
+        --security-type TrustedLaunch `
+        --enable-secure-boot true `
+        --enable-vtpm true `
+        --license-type Windows_Client `
+        --output none
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create VM"
+        exit 1
+      }
+
+      # Get VM details
+      Write-Host "[PROGRESS] Getting VM details..."
+      $vmDetails = az vm show --resource-group $resourceGroup --name $vmName --show-details -o json | ConvertFrom-Json
+      $vmId = az vm show --resource-group $resourceGroup --name $vmName --query id -o tsv
+
+      Write-Host "[SUCCESS] VM created:"
+      Write-Host "  Name: $vmName"
+      Write-Host "  Size: $vmSize"
+      Write-Host "  Private IP: $($vmDetails.privateIps)"
+      Write-Host "  Public IP: $($vmDetails.publicIps)"
+      Write-Host "  Power State: $($vmDetails.powerState)"
+      Write-Host "  Identity: SystemAssigned"
+
+      # Output for state.db
+      Write-Host "[OUTPUT] {""vm_name"": ""$vmName"", ""vm_resource_id"": ""$vmId"", ""vm_private_ip"": ""$($vmDetails.privateIps)"", ""vm_public_ip"": ""$($vmDetails.publicIps)""}"
+      exit 0

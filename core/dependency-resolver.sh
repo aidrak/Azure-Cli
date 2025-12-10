@@ -768,13 +768,17 @@ validate_dependencies() {
         return 1
     fi
 
+    # Escape resource_id for SQL
+    local escaped_resource_id
+    escaped_resource_id=$(echo "$resource_id" | sed "s/'/''/g")
+
     # Get dependencies from database or file
     local dependencies
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
         dependencies=$(sqlite3 "$STATE_DB" -json <<EOF
 SELECT depends_on_resource_id, dependency_type, relationship
 FROM dependencies
-WHERE resource_id = '$resource_id';
+WHERE resource_id = '$escaped_resource_id';
 EOF
 )
     else
@@ -920,6 +924,10 @@ get_dependency_tree() {
         return 1
     fi
 
+    # Escape resource_id for SQL
+    local escaped_resource_id
+    escaped_resource_id=$(echo "$resource_id" | sed "s/'/''/g")
+
     # Use recursive CTE if database is available
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
         sqlite3 "$STATE_DB" -json <<EOF
@@ -935,7 +943,7 @@ WITH RECURSIVE dep_tree AS (
         1 as depth
     FROM dependencies d
     JOIN resources r ON d.depends_on_resource_id = r.resource_id
-    WHERE d.resource_id = '$resource_id'
+    WHERE d.resource_id = '$escaped_resource_id'
 
     UNION ALL
 
@@ -973,6 +981,11 @@ get_dependency_path() {
         return 1
     fi
 
+    # Escape resource IDs for SQL
+    local escaped_from_id escaped_to_id
+    escaped_from_id=$(echo "$from_id" | sed "s/'/''/g")
+    escaped_to_id=$(echo "$to_id" | sed "s/'/''/g")
+
     # Use BFS to find shortest path
     # This is complex in bash/SQL, simplified implementation
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
@@ -985,7 +998,7 @@ WITH RECURSIVE path AS (
         resource_id || ' -> ' || depends_on_resource_id as path_str,
         1 as depth
     FROM dependencies
-    WHERE resource_id = '$from_id'
+    WHERE resource_id = '$escaped_from_id'
 
     UNION ALL
 
@@ -997,9 +1010,9 @@ WITH RECURSIVE path AS (
     FROM dependencies d
     JOIN path p ON d.resource_id = p.depends_on_resource_id
     WHERE p.depth < 20
-    AND d.depends_on_resource_id = '$to_id'
+    AND d.depends_on_resource_id = '$escaped_to_id'
 )
-SELECT * FROM path WHERE depends_on_resource_id = '$to_id' ORDER BY depth LIMIT 1;
+SELECT * FROM path WHERE depends_on_resource_id = '$escaped_to_id' ORDER BY depth LIMIT 1;
 EOF
     else
         echo "ERROR: Requires state database" >&2
@@ -1048,6 +1061,95 @@ EOF
 }
 
 # ==============================================================================
+# OPERATION YAML DEPENDENCY VALIDATION
+# ==============================================================================
+
+# Validate operation dependencies from YAML file
+# Args: yaml_file
+# Returns: 0 if all dependencies satisfied, 1 if any missing
+validate_operation_dependencies() {
+    local yaml_file="$1"
+
+    if [[ ! -f "$yaml_file" ]]; then
+        echo "ERROR: Operation file not found: $yaml_file" >&2
+        return 1
+    fi
+
+    # Check if yq is available
+    if ! command -v yq &>/dev/null; then
+        echo "ERROR: yq is required for YAML parsing" >&2
+        return 1
+    fi
+
+    # Check if state database exists
+    if [[ ! -f "${STATE_DB:-${PROJECT_ROOT}/state.db}" ]]; then
+        echo "WARNING: State database not found, skipping dependency validation" >&2
+        return 0
+    fi
+
+    local state_db="${STATE_DB:-${PROJECT_ROOT}/state.db}"
+
+    # Parse dependencies from YAML (check both root and operation.dependencies)
+    local deps_root=$(yq eval '.dependencies // []' "$yaml_file" 2>/dev/null)
+    local deps_op=$(yq eval '.operation.dependencies // []' "$yaml_file" 2>/dev/null)
+
+    # Combine both arrays
+    local dependencies="[]"
+    if [[ "$deps_root" != "[]" && "$deps_root" != "null" ]]; then
+        dependencies="$deps_root"
+    elif [[ "$deps_op" != "[]" && "$deps_op" != "null" ]]; then
+        dependencies="$deps_op"
+    fi
+
+    # If no dependencies, validation passes
+    if [[ "$dependencies" == "[]" || "$dependencies" == "null" ]]; then
+        return 0
+    fi
+
+    # Validate each dependency
+    local failed_count=0
+    local dep_count=$(echo "$dependencies" | yq eval 'length' -)
+
+    local i=0
+    while [[ $i -lt $dep_count ]]; do
+        local dep_op_id=$(echo "$dependencies" | yq eval ".[$i].operation_id // .[$i]" -)
+
+        if [[ -z "$dep_op_id" || "$dep_op_id" == "null" ]]; then
+            ((i++))
+            continue
+        fi
+
+        # Escape dep_op_id for SQL
+        local escaped_dep_op_id
+        escaped_dep_op_id=$(echo "$dep_op_id" | sed "s/'/''/g")
+
+        # Query state.db to check if operation completed
+        local op_status=$(sqlite3 "$state_db" "SELECT status FROM operations WHERE operation_name = '$escaped_dep_op_id' OR operation_id LIKE '%$escaped_dep_op_id%' ORDER BY started_at DESC LIMIT 1;" 2>/dev/null || echo "")
+
+        if [[ "$op_status" == "completed" ]]; then
+            if command -v log_info &>/dev/null; then
+                log_info "Dependency satisfied: $dep_op_id" "dependency-resolver"
+            fi
+        else
+            if command -v log_warn &>/dev/null; then
+                log_warn "Dependency not satisfied: $dep_op_id (status: ${op_status:-not found})" "dependency-resolver"
+            else
+                echo "WARNING: Dependency not satisfied: $dep_op_id (status: ${op_status:-not found})" >&2
+            fi
+            ((failed_count++))
+        fi
+
+        ((i++))
+    done
+
+    if [[ $failed_count -gt 0 ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================================
 # MAIN EXECUTION (if run directly)
 # ==============================================================================
 
@@ -1067,6 +1169,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "  - build_dependency_graph [output_file]"
     echo "  - export_dependency_graph_dot [output_file]"
     echo "  - validate_dependencies <resource_id>"
+    echo "  - validate_operation_dependencies <yaml_file>"
     echo "  - detect_circular_dependencies"
     echo "  - get_dependency_tree <resource_id> [max_depth]"
     echo "  - get_dependency_path <from_id> <to_id>"

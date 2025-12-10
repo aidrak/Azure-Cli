@@ -1,67 +1,72 @@
 ---
 title: "System Architecture"
-description: "The complete technical reference for the YAML-based deployment engine, detailing the system flow, core components, directory structure, and development patterns."
-tags: ["architecture", "technical", "engine", "design", "development"]
-last_updated: "2025-12-05"
+description: "Technical reference for the YAML-based deployment engine: unified execution path, core components, and design patterns"
+tags: ["architecture", "technical", "engine", "design", "unified-execution"]
+last_updated: "2025-12-10"
 ---
-# Azure VDI Deployment - System Architecture
+# System Architecture
 
-Complete technical reference for the YAML-based deployment engine.
-
-## Quick Reference
-
-- **Active System**: YAML engine (`core/` + `capabilities/`)
-- **User Guide & Ops**: See the main [.claude/CLAUDE.md](.claude/CLAUDE.md) for operational guides.
-- **Configuration**: `config.yaml` (single source of truth)
-- **Execution**: `./core/engine.sh run <operation-id>`
-- **State**: `state.json` (centralized tracking)
-- **Legacy**: `legacy/` directory (reference only, never execute)
-
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Directory Structure](#directory-structure)
-3. [Configuration System](#configuration-system)
-4. [Execution Model](#execution-model)
-5. [Module Development](#module-development)
-6. [Error Handling & Self-Healing](#error-handling--self-healing)
-7. [Troubleshooting](#troubleshooting)
+Technical reference for the YAML-based deployment engine. For operational guides, see [QUICKSTART.md](QUICKSTART.md) and [.claude/CLAUDE.md](.claude/CLAUDE.md).
 
 ---
 
 ## Architecture Overview
 
-### System Flow
+### Unified Execution Flow (Updated 2025-12-10)
+
+The system now uses a **unified execution path** through `executor.sh`:
 
 ```
-config.yaml → config-manager.sh → Export ENV vars
-                ↓
-      template-engine.sh → Substitute {{VARIABLES}}
-                ↓
-           engine.sh → Execute operations
-                ↓
-    progress-tracker.sh → Monitor [START/PROGRESS/SUCCESS]
-                ↓
-       error-handler.sh → Self-heal on failure
-                ↓
-    state.db + artifacts/logs/ → Track execution
+┌─────────────────────────────────────────────────────────────┐
+│ CLI Entry Points                                            │
+├─────────────────────────────────────────────────────────────┤
+│ ./core/engine.sh run <op-id>    (single operations)        │
+│ ./core/engine.sh workflow <id>  (multi-step workflows)     │
+└────────────┬────────────────────────────────┬───────────────┘
+             │                                │
+             v                                v
+    ┌────────────────┐              ┌──────────────────┐
+    │  engine.sh     │              │ workflow-engine  │
+    │  (thin wrapper)│              │  (orchestration) │
+    └────────┬───────┘              └────────┬─────────┘
+             │                                │
+             └────────────┬───────────────────┘
+                          v
+                ┌──────────────────┐
+                │   executor.sh    │ ← UNIFIED EXECUTION ENGINE
+                │                  │
+                │ • Prerequisites  │
+                │ • Step execution │
+                │ • Rollback       │
+                │ • State tracking │
+                └────────┬─────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         v               v               v
+   config-manager   template-engine   state-manager
+   query.sh         error-handler     logger.sh
 ```
 
 ### Core Components
 
-| Component | Lines | Purpose |
-|-----------|-------|---------|
-| `core/config-manager.sh` | 556 | Load config.yaml, export 50+ ENV vars, validate |
-| `core/template-engine.sh` | 556 | Parse YAML operations, substitute variables |
-| `core/engine.sh` | 515 | Main orchestrator (run/resume/status/list) |
-| `core/progress-tracker.sh` | 325 | Real-time monitoring, duration validation |
-| `core/error-handler.sh` | 382 | Extract errors, apply fixes, retry (max 3) |
-| `core/logger.sh` | 322 | Structured JSONL logging |
-| `core/validator.sh` | 362 | Configuration & prerequisite validation |
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| `engine.sh` | CLI wrapper, operation discovery, backward compatibility | REFACTORED (thin wrapper) |
+| `executor.sh` | **UNIFIED execution engine**: prerequisites, steps, rollback, state | PRIMARY PATH |
+| `workflow-engine.sh` | Multi-step orchestration (delegates to executor.sh) | ACTIVE |
+| `config-manager.sh` | Load config, export ENV vars, validate | ACTIVE |
+| `template-engine.sh` | Parse YAML, substitute variables | ACTIVE |
+| `state-manager.sh` | SQLite state tracking | ACTIVE |
+| `query.sh` | Azure resource queries and caching | ACTIVE |
+| `logger.sh` | Structured JSONL logging | ACTIVE |
+| `error-handler.sh` | Self-healing pattern matching | ACTIVE |
+| `progress-tracker.sh` | Real-time monitoring | LEGACY (used by engine.sh only) |
 
-**Total**: 3,018 lines
+### Deprecated Components
+
+- **Module-based execution** (`execute_module` in engine.sh) - Use capability operations instead
+- **Parallel group execution** (`execute_parallel_group`) - Use workflow-engine.sh instead
+- **Legacy operation format** - Migrate to capability format with prerequisites and rollback
 
 ---
 
@@ -69,53 +74,23 @@ config.yaml → config-manager.sh → Export ENV vars
 
 ```
 azure-cli/
-├── config.yaml                  # Single source of truth
-├── state.db                     # SQLite state database
-│
-├── core/                        # Engine components (7 files)
-│   ├── config-manager.sh
-│   ├── template-engine.sh
-│   ├── engine.sh
-│   ├── progress-tracker.sh
-│   ├── error-handler.sh
-│   ├── logger.sh
-│   └── validator.sh
-│
-├── capabilities/                # Capability-based operations (ACTIVE)
-│   ├── networking/
-│   │   └── operations/          # 21 networking operations
-│   ├── storage/
-│   │   └── operations/          # 10 storage operations
-│   ├── identity/
-│   │   └── operations/          # 16 identity operations
-│   ├── compute/
-│   │   └── operations/          # 18 compute operations
-│   ├── avd/
-│   │   └── operations/          # 15 AVD operations
-│   ├── management/
-│   │   └── operations/          # 2 management operations
-│   └── test-capability/
-│       └── operations/          # 1 test operation
-│
-├── artifacts/                   # Runtime artifacts
-│   ├── logs/                    # JSONL structured logs
-│   ├── temp/                    # Temporary files
-│   ├── workflow-logs/           # Workflow execution logs
-│   └── workflow-state/          # Workflow state tracking
-│
+├── config.yaml              # Configuration (single source of truth)
+├── state.db                 # SQLite state tracking
+├── core/                    # 7 engine scripts
+├── capabilities/            # 79 operations across 7 domains
+│   ├── networking/          # 20 operations
+│   ├── storage/             # 9 operations
+│   ├── identity/            # 15 operations
+│   ├── compute/             # 17 operations
+│   ├── avd/                 # 15 operations
+│   ├── management/          # 2 operations
+│   └── test-capability/     # 1 operation
+├── artifacts/               # Logs only (gitignored)
+│   ├── logs/                # JSONL structured logs
+│   └── temp/                # Temporary files
 ├── tools/
-│   └── capability-cli.sh        # Capability/operation generator
-│
-├── docs/
-│   ├── config-migration.md
-│   └── archive/                 # Historical documentation
-│
-├── .claude/
-│   └── CLAUDE.md                # AI assistant instructions
-│
-└── legacy/                      # ARCHIVED: Original module-based system
-    ├── README.md                # Archive documentation
-    └── modules/                 # 10 legacy modules (reference only)
+│   └── capability-cli.sh    # Operation generator
+└── legacy/                  # Archived (DO NOT USE)
 ```
 
 ---
@@ -124,53 +99,50 @@ azure-cli/
 
 ### config.yaml Structure
 
-Single file containing all deployment configuration:
-
 ```yaml
-# Global Azure
 azure:
-  subscription_id: "00000000-0000-0000-0000-000000000000"
-  tenant_id: "00000000-0000-0000-0000-000000000000"
-  location: "centralus"
-  resource_group: "RG-Azure-VDI-01"
+  subscription_id: "{{YOUR_SUBSCRIPTION_ID}}"
+  tenant_id: "{{YOUR_TENANT_ID}}"
+  location: "{{YOUR_REGION}}"           # e.g., centralus, eastus
+  resource_group: "{{YOUR_RG_NAME}}"
 
-# Module-specific sections
 networking:
-  vnet_name: "avd-vnet"
-  subnet_name: "avd-subnet"
+  vnet_name: "{{YOUR_VNET_NAME}}"
+  subnet_name: "{{YOUR_SUBNET_NAME}}"
+  address_space: "{{YOUR_CIDR}}"        # e.g., 10.0.0.0/16
 
 storage:
-  account_name: "avdfslogix001"
-  share_name: "fslogix-profiles"
+  account_name: "{{YOUR_STORAGE_NAME}}" # lowercase, 3-24 chars
+  share_name: "{{YOUR_SHARE_NAME}}"
 
-golden_image:
-  temp_vm_name: "gm-temp-vm"
-  vm_size: "Standard_D4s_v6"
-  fslogix_version: "2.9.8653.48899"
-  timezone: "Central Standard Time"
-
-session_host:
-  vm_count: 2
-  vm_size: "Standard_D4s_v6"
-  name_prefix: "avd-sh"
+compute:
+  vm_size: "{{YOUR_VM_SKU}}"            # e.g., Standard_D4s_v5
+  vm_count: {{YOUR_COUNT}}              # e.g., 2
 ```
 
-### Configuration Loading
+### Variable Mapping
 
 ```bash
-# Load configuration (exports 50+ environment variables)
-source core/config-manager.sh
-load_config
+# Load configuration
+source core/config-manager.sh && load_config
 
-# Variables available as:
-echo $AZURE_RESOURCE_GROUP          # "RG-Azure-VDI-01"
-echo $GOLDEN_IMAGE_TEMP_VM_NAME     # "gm-temp-vm"
-echo $SESSION_HOST_VM_COUNT         # "2"
+# config.yaml → Environment Variables
+azure.subscription_id    → AZURE_SUBSCRIPTION_ID
+azure.resource_group     → AZURE_RESOURCE_GROUP
+networking.vnet_name     → NETWORKING_VNET_NAME
+storage.account_name     → STORAGE_ACCOUNT_NAME
 ```
 
-### Variable Usage in Templates
+**Variable Categories** (50+ total):
+- `AZURE_*` - Global settings (5 vars)
+- `NETWORKING_*` - VNet, NSG (5 vars)
+- `STORAGE_*` - Accounts, shares (4 vars)
+- `ENTRA_ID_*` - Groups, RBAC (6 vars)
+- `HOST_POOL_*` - AVD settings (4 vars)
+- `GOLDEN_IMAGE_*` - Image prep (12 vars)
+- `SESSION_HOST_*` - VMs (4 vars)
 
-YAML templates use `{{VARIABLE}}` syntax:
+### Template Substitution
 
 ```yaml
 operation:
@@ -178,402 +150,151 @@ operation:
     command: |
       az vm run-command invoke \
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{GOLDEN_IMAGE_TEMP_VM_NAME}}" \
-        --scripts "@capabilities/compute/operations/golden-image-install-fslogix.ps1"
+        --name "{{COMPUTE_VM_NAME}}" \
+        --scripts "@capabilities/compute/operations/script.ps1"
 ```
-
-**Available Variable Categories**:
-- `AZURE_*` - Global Azure settings (5 vars)
-- `NETWORKING_*` - VNet, subnet, NSG (5 vars)
-- `STORAGE_*` - Storage account, file shares (4 vars)
-- `ENTRA_ID_*` - Security groups (6 vars)
-- `HOST_POOL_*` - Host pool settings (4 vars)
-- `WORKSPACE_*` - Workspace settings (3 vars)
-- `APP_GROUP_*` - Application group settings (3 vars)
-- `GOLDEN_IMAGE_*` - Golden image settings (12 vars)
-- `SESSION_HOST_*` - Session host settings (4 vars)
-
-**Total**: 50+ configuration variables
 
 ---
 
 ## Execution Model
 
-### Commands
-
-```bash
-# Run capability operations
-./core/engine.sh run golden-image-install-apps
-./core/engine.sh run vnet-create
-./core/engine.sh run storage-account-create
-
-# Resume from last failure
-./core/engine.sh resume
-
-# Check execution status
-./core/engine.sh status
+```
+./core/engine.sh run <operation-id>
+  → Initialize state.db
+  → Load config.yaml → Export ENV vars
+  → Parse YAML → Substitute {{VARIABLES}}
+  → Execute command
+  → Monitor markers ([START/PROGRESS/SUCCESS])
+  → On error: retry max 3x
+  → Update state.db + checkpoint
 ```
 
-### Execution Flow
-
-```
-1. User Command
-   ./core/engine.sh run golden-image-install-apps
-
-2. Initialize State
-   ├─ Create state.json if missing
-   ├─ Initialize module tracking
-   └─ Create artifacts/ directories
-
-3. Load Configuration
-   ├─ Parse config.yaml with yq
-   ├─ Export 50+ environment variables
-   └─ Validate required fields
-
-4. Get Capability Operations
-   ├─ Read capabilities/*/operations/*.yaml
-   └─ Extract operation list
-
-5. For Each Operation:
-   ├─ Parse operation YAML
-   ├─ Load previous fixes (if any)
-   ├─ Substitute {{VARIABLES}}
-   ├─ Execute command
-   ├─ Monitor progress markers
-   ├─ Update state.json
-   └─ Create checkpoint
-
-6. On Error → error-handler.sh
-   ├─ Extract [ERROR] markers
-   ├─ Generate fix description
-   ├─ Apply fix to YAML (yq)
-   ├─ Retry (max 3 times)
-   └─ Next run uses fixed template
-
-7. On Success → Next Operation
-```
-
-### Progress Markers
-
-All PowerShell scripts **must** include:
-
+**Progress markers** (required in PowerShell):
 ```powershell
-Write-Host "[START] Operation: $(Get-Date -Format 'HH:mm:ss')"
-Write-Host "[PROGRESS] Step 1/4: Downloading..."
-Write-Host "[PROGRESS] Step 2/4: Installing..."
-Write-Host "[VALIDATE] Checking installation..."
-Write-Host "[SUCCESS] Operation completed"
-exit 0  # Required
+Write-Host "[START] {{Operation}}: $(Get-Date -Format 'HH:mm:ss')"
+Write-Host "[PROGRESS] Step 1/N: {{Description}}"
+Write-Host "[SUCCESS] {{Completion message}}"
+exit 0
 ```
 
-**Supported Markers**:
-- `[START]` - Operation begins
-- `[PROGRESS]` - Step update
-- `[VALIDATE]` - Validation check
-- `[SUCCESS]` - Completed successfully
-- `[ERROR]` - Error occurred
-- `[WARNING]` - Non-fatal issue
+Supported: `[START]`, `[PROGRESS]`, `[VALIDATE]`, `[SUCCESS]`, `[ERROR]`, `[WARNING]`
 
 ---
 
 ## Capability System
 
-The deployment engine uses a capability-based organization:
+### Design Principles
 
-### Benefits
-- **Domain Organization:** Operations grouped by Azure service domain
-- **Discoverability:** Easy to find networking, storage, or identity operations
-- **Reusability:** Operations can be used across different deployment scenarios
-- **Composability:** Build workflows from capability operations
+- **Domain Organization**: Group by Azure service (networking, compute, etc.)
+- **Reusability**: Use operations across workflows
+- **Composability**: Chain operations
+- **Idempotency**: Check before execute
+- **Self-Documenting**: YAML defines behavior
 
-### Capability Structure
-Each operation defines:
-- **capability:** Domain (networking, storage, identity, compute, avd, management)
-- **operation_mode:** Action type (create, configure, validate, update, delete)
-- **resource_type:** Azure resource (Microsoft.Network/virtualNetworks)
-- **parameters:** Required and optional configuration
-- **idempotency:** Check before execution
-- **validation:** Verify after execution
-- **rollback:** Cleanup procedures
-
-### Available Capabilities
-- **networking** - VNets, subnets, NSGs, VPN gateways, DNS, load balancers (20 operations)
-- **storage** - Storage accounts, file shares, private endpoints, blob containers (9 operations)
-- **identity** - Entra ID groups, RBAC, service principals, managed identities (15 operations)
-- **compute** - VMs, images, disks, golden image preparation, extensions (17 operations)
-- **avd** - Host pools, workspaces, app groups, scaling plans, session hosts (15 operations)
-- **management** - Resource groups, validation, deployment state (2 operations)
-- **test-capability** - Testing and validation framework (1 operation)
-
----
-
-## Operation Development
-
-### Creating a New Operation
-
-Use the capability CLI:
-
-```bash
-./tools/capability-cli.sh create-operation <capability> <operation-name>
-```
-
-Or manually:
-
-#### 1. Create Capability Directory
-
-```bash
-mkdir -p capabilities/compute/operations/
-```
-
-#### 2. Create Operation Template (`operations/session-host-create-vms.yaml`)
+### Operation Structure
 
 ```yaml
 operation:
-  id: "session-host-create-vms"
-  name: "Create Session Host VMs"
+  id: "{{capability}}-{{action}}-{{resource}}"
+  name: "{{Human Readable Name}}"
 
   duration:
-    expected: 300      # Seconds
-    timeout: 600
-    type: "NORMAL"
+    expected: {{seconds}}
+    timeout: {{seconds}}
+    type: "FAST|NORMAL|SLOW"
 
   template:
-    type: "az-cli"
+    type: "az-cli|az-vm-run-command"
     command: |
-      az vm create \
-        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-        --name "{{SESSION_HOST_NAME_PREFIX}}-01" \
-        --image "{{GOLDEN_IMAGE_DEFINITION_NAME}}" \
-        --size "{{SESSION_HOST_VM_SIZE}}"
+      {{Azure CLI command with {{VARIABLES}}}}
+
+  powershell:
+    content: |
+      {{Inline PowerShell if needed}}
 
   validation:
-    enabled: true
+    enabled: true|false
     checks:
-      - type: "vm_running"
-        timeout: 120
+      - type: "{{validation_type}}"
+        expected: {{value}}
 
   fixes:
-    # Auto-populated by error handler
+    # Auto-populated by error-handler.sh
 ```
 
-#### 3. Add Configuration to `config.yaml`
+### Available Capabilities
 
-```yaml
-session_host:
-  vm_count: 2
-  vm_size: "Standard_D4s_v6"
-  name_prefix: "avd-sh"
-```
+| Capability | Operations | Purpose |
+|------------|-----------|---------|
+| networking | 20 | VNets, subnets, NSGs, DNS, VPN |
+| storage | 9 | Accounts, shares, private endpoints |
+| identity | 15 | Entra ID, RBAC, managed identities |
+| compute | 17 | VMs, images, disks, extensions |
+| avd | 15 | Host pools, workspaces, app groups |
+| management | 2 | Resource groups, validation |
+| test-capability | 1 | Testing framework |
 
-#### 4. Execute Operation
-
-```bash
-source core/config-manager.sh && load_config
-./core/engine.sh run session-host-create-vms
-```
-
-### Operation YAML Template Format
-
-**Required Fields**:
-- `operation.id` - Unique identifier
-- `operation.name` - Human-readable name
-- `operation.duration.expected` - Expected duration (seconds)
-- `operation.duration.timeout` - Fail if exceeds this
-- `operation.duration.type` - `FAST` | `NORMAL` | `SLOW`
-- `operation.template.command` - Bash command to execute
-
-**Optional Fields**:
-- `operation.powershell.content` - Inline PowerShell script
-- `operation.validation.enabled` - Enable validation
-- `operation.validation.checks` - List of validation checks
-- `operation.fixes` - Previous fixes (auto-populated)
+**Total**: 79 operations
 
 ---
 
 ## Error Handling & Self-Healing
 
-### Automatic Error Recovery
-
-When an operation fails:
-
-#### 1. Error Detection
-
-```powershell
-Write-Host "[ERROR] Failed to download FSLogix: Connection timeout"
-exit 1
+**Automatic recovery**:
+```
+Error → Extract [ERROR] text → Generate fix → Apply to YAML (yq)
+  → Retry (max 3x) → Success or checkpoint
 ```
 
-#### 2. Error Extraction
-
-`error-handler.sh` parses `[ERROR]` markers from operation output:
-
-```bash
-cat artifacts/outputs/golden-image-install-fslogix.json | jq -r '.value[0].message' | grep '\[ERROR\]'
-```
-
-#### 3. Fix Generation
-
-Analyze error and generate fix description:
-
-```bash
-# Example error: "Connection timeout"
-# Generated fix: "Increase timeout in Invoke-WebRequest -TimeoutSec 120"
-```
-
-#### 4. Apply Fix to YAML
-
-Use `yq` to add fix to operation template:
-
-```bash
-yq eval '.operation.fixes += [{"issue": "Download timeout", "detected": "2025-12-05", "fix": "Added -TimeoutSec 120", "applied_to_template": true}]' -i operation.yaml
-```
-
-#### 5. Retry Operation
-
-```bash
-# Automatically retry (max 3 attempts)
-if [ "$retry_count" -lt 3 ]; then
-    increment_retry_count "$operation_id"
-    execute_operation "$module_id" "$operation_id"
-else
-    fail_operation "$operation_id" "Max retries exceeded"
-fi
-```
-
-### Anti-Destructive Safeguards
-
-Error handler **blocks** these patterns:
-
-- `az vm delete`
-- `recreate.*vm`
-- `start over`
-- `create.*new.*vm`
-- `destroy`
-- `remove.*vm`
-- `az vm deallocate.*delete`
+**Anti-destructive safeguards** (blocked patterns):
+`az vm delete`, `recreate.*vm`, `start over`, `destroy`, `remove.*vm`
 
 **Philosophy**: Fix incrementally, never destroy and recreate.
 
-### State Files
-
-**state.json**:
-```json
-{
-  "current_module": "05-golden-image",
-  "current_operation": "golden-image-install-fslogix",
-  "operations": {
-    "golden-image-system-prep": {
-      "status": "completed",
-      "duration": 33,
-      "timestamp": "2025-12-04T20:47:06Z"
-    }
-  }
-}
-```
-
-**Checkpoint Files** (`artifacts/checkpoint_[operation].json`):
-```json
-{
-  "operation_id": "golden-image-system-prep",
-  "status": "completed",
-  "duration_seconds": 33,
-  "timestamp": "2025-12-04T20:47:06Z"
-}
-```
-
-**Structured Logs** (`artifacts/logs/deployment_YYYYMMDD.jsonl`):
-```jsonl
-{"timestamp":"2025-12-04T20:47:06Z","level":"INFO","operation":"golden-image-system-prep","message":"[START] System preparation"}
-{"timestamp":"2025-12-04T20:47:39Z","level":"INFO","operation":"golden-image-system-prep","message":"[SUCCESS] Complete"}
-```
+**State tracking**:
+- `state.db` - SQLite (current operation, history, retry counts)
+- `artifacts/checkpoint_*.json` - Operation checkpoints
+- `artifacts/logs/*.jsonl` - Structured logs
 
 ---
 
-## Troubleshooting
+## Operation Development
 
-### Config Loading Fails
+See [docs/guides/executor-overview.md](docs/guides/executor-overview.md) for detailed guides.
 
+**Quick create**:
 ```bash
-# Error: yq command not found
-# Solution:
-sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-sudo chmod +x /usr/local/bin/yq
+./tools/capability-cli.sh create-operation {{capability}} {{operation-name}}
 ```
 
-### Variable Substitution Fails
+**Naming conventions**:
+- Operations: `{{capability}}-{{action}}-{{resource}}`
+- Files: `{{action}}-{{resource}}.yaml`
+- Variables: `{{CATEGORY}}_{{SUBCATEGORY}}_{{NAME}}`
 
-```bash
-# Error: {{VARIABLE}} not replaced
-# Solution: Ensure load_config() was called
-source core/config-manager.sh
-load_config
-echo $AZURE_RESOURCE_GROUP  # Should not be empty
-```
-
-### Operation Timeout
-
-```bash
-# Check expected vs actual duration
-# Adjust timeout if operation legitimately takes longer
-yq eval '.operation.duration.timeout = 900' -i capabilities/compute/operations/golden-image-system-prep.yaml
-```
-
-### Resume After Failure
-
-```bash
-# Check current state
-cat state.json | jq '.current_operation'
-
-# Resume from last checkpoint
-./core/engine.sh resume
-```
-
-### View Logs
-
-```bash
-# Real-time monitoring
-tail -f artifacts/logs/deployment_$(date +%Y%m%d).jsonl
-
-# View operation output
-cat artifacts/outputs/[operation-id].json | jq -r '.value[0].message'
-
-# Check for errors
-grep '\[ERROR\]' artifacts/logs/*.jsonl
-```
+**Required fields**: id, name, duration.expected, duration.timeout, template.command
+**Optional fields**: powershell.content, validation, fixes (auto-populated)
 
 ---
 
-## Operation Status
+## Integration Points
 
-| Capability | Operations | Status | Notes |
-|------------|-----------|--------|-------|
-| Networking | 20 | ✅ Migrated | VNets, subnets, NSGs, DNS, VPN, gateways |
-| Compute | 17 | ✅ Migrated | VMs, images, golden image prep, extensions |
-| Identity | 15 | ✅ Migrated | Groups, RBAC, service principals, managed identities |
-| AVD | 15 | ✅ Migrated | Host pools, workspaces, app groups, scaling, SSO |
-| Storage | 9 | ✅ Migrated | Accounts, shares, private endpoints, DNS zones |
-| Management | 2 | ✅ Migrated | Resource groups, validation |
-| Test-Capability | 1 | ✅ Migrated | Testing framework |
-
-**Total:** 83 operations across 7 capabilities
-**Migration Status:** ✅ COMPLETE (2025-12-06)
-
-See [docs/migration/](docs/migration/) for migration history and operation catalog.
+- **Azure CLI**: All operations use `az` commands (no RDP/WinRM/PowerShell remoting)
+- **State**: SQLite database (`state.db`) tracks execution
+- **Logs**: JSONL format (`artifacts/logs/deployment_YYYYMMDD.jsonl`)
 
 ---
 
 ## Additional Resources
 
-- **Quick Start**: [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
-- **README**: [README.md](README.md) - Project overview
-- **Main Hub & User Guide**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
-- **Remote Execution**: [docs/features/remote-execution-part1.md](docs/features/remote-execution-part1.md)
-- **Configuration**: [config.yaml](config.yaml)
-- **Legacy Reference**: [legacy/README.md](legacy/README.md)
+- **Quick Start**: [QUICKSTART.md](QUICKSTART.md)
+- **User Guide**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
+- **Documentation**: [docs/README.md](docs/README.md)
+- **Migration Status**: [docs/migration/](docs/migration/)
 
 ---
 
-**Last Updated**: 2025-12-06
-**Engine Version**: Phase 3 Complete (Self-Healing)
-**System**: Capability-based (79 operations across 7 capabilities)
-**Migration Status**: ✅ Complete
+**Last Updated**: 2025-12-07
+**Engine Version**: Phase 3 (Self-Healing)
+**Operations**: 79 across 7 capabilities
+**Status**: ✅ Production Ready

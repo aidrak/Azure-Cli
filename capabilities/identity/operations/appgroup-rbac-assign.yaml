@@ -7,17 +7,14 @@ operation:
   id: "appgroup-rbac-assign"
   name: "Assign Application Group RBAC Permissions"
   description: "Assign Desktop Virtualization User role to application groups for both user groups"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Authorization/roleAssignments"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 300    # 5 minutes (fail-fast if exceeds)
-    type: "FAST"    # FAST (<5min) or WAIT (10+min)
-
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes (fail-fast if exceeds)
+    type: "FAST" # FAST (<5min) or WAIT (10+min)
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,12 +39,10 @@ operation:
         type: "string"
         description: "Admin users group name"
         default: "{{ENTRA_GROUP_USERS_ADMINS}}"
-
   # Prerequisites (check state.json)
   requires:
     - operation: "vm-login-rbac-assign"
       status: "completed"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -73,7 +68,6 @@ operation:
             exit 1
           }
         description: "Verify application group permissions are assigned"
-
   # Idempotency: Check for existing role assignments
   idempotency:
     enabled: true
@@ -81,13 +75,38 @@ operation:
       az role assignment list \
         --role "Desktop Virtualization User" \
         --output none 2>/dev/null
-    skip_if_exists: false  # Check but don't skip (may need to assign)
-
+    skip_if_exists: false # Check but don't skip (may need to assign)
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rbac-appgroup-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Application Group RBAC Assignments"
+        description: "Revoke application group role assignments from user groups"
+        command: |
+          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
+          APP_GROUP_ID=$(az desktopvirtualization applicationgroup list --resource-group "$RESOURCE_GROUP" --query "[0].id" -o tsv 2>/dev/null)
+
+          if [ -n "$APP_GROUP_ID" ]; then
+            # Get and remove standard users assignment
+            STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
+            if [ -n "$STD_GROUP_ID" ]; then
+              az role assignment delete --assignee "$STD_GROUP_ID" --role "Desktop Virtualization User" --scope "$APP_GROUP_ID" 2>/dev/null || true
+            fi
+
+            # Get and remove admin users assignment
+            ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
+            if [ -n "$ADMIN_GROUP_ID" ]; then
+              az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Desktop Virtualization User" --scope "$APP_GROUP_ID" 2>/dev/null || true
+            fi
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Application Group Permissions Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -256,34 +275,3 @@ operation:
 
       Write-Host "[SUCCESS] Application group permissions assignment completed"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rbac-appgroup-wrapper.ps1
-      rm -f /tmp/rbac-appgroup-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove Application Group RBAC Assignments"
-        description: "Revoke application group role assignments from user groups"
-        command: |
-          RESOURCE_GROUP="{{AZURE_RESOURCE_GROUP}}"
-          APP_GROUP_ID=$(az desktopvirtualization applicationgroup list --resource-group "$RESOURCE_GROUP" --query "[0].id" -o tsv 2>/dev/null)
-
-          if [ -n "$APP_GROUP_ID" ]; then
-            # Get and remove standard users assignment
-            STD_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" --query "[0].id" -o tsv 2>/dev/null)
-            if [ -n "$STD_GROUP_ID" ]; then
-              az role assignment delete --assignee "$STD_GROUP_ID" --role "Desktop Virtualization User" --scope "$APP_GROUP_ID" 2>/dev/null || true
-            fi
-
-            # Get and remove admin users assignment
-            ADMIN_GROUP_ID=$(az ad group list --filter "displayName eq '{{ENTRA_GROUP_USERS_ADMINS}}'" --query "[0].id" -o tsv 2>/dev/null)
-            if [ -n "$ADMIN_GROUP_ID" ]; then
-              az role assignment delete --assignee "$ADMIN_GROUP_ID" --role "Desktop Virtualization User" --scope "$APP_GROUP_ID" 2>/dev/null || true
-            fi
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

@@ -6,17 +6,14 @@ operation:
   id: "group-delete"
   name: "Delete Entra Group"
   description: "Delete Entra (Azure AD) group and all associated memberships permanently"
-
   capability: "identity"
   operation_mode: "delete"
   resource_type: "Microsoft.Graph/groups"
-
   # Duration expectations
   duration:
-    expected: 60        # 1 minute
-    timeout: 180        # 3 minutes
+    expected: 60 # 1 minute
+    timeout: 180 # 3 minutes
     type: "NORMAL"
-
   # Parameters for deletion
   parameters:
     required:
@@ -36,7 +33,6 @@ operation:
         type: "boolean"
         description: "Perform validation without actual deletion"
         default: false
-
   # Validation checks (pre-checks for delete operations)
   validation:
     enabled: true
@@ -45,19 +41,23 @@ operation:
         resource_type: "Microsoft.Graph/groups"
         resource_name: "{{group_name}}"
         description: "Entra group exists"
-
   # Idempotency: Check if already deleted
   idempotency:
     enabled: true
     check_command: |
       az ad group show --group "{{group_name}}" --output none 2>/dev/null || exit 0
     skip_if_exists: false
-
   # Template command (delete Entra group)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/identity-group-delete-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Not possible for delete operations
+  rollback:
+    enabled: false
+    note: "Entra group deletion is irreversible. Members and assignments cannot be recovered."
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Entra group deletion: {{group_name}} at $(Get-Date -Format 'HH:mm:ss')"
 
       $groupName = "{{group_name}}"
@@ -172,14 +172,3 @@ operation:
       Write-Host "[WARNING] Group appears to still exist after deletion attempt"
       Write-Host "[WARNING] This may be due to Azure AD replication delay"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/identity-group-delete-wrapper.ps1
-      rm -f /tmp/identity-group-delete-wrapper.ps1
-
-  # Rollback: Not possible for delete operations
-  rollback:
-    enabled: false
-    note: "Entra group deletion is irreversible. Members and assignments cannot be recovered."
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

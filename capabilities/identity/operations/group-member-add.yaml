@@ -7,17 +7,14 @@ operation:
   id: "group-member-add"
   name: "Add Member to Entra ID Group"
   description: "Add users or service principals as members to Entra ID security groups"
-
   capability: "identity"
   operation_mode: "configure"
   resource_type: "Microsoft.Graph/groups"
-
   # Duration expectations
   duration:
-    expected: 30    # 30 seconds
-    timeout: 120    # 2 minutes
+    expected: 30 # 30 seconds
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,7 +39,6 @@ operation:
         type: "boolean"
         description: "Skip if member already exists in group"
         default: true
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -50,7 +46,6 @@ operation:
       - type: "group_member_exists"
         group_name: "{{ENTRA_GROUP_USERS_STANDARD}}"
         description: "Member added to group successfully"
-
   # Idempotency: Member addition is idempotent
   idempotency:
     enabled: true
@@ -68,12 +63,30 @@ operation:
         --query "[?id=='{{MEMBER_ID}}']" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/identity-group-member-add-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Remove member from group
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Member from Group"
+        description: "Remove the member from the Entra ID group"
+        command: |
+          GROUP_ID=$(az ad group list \
+            --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" \
+            --query "[0].id" -o tsv)
+          if [ -n "$GROUP_ID" ]; then
+            az ad group member remove \
+              --group "$GROUP_ID" \
+              --member-id "{{MEMBER_ID}}" \
+              --yes
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Adding Group Member: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -218,27 +231,3 @@ operation:
       Write-Host "[INFO] Member has been successfully added to the group"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/identity-group-member-add-wrapper.ps1
-      rm -f /tmp/identity-group-member-add-wrapper.ps1
-
-  # Rollback: Remove member from group
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove Member from Group"
-        description: "Remove the member from the Entra ID group"
-        command: |
-          GROUP_ID=$(az ad group list \
-            --filter "displayName eq '{{ENTRA_GROUP_USERS_STANDARD}}'" \
-            --query "[0].id" -o tsv)
-          if [ -n "$GROUP_ID" ]; then
-            az ad group member remove \
-              --group "$GROUP_ID" \
-              --member-id "{{MEMBER_ID}}" \
-              --yes
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

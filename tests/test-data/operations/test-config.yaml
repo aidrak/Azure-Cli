@@ -1,0 +1,22 @@
+azure:
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+  tenant_id: "11111111-1111-1111-1111-111111111111"
+  location: "eastus"
+  resource_group: "rg-test-01"
+
+networking:
+  vnet:
+    name: "vnet-test"
+    address_space:
+      - "10.0.0.0/16"
+    dns_servers: []
+
+storage:
+  account_name: "sttestaccount"
+  sku: "Standard_LRS"
+  file_share_name: "testshare"
+  quota_gb: 100
+
+compute:
+  vm_size: "Standard_D4s_v3"
+  admin_user: "azureuser"

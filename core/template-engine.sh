@@ -18,6 +18,80 @@ set -euo pipefail
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # ==============================================================================
+# Pre-Parse Configuration Values from YAML
+# ==============================================================================
+# This function extracts values from config.yaml BEFORE PowerShell execution,
+# eliminating the need to call yq from within PowerShell scripts.
+# Values are exported as environment variables for template substitution.
+#
+# Usage in operation YAML:
+#   operation:
+#     template:
+#       pre_parse:
+#         - source: ".networking.private_dns.enabled"
+#           variable: "PRIVATE_DNS_ENABLED"
+#         - source: ".networking.private_dns.zones"
+#           variable: "DNS_ZONES_JSON"
+#           format: "json"
+#
+preparse_config_values() {
+    local yaml_file="$1"
+    local config_file="${PROJECT_ROOT}/config.yaml"
+
+    # Check if pre_parse section exists
+    local preparse_count
+    preparse_count=$(yq e '.operation.template.pre_parse | length' "$yaml_file" 2>/dev/null || echo "0")
+
+    if [[ "$preparse_count" == "0" || "$preparse_count" == "null" ]]; then
+        # No pre_parse section, nothing to do
+        return 0
+    fi
+
+    if [[ ! -f "$config_file" ]]; then
+        echo "[!] WARNING: Config file not found for pre-parsing: $config_file" >&2
+        return 0
+    fi
+
+    echo "[*] Pre-parsing $preparse_count config values..." >&2
+
+    local i=0
+    while [[ $i -lt $preparse_count ]]; do
+        local source
+        local variable
+        local format
+
+        source=$(yq e ".operation.template.pre_parse[$i].source" "$yaml_file")
+        variable=$(yq e ".operation.template.pre_parse[$i].variable" "$yaml_file")
+        format=$(yq e ".operation.template.pre_parse[$i].format // \"string\"" "$yaml_file")
+
+        if [[ -z "$source" || "$source" == "null" || -z "$variable" || "$variable" == "null" ]]; then
+            echo "[!] WARNING: Invalid pre_parse entry at index $i" >&2
+            ((i++))
+            continue
+        fi
+
+        local value
+        if [[ "$format" == "json" ]]; then
+            # Extract as JSON (for arrays/objects)
+            value=$(yq e "$source" "$config_file" -o=json 2>/dev/null || echo "null")
+        else
+            # Extract as string
+            value=$(yq e "$source" "$config_file" 2>/dev/null || echo "")
+        fi
+
+        # Export for template substitution
+        export "$variable"="$value"
+
+        echo "[v] Pre-parsed: $variable = ${value:0:50}$([ ${#value} -gt 50 ] && echo '...')" >&2
+
+        ((i++))
+    done
+
+    echo "[v] Pre-parsing complete" >&2
+    return 0
+}
+
+# ==============================================================================
 # Parse Operation YAML
 # ==============================================================================
 parse_operation_yaml() {
@@ -29,6 +103,9 @@ parse_operation_yaml() {
     fi
 
     echo "[*] Parsing operation: $yaml_file" >&2
+
+    # Pre-parse config values FIRST (before any substitution)
+    preparse_config_values "$yaml_file"
 
     # Extract key fields using yq (works for both legacy and capability formats)
     OPERATION_ID=$(yq e '.operation.id' "$yaml_file")
@@ -85,91 +162,56 @@ parse_operation_yaml() {
 # ==============================================================================
 # Substitute Variables in Template
 # ==============================================================================
+# Now supports dynamic resolution via value-resolver.sh
+# Priority: Environment Variable -> Azure Discovery -> Standards -> Config -> Ask
+#
 substitute_variables() {
     local template="$1"
+    local context="${2:-}"
     local result="$template"
 
-    # Replace {{VAR}} with environment variable value
-    # Common variables from config.yaml (loaded by config-manager.sh):
+    # Source value resolver for dynamic resolution (required)
+    local use_dynamic_resolution=true
+    if [[ -f "${PROJECT_ROOT}/core/value-resolver.sh" ]]; then
+        source "${PROJECT_ROOT}/core/value-resolver.sh" 2>/dev/null || {
+            echo "[x] ERROR: Failed to load value-resolver.sh - dynamic resolution unavailable" >&2
+            use_dynamic_resolution=false
+        }
+    else
+        echo "[x] ERROR: value-resolver.sh not found at ${PROJECT_ROOT}/core/value-resolver.sh" >&2
+        echo "[!] Dynamic configuration resolution is disabled - template substitution will be limited" >&2
+        use_dynamic_resolution=false
+    fi
 
-    # Azure variables
-    result="${result//\{\{AZURE_SUBSCRIPTION_ID\}\}/$AZURE_SUBSCRIPTION_ID}"
-    result="${result//\{\{AZURE_TENANT_ID\}\}/$AZURE_TENANT_ID}"
-    result="${result//\{\{AZURE_LOCATION\}\}/$AZURE_LOCATION}"
-    result="${result//\{\{AZURE_RESOURCE_GROUP\}\}/$AZURE_RESOURCE_GROUP}"
+    # Find all {{VARIABLE}} patterns in template
+    local variables
+    variables=$(echo "$result" | grep -oE '\{\{[A-Z_]+\}\}' | sort -u || true)
 
-    # Networking variables
-    result="${result//\{\{NETWORKING_VNET_NAME\}\}/${NETWORKING_VNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_VNET_CIDR\}\}/${NETWORKING_VNET_CIDR:-}}"
-    result="${result//\{\{NETWORKING_SUBNET_NAME\}\}/${NETWORKING_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_SUBNET_CIDR\}\}/${NETWORKING_SUBNET_CIDR:-}}"
-    result="${result//\{\{NETWORKING_NSG_NAME\}\}/${NETWORKING_NSG_NAME:-}}"
-    result="${result//\{\{NETWORKING_SESSION_HOST_SUBNET_NAME\}\}/${NETWORKING_SESSION_HOST_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME\}\}/${NETWORKING_PRIVATE_ENDPOINT_SUBNET_NAME:-}}"
-    result="${result//\{\{NETWORKING_MANAGEMENT_SUBNET_NAME\}\}/${NETWORKING_MANAGEMENT_SUBNET_NAME:-}}"
+    for var_pattern in $variables; do
+        # Skip POWERSHELL_CONTENT - handled separately below
+        [[ "$var_pattern" == "{{POWERSHELL_CONTENT}}" ]] && continue
 
-    # Storage variables
-    result="${result//\{\{STORAGE_ACCOUNT_NAME\}\}/${STORAGE_ACCOUNT_NAME:-}}"
-    result="${result//\{\{STORAGE_SHARE_NAME\}\}/${STORAGE_SHARE_NAME:-}}"
-    result="${result//\{\{STORAGE_FILE_SHARE_NAME\}\}/${STORAGE_FILE_SHARE_NAME:-}}"
-    result="${result//\{\{STORAGE_QUOTA_GB\}\}/${STORAGE_QUOTA_GB:-}}"
-    result="${result//\{\{STORAGE_SKU\}\}/${STORAGE_SKU:-}}"
-    result="${result//\{\{STORAGE_KIND\}\}/${STORAGE_KIND:-}}"
-    result="${result//\{\{STORAGE_ENABLE_ENTRA_KERBEROS\}\}/${STORAGE_ENABLE_ENTRA_KERBEROS:-}}"
-    result="${result//\{\{STORAGE_ENABLE_SMB_MULTICHANNEL\}\}/${STORAGE_ENABLE_SMB_MULTICHANNEL:-}}"
-    result="${result//\{\{STORAGE_PUBLIC_NETWORK_ACCESS\}\}/${STORAGE_PUBLIC_NETWORK_ACCESS:-}}"
-    result="${result//\{\{STORAGE_HTTPS_ONLY\}\}/${STORAGE_HTTPS_ONLY:-}}"
-    result="${result//\{\{STORAGE_MIN_TLS_VERSION\}\}/${STORAGE_MIN_TLS_VERSION:-}}"
+        # Extract variable name (remove {{ and }})
+        local var_name="${var_pattern//\{\{/}"
+        var_name="${var_name//\}\}/}"
 
-    # Entra ID variables
-    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD\}\}/${ENTRA_GROUP_USERS_STANDARD:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_STANDARD_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_STANDARD_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS\}\}/${ENTRA_GROUP_USERS_ADMINS:-}}"
-    result="${result//\{\{ENTRA_GROUP_USERS_ADMINS_DESCRIPTION\}\}/${ENTRA_GROUP_USERS_ADMINS_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO\}\}/${ENTRA_GROUP_DEVICES_SSO:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SSO_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SSO_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_FSLOGIX_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK\}\}/${ENTRA_GROUP_DEVICES_NETWORK:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_NETWORK_DESCRIPTION:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY\}\}/${ENTRA_GROUP_DEVICES_SECURITY:-}}"
-    result="${result//\{\{ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION\}\}/${ENTRA_GROUP_DEVICES_SECURITY_DESCRIPTION:-}}"
+        local resolved_value=""
 
-    # Golden Image variables
-    result="${result//\{\{GOLDEN_IMAGE_TEMP_VM_NAME\}\}/${GOLDEN_IMAGE_TEMP_VM_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_VM_SIZE\}\}/${GOLDEN_IMAGE_VM_SIZE:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_PUBLISHER\}\}/${GOLDEN_IMAGE_IMAGE_PUBLISHER:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_OFFER\}\}/${GOLDEN_IMAGE_IMAGE_OFFER:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_SKU\}\}/${GOLDEN_IMAGE_IMAGE_SKU:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_IMAGE_VERSION\}\}/${GOLDEN_IMAGE_IMAGE_VERSION:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_USERNAME\}\}/${GOLDEN_IMAGE_ADMIN_USERNAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_ADMIN_PASSWORD\}\}/${GOLDEN_IMAGE_ADMIN_PASSWORD:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_GALLERY_NAME\}\}/${GOLDEN_IMAGE_GALLERY_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_DEFINITION_NAME\}\}/${GOLDEN_IMAGE_DEFINITION_NAME:-}}"
-    result="${result//\{\{GOLDEN_IMAGE_APPLICATIONS_CSV\}\}/${GOLDEN_IMAGE_APPLICATIONS_CSV:-}}"
-    result="${result//\{\{APP_MANIFEST_CONTENT\}\}/${APP_MANIFEST_CONTENT:-}}"
-    result="${result//\{\{APP_MANIFEST_B64\}\}/${APP_MANIFEST_B64:-}}"
+        # Try dynamic resolution first (if available)
+        if [[ "$use_dynamic_resolution" == "true" ]]; then
+            resolved_value=$(resolve_value "$var_name" "$context" "{}" 2>/dev/null) || resolved_value=""
+        fi
 
-    # Host Pool variables
-    result="${result//\{\{HOST_POOL_NAME\}\}/${HOST_POOL_NAME:-}}"
-    result="${result//\{\{HOST_POOL_TYPE\}\}/${HOST_POOL_TYPE:-}}"
-    result="${result//\{\{HOST_POOL_MAX_SESSIONS\}\}/${HOST_POOL_MAX_SESSIONS:-}}"
-    result="${result//\{\{HOST_POOL_LOAD_BALANCER\}\}/${HOST_POOL_LOAD_BALANCER:-}}"
+        # Fall back to direct environment variable
+        if [[ -z "$resolved_value" ]]; then
+            resolved_value="${!var_name:-}"
+        fi
 
-    # Workspace variables
-    result="${result//\{\{WORKSPACE_NAME\}\}/${WORKSPACE_NAME:-}}"
-    result="${result//\{\{WORKSPACE_FRIENDLY_NAME\}\}/${WORKSPACE_FRIENDLY_NAME:-}}"
+        # Substitute in template
+        result="${result//$var_pattern/$resolved_value}"
+    done
 
-    # App Group variables
-    result="${result//\{\{APP_GROUP_NAME\}\}/${APP_GROUP_NAME:-}}"
-    result="${result//\{\{APP_GROUP_TYPE\}\}/${APP_GROUP_TYPE:-}}"
-
-    # Session Host variables
-    result="${result//\{\{SESSION_HOST_VM_COUNT\}\}/${SESSION_HOST_VM_COUNT:-}}"
-    result="${result//\{\{SESSION_HOST_VM_SIZE\}\}/${SESSION_HOST_VM_SIZE:-}}"
-    result="${result//\{\{SESSION_HOST_NAME_PREFIX\}\}/${SESSION_HOST_NAME_PREFIX:-}}"
-
-    # Project paths
+    # Handle PROJECT_ROOT separately (always available)
     result="${result//\{\{PROJECT_ROOT\}\}/$PROJECT_ROOT}"
 
     # PowerShell content (for powershell-vm-command template type)
@@ -243,7 +285,58 @@ render_command() {
     # Parse operation
     parse_operation_yaml "$yaml_file" || return 1
 
-    # Extract PowerShell script (if exists)
+    # Handle powershell-direct template type
+    if [[ "$TEMPLATE_TYPE" == "powershell-direct" ]]; then
+        # Create temp file with PowerShell content
+        local temp_ps_file="/tmp/powershell-direct-${OPERATION_ID}-$(date +%s).ps1"
+
+        # Extract and substitute variables in PowerShell content
+        if [[ -n "$POWERSHELL_CONTENT" && "$POWERSHELL_CONTENT" != "null" ]]; then
+            local ps_content
+            ps_content=$(substitute_variables "$POWERSHELL_CONTENT")
+            echo "$ps_content" > "$temp_ps_file"
+        else
+            echo "[x] ERROR: powershell-direct requires powershell.content" >&2
+            return 1
+        fi
+
+        # Return command to execute PowerShell and cleanup
+        echo "pwsh -NoProfile -NonInteractive -File \"$temp_ps_file\"; _exit_code=\$?; rm -f \"$temp_ps_file\"; exit \$_exit_code"
+        return 0
+    fi
+
+    # Handle powershell-vm-command template type
+    if [[ "$TEMPLATE_TYPE" == "powershell-vm-command" ]]; then
+        # Extract PowerShell script first (if exists)
+        local ps_script
+        ps_script=$(extract_powershell_script "$yaml_file" 2>/dev/null) || true
+        local ps_script_status=$?
+
+        # Substitute variables in template command
+        local command
+        command=$(substitute_variables "$TEMPLATE_COMMAND")
+
+        # Replace @script.ps1 patterns with actual extracted path
+        if [[ -n "$ps_script" && -f "$ps_script" ]]; then
+            # Replace @${PS_FILE} or @"${PS_FILE}" with extracted path
+            # Also replace any @path/to/file.ps1 patterns
+            if [[ -n "$POWERSHELL_FILE" && "$POWERSHELL_FILE" != "null" ]]; then
+                # Replace patterns like @${PS_FILE} or @"${PS_FILE}"
+                command="${command//\@\$\{PS_FILE\}/@${ps_script}}"
+                command="${command//\@\"\$\{PS_FILE\}\"/@${ps_script}}"
+                # Also replace direct filename references
+                if [[ "$command" =~ @[^[:space:]]*${POWERSHELL_FILE} ]]; then
+                    local full_match="${BASH_REMATCH[0]}"
+                    command="${command//${full_match}/@${ps_script}}"
+                fi
+            fi
+        fi
+
+        echo "$command"
+        return 0
+    fi
+
+    # Extract PowerShell script (if exists) for other template types
     local ps_script
     ps_script=$(extract_powershell_script "$yaml_file")  # Don't fail if no PowerShell
     local ps_script_status=$?
@@ -631,6 +724,7 @@ add_validation_check() {
 # ==============================================================================
 # Export functions for use by other scripts
 # ==============================================================================
+export -f preparse_config_values
 export -f parse_operation_yaml
 export -f substitute_variables
 export -f extract_powershell_script

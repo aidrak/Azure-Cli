@@ -7,17 +7,14 @@ operation:
   id: "rbac-assign"
   name: "Assign RBAC Role"
   description: "Assign Desktop Virtualization Power On Off Contributor role to Azure Virtual Desktop service principal"
-
   capability: "identity"
   operation_mode: "create"
   resource_type: "Microsoft.Authorization/roleAssignments"
-
   # Duration expectations
   duration:
-    expected: 120   # 2 minutes
-    timeout: 300    # 5 minutes
+    expected: 120 # 2 minutes
+    timeout: 300 # 5 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -38,7 +35,6 @@ operation:
         type: "string"
         description: "Service principal display name"
         default: "Azure Virtual Desktop"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -70,7 +66,6 @@ operation:
             exit 0
           }
         description: "Verify RBAC role assigned"
-
   # Idempotency: Check for existing role assignment
   idempotency:
     enabled: true
@@ -78,13 +73,32 @@ operation:
       az role assignment list \
         --role "Desktop Virtualization Power On Off Contributor" \
         --output none 2>/dev/null
-    skip_if_exists: false  # Check but don't skip if exists (role may need to be assigned)
-
+    skip_if_exists: false # Check but don't skip if exists (role may need to be assigned)
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rbac-assign-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove RBAC Role Assignment"
+        description: "Revoke the role assignment from AVD service principal"
+        command: |
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          AVD_SP_ID=$(az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>/dev/null)
+
+          if [ -n "$AVD_SP_ID" ] && [ "$AVD_SP_ID" != "null" ]; then
+            az role assignment delete \
+              --assignee "$AVD_SP_ID" \
+              --role "Desktop Virtualization Power On Off Contributor" \
+              --scope "/subscriptions/$SUBSCRIPTION_ID" \
+              2>/dev/null || true
+          fi
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Autoscaling RBAC Assignment: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -182,28 +196,3 @@ operation:
 
       Write-Host "[SUCCESS] RBAC assignment completed"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rbac-assign-wrapper.ps1
-      rm -f /tmp/rbac-assign-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove RBAC Role Assignment"
-        description: "Revoke the role assignment from AVD service principal"
-        command: |
-          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-          AVD_SP_ID=$(az ad sp list --filter "displayName eq 'Azure Virtual Desktop'" --query "[0].id" -o tsv 2>/dev/null)
-
-          if [ -n "$AVD_SP_ID" ] && [ "$AVD_SP_ID" != "null" ]; then
-            az role assignment delete \
-              --assignee "$AVD_SP_ID" \
-              --role "Desktop Virtualization Power On Off Contributor" \
-              --scope "/subscriptions/$SUBSCRIPTION_ID" \
-              2>/dev/null || true
-          fi
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

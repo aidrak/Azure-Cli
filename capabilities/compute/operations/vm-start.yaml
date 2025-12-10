@@ -7,17 +7,14 @@ operation:
   id: "vm-start"
   name: "Start Virtual Machine"
   description: "Start a stopped Azure Virtual Machine and wait for it to reach running state"
-
   capability: "compute"
   operation_mode: "modify"
   resource_type: "Microsoft.Compute/virtualMachines"
-
   # Duration expectations
   duration:
     expected: 120
     timeout: 300
     type: "WAIT"
-
   # Parameters
   parameters:
     required:
@@ -41,7 +38,6 @@ operation:
         type: "integer"
         description: "Interval in seconds between status checks"
         default: "15"
-
   # Validation checks
   validation:
     pre_checks:
@@ -49,12 +45,10 @@ operation:
         resource_type: "Microsoft.Compute/virtualMachines"
         resource_name: "{{vm_name}}"
         error_message: "Virtual machine '{{vm_name}}' not found"
-
     post_checks:
       - type: "provisioning_state"
         expected: "Succeeded"
         timeout: 300
-
   # Idempotency
   idempotency:
     enabled: true
@@ -65,12 +59,25 @@ operation:
         --resource-group "{{resource_group}}" \
         --query "instanceView.statuses[?starts_with(code, 'PowerState/')].code" \
         --output tsv 2>/dev/null | grep -q "running"
-
   # Template command
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-vm-start-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Stop Virtual Machine"
+        description: "Stop the started virtual machine to restore previous state"
+        command: |
+          az vm stop \
+            --name "{{vm_name}}" \
+            --resource-group "{{resource_group}}" \
+            --no-wait
+        continue_on_error: true
+  # Self-healing
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $vmName = "{{vm_name}}"
@@ -162,22 +169,3 @@ operation:
         Write-Host "[SUCCESS] - Proceeding without waiting for ready state"
         exit 0
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-vm-start-wrapper.ps1
-      rm -f /tmp/compute-vm-start-wrapper.ps1
-
-  # Rollback
-  rollback:
-    enabled: true
-    steps:
-      - name: "Stop Virtual Machine"
-        description: "Stop the started virtual machine to restore previous state"
-        command: |
-          az vm stop \
-            --name "{{vm_name}}" \
-            --resource-group "{{resource_group}}" \
-            --no-wait
-        continue_on_error: true
-
-  # Self-healing
-  fixes: []

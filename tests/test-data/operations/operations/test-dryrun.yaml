@@ -1,0 +1,28 @@
+operation:
+  id: "test-dryrun"
+  name: "Test Dry Run Execution"
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  template:
+    type: "powershell-direct"
+
+  powershell:
+    content: |
+      Write-Host "[START] Dry run test"
+      Write-Host "[PROGRESS] Checking prerequisites"
+      Write-Host "[PROGRESS] Validating configuration"
+      Write-Host "[SUCCESS] Dry run completed successfully"
+      exit 0
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Rollback test"
+        command: "echo Rollback would execute here"

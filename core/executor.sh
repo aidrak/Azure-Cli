@@ -78,6 +78,11 @@ else
     exit 1
 fi
 
+# Optional: dependency-resolver.sh (warn-only integration)
+if [[ -f "${PROJECT_ROOT}/core/dependency-resolver.sh" ]]; then
+    source "${PROJECT_ROOT}/core/dependency-resolver.sh"
+fi
+
 # ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
@@ -158,15 +163,24 @@ get_steps() {
         return 0
     fi
 
-    # Try template command (Capability Schema)
-    local template_command=$(yq eval '.operation.template.command' "$yaml_file")
+    # Try template command (Capability Schema) - use render_command for full processing
+    local template_command
 
-    if [[ -n "$template_command" ]] && [[ "$template_command" != "null" ]]; then
-        # Construct a synthetic step
-        # escape double quotes for JSON
-        local escaped_command=$(echo "$template_command" | jq -Rs .)
-        echo "[{\"name\": \"Execute Operation Template\", \"command\": $escaped_command}]"
-        return 0
+    # Check if template exists - either command OR type (for powershell-direct and similar)
+    local raw_template=$(yq eval '.operation.template.command' "$yaml_file")
+    local template_type=$(yq eval '.operation.template.type' "$yaml_file")
+
+    # Call render_command if we have either a command OR a recognized template type
+    if [[ (-n "$raw_template" && "$raw_template" != "null") || (-n "$template_type" && "$template_type" != "null") ]]; then
+        # Use render_command to properly process the template (substitutes {{POWERSHELL_CONTENT}}, etc.)
+        template_command=$(render_command "$yaml_file" 2>/dev/null)
+
+        if [[ -n "$template_command" ]]; then
+            # Construct a synthetic step with the fully rendered command
+            local escaped_command=$(echo "$template_command" | jq -Rs .)
+            echo "[{\"name\": \"Execute Operation Template\", \"command\": $escaped_command}]"
+            return 0
+        fi
     fi
 
     log_error "No steps or template defined in operation"
@@ -204,7 +218,7 @@ get_rollback_steps() {
 
 validate_prerequisites() {
     local yaml_file="$1"
-    local operation_exec_id="$2"
+    local operation_exec_id="${2:-}"
 
     log_info "Validating prerequisites..." "$operation_exec_id"
 
@@ -361,6 +375,14 @@ execute_operation() {
     # Track start time
     local start_time=$(date +%s)
 
+    # Validate operation dependencies from YAML (warn-only, non-blocking)
+    if [[ "$force_mode" != "true" ]] && command -v validate_operation_dependencies &>/dev/null; then
+        if ! validate_operation_dependencies "$yaml_file" 2>/dev/null; then
+            log_warn "Some operation dependencies may not be satisfied" "$operation_exec_id"
+            # Don't fail - just warn for now
+        fi
+    fi
+
     # Validate prerequisites (unless force mode)
     if [[ "$force_mode" != "true" ]]; then
         if ! validate_prerequisites "$yaml_file" "$operation_exec_id"; then
@@ -458,7 +480,13 @@ execute_step() {
         return 0
     fi
 
-    output=$(eval "$command" 2>&1) || exit_code=$?
+    # Write command to temp script using printf to preserve all characters including braces
+    local temp_script=$(mktemp)
+    printf '%s\n' "$command" > "$temp_script"
+    chmod +x "$temp_script"
+
+    output=$(bash "$temp_script" 2>&1) || exit_code=$?
+    rm -f "$temp_script"
 
     # Save output to log file
     echo "$output" > "$step_log"
@@ -466,6 +494,38 @@ execute_step() {
     if [[ $exit_code -eq 0 ]]; then
         log_success "Step completed successfully: $step_name" "$operation_exec_id"
         log_info "Output saved to: $step_log" "$operation_exec_id"
+
+        # Parse [OUTPUT] lines for inter-operation data passing
+        # Format: [OUTPUT] {"key": "value", "key2": "value2"}
+        local output_lines
+        output_lines=$(echo "$output" | grep '^\[OUTPUT\]' || true)
+        if [[ -n "$output_lines" ]]; then
+            # Extract operation ID from exec ID (remove timestamp suffix)
+            local base_operation_id="${operation_exec_id%%_[0-9]*}"
+
+            while IFS= read -r line; do
+                # Remove [OUTPUT] prefix
+                local json_data="${line#\[OUTPUT\] }"
+
+                # Parse JSON and store each key-value pair
+                if echo "$json_data" | jq empty 2>/dev/null; then
+                    local keys
+                    keys=$(echo "$json_data" | jq -r 'keys[]')
+                    for key in $keys; do
+                        local value
+                        value=$(echo "$json_data" | jq -r --arg k "$key" '.[$k]')
+                        if [[ -n "$value" && "$value" != "null" ]]; then
+                            store_operation_output "$base_operation_id" "$key" "$value" 2>/dev/null || {
+                                log_warn "Failed to store operation output: $key" "$operation_exec_id"
+                            }
+                        fi
+                    done
+                    log_info "Stored operation outputs from [OUTPUT] line" "$operation_exec_id"
+                else
+                    log_warn "Invalid JSON in [OUTPUT] line: $json_data" "$operation_exec_id"
+                fi
+            done <<< "$output_lines"
+        fi
 
         # Log to operation logs in database
         log_operation "$operation_exec_id" "INFO" "Step completed: $step_name" "{\"log_file\": \"$step_log\"}"
@@ -541,7 +601,11 @@ execute_rollback() {
         # Execute rollback step (best effort - don't fail rollback on error)
         local exit_code=0
         local output=""
-        output=$(eval "$resolved_command" 2>&1) || exit_code=$?
+        local temp_script=$(mktemp)
+        printf '%s\n' "$resolved_command" > "$temp_script"
+        chmod +x "$temp_script"
+        output=$(bash "$temp_script" 2>&1) || exit_code=$?
+        rm -f "$temp_script"
 
         if [[ $exit_code -eq 0 ]]; then
             log_success "Rollback step completed: $step_name" "$operation_exec_id"

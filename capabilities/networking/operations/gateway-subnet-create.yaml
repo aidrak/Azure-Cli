@@ -7,21 +7,17 @@ operation:
   id: "gateway-subnet-create"
   name: "Create Gateway Subnet"
   description: "Create GatewaySubnet for VPN or ExpressRoute Gateway (if enabled)"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/virtualNetworks/subnets"
-
   # Duration expectations
   duration:
-    expected: 60    # 1 minute
-    timeout: 120    # 2 minutes
+    expected: 60 # 1 minute
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Prerequisites
   requires:
-    - "route-table-configure"  # Route tables should be configured first
-
+    - "route-table-configure" # Route tables should be configured first
   # Parameters extracted from old operation
   parameters:
     required:
@@ -46,7 +42,6 @@ operation:
         type: "string"
         description: "Address prefix for the gateway subnet"
         default: "{{NETWORKING_GATEWAY_SUBNET_PREFIX|10.0.255.0/27}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -54,11 +49,9 @@ operation:
       - type: "resource_exists"
         resource_type: "Microsoft.Network/virtualNetworks/subnets"
         description: "Gateway subnet exists"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Gateway subnet provisioned successfully"
-
   # Idempotency: Check for existing gateway subnet
   idempotency:
     enabled: true
@@ -69,12 +62,26 @@ operation:
         --name "GatewaySubnet" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-gateway-subnet-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Delete gateway subnet
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Gateway Subnet"
+        description: "Remove the GatewaySubnet"
+        command: |
+          az network vnet subnet delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --vnet-name "{{NETWORKING_VNET_NAME}}" \
+            --name "GatewaySubnet" \
+            --yes 2>/dev/null || true
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] Gateway subnet creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $vnetName = "{{NETWORKING_VNET_NAME}}"
@@ -120,23 +127,3 @@ operation:
 
       Write-Host "[SUCCESS] GatewaySubnet created successfully"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-gateway-subnet-create-wrapper.ps1
-      rm -f /tmp/networking-gateway-subnet-create-wrapper.ps1
-
-  # Rollback: Delete gateway subnet
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Gateway Subnet"
-        description: "Remove the GatewaySubnet"
-        command: |
-          az network vnet subnet delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --vnet-name "{{NETWORKING_VNET_NAME}}" \
-            --name "GatewaySubnet" \
-            --yes 2>/dev/null || true
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

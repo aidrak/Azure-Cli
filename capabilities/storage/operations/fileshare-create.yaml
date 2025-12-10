@@ -7,17 +7,14 @@ operation:
   id: "fileshare-create"
   name: "Create FSLogix File Share"
   description: "Create Azure Premium file share for FSLogix profile containers with specified quota"
-
   capability: "storage"
   operation_mode: "create"
   resource_type: "Microsoft.Storage/storageAccounts/fileServices/shares"
-
   # Duration expectations
   duration:
-    expected: 60       # 60 seconds (1 minute)
-    timeout: 120       # 2 minutes
+    expected: 60 # 60 seconds (1 minute)
+    timeout: 120 # 2 minutes
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -38,7 +35,6 @@ operation:
         type: "string"
         description: "Azure resource group name (for reference)"
         default: "{{AZURE_RESOURCE_GROUP}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -47,12 +43,10 @@ operation:
         resource_type: "Microsoft.Storage/storageAccounts/fileServices/shares"
         resource_name: "{{STORAGE_FILE_SHARE_NAME}}"
         description: "File share exists"
-
       - type: "property_greater_than"
         property: "quota"
         expected: 0
         description: "File share has quota configured"
-
   # Idempotency: Check for existing file share
   idempotency:
     enabled: true
@@ -62,18 +56,40 @@ operation:
         --name "{{STORAGE_FILE_SHARE_NAME}}" \
         --query exists -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-fileshare-create-wrapper.ps1 << 'PSWRAPPER'
-      # Get storage account name (from previous operation or config)
-      if (Test-Path /tmp/storage-account-name.txt) {
-        $storageName = Get-Content /tmp/storage-account-name.txt
-      } else {
-        $storageName = "{{STORAGE_ACCOUNT_NAME}}"
-      }
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete File Share"
+        description: "Remove the file share and all data"
+        command: |
+          az storage share delete \
+            --account-name "{{STORAGE_ACCOUNT_NAME}}" \
+            --name "{{STORAGE_FILE_SHARE_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+
+  # Dependencies: Requires storage account to exist
+  dependencies:
+    operations:
+      - id: "account-create"
+        status: "completed"
+        optional: true
+        description: "Storage account should be created first (may be pre-existing)"
+
+  powershell:
+    content: |
+      # Get storage account name from template variable
+      # The STORAGE_ACCOUNT_NAME is resolved by the engine from:
+      # 1. Environment variable (if set)
+      # 2. state.db (from account-create operation output)
+      # 3. config.yaml
+      $storageName = "{{STORAGE_ACCOUNT_NAME}}"
 
       $fileShareName = "{{STORAGE_FILE_SHARE_NAME}}"
       $quotaGb = "{{STORAGE_QUOTA_GB}}"
@@ -146,22 +162,3 @@ operation:
       Write-Host "[INFO] FSLogix Configuration Value:"
       Write-Host "  VHDLocations: \\${storageName}.file.core.windows.net\${fileShareName}"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-fileshare-create-wrapper.ps1
-      rm -f /tmp/storage-fileshare-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete File Share"
-        description: "Remove the file share and all data"
-        command: |
-          az storage share delete \
-            --account-name "{{STORAGE_ACCOUNT_NAME}}" \
-            --name "{{STORAGE_FILE_SHARE_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

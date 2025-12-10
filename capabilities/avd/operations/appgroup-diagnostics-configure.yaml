@@ -1,0 +1,152 @@
+# ==============================================================================
+# Capability Operation: Configure Application Group Diagnostic Settings
+# ==============================================================================
+
+operation:
+  id: "appgroup-diagnostics-configure"
+  name: "Configure Application Group Diagnostics"
+  description: "Enable diagnostic settings to send AVD application group logs to Log Analytics"
+  capability: "avd"
+  operation_mode: "configure"
+  resource_type: "Microsoft.DesktopVirtualization/applicationGroups"
+
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "app_group_name"
+        type: "string"
+        description: "Name of the application group"
+        default: "{{AVD_APP_GROUP_NAME}}"
+      - name: "resource_group"
+        type: "string"
+        description: "Resource group containing the application group"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "workspace_name"
+        type: "string"
+        description: "Log Analytics workspace name"
+        default: "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      - name: "diagnostic_setting_name"
+        type: "string"
+        description: "Name for the diagnostic setting"
+        default: "{{DIAGNOSTIC_SETTING_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "custom"
+        description: "Diagnostic settings configured successfully"
+
+  idempotency:
+    enabled: true
+    check_command: |
+      az monitor diagnostic-settings show \
+        --name "{{DIAGNOSTIC_SETTING_NAME}}" \
+        --resource "{{AVD_APP_GROUP_NAME}}" \
+        --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+        --resource-type "Microsoft.DesktopVirtualization/applicationGroups" \
+        --output none 2>/dev/null
+    skip_if_exists: true
+
+  template:
+    type: "powershell-direct"
+
+  rollback:
+    enabled: false
+
+  fixes: []
+
+  powershell:
+    content: |
+      Write-Host "[START] Application group diagnostics configuration: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+      $appGroupName = "{{AVD_APP_GROUP_NAME}}"
+      $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
+      $workspaceName = "{{LOG_ANALYTICS_WORKSPACE_NAME}}"
+      $diagnosticSettingName = "{{DIAGNOSTIC_SETTING_NAME}}"
+
+      Write-Host "[PROGRESS] Checking if diagnostic settings already exist..."
+
+      $existingSettings = az monitor diagnostic-settings show `
+        --name $diagnosticSettingName `
+        --resource $appGroupName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/applicationGroups" `
+        --output json 2>$null
+
+      if ($existingSettings) {
+        Write-Host "[INFO] Diagnostic settings already exist: $diagnosticSettingName"
+        Write-Host "[SUCCESS] Diagnostic settings verified"
+        exit 0
+      }
+
+      Write-Host "[PROGRESS] Getting Log Analytics workspace ID..."
+      $workspaceInfo = az monitor log-analytics workspace show `
+        --workspace-name $workspaceName `
+        --resource-group $resourceGroup `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to find Log Analytics workspace: $workspaceName"
+        Write-Host $workspaceInfo
+        exit 1
+      }
+
+      $workspace = $workspaceInfo | ConvertFrom-Json
+      $workspaceId = $workspace.id
+
+      Write-Host "[INFO] Workspace ID: $workspaceId"
+
+      Write-Host "[PROGRESS] Configuring diagnostic settings..."
+      Write-Host "[PROGRESS]   Application Group: $appGroupName"
+      Write-Host "[PROGRESS]   Workspace: $workspaceName"
+      Write-Host "[PROGRESS]   Setting Name: $diagnosticSettingName"
+
+      # Enable all available log categories for AVD application group
+      $logCategories = @(
+        "Checkpoint",
+        "Error",
+        "Management"
+      )
+
+      Write-Host "[PROGRESS] Enabling log categories:"
+      foreach ($category in $logCategories) {
+        Write-Host "[INFO]   - $category"
+      }
+
+      $logsParam = ($logCategories | ForEach-Object { @{ category = $_; enabled = $true } } | ConvertTo-Json -Compress -AsArray)
+
+      Write-Host "[PROGRESS] Creating diagnostic settings..."
+
+      $createOutput = az monitor diagnostic-settings create `
+        --name $diagnosticSettingName `
+        --resource $appGroupName `
+        --resource-group $resourceGroup `
+        --resource-type "Microsoft.DesktopVirtualization/applicationGroups" `
+        --workspace $workspaceId `
+        --logs $logsParam `
+        --output json 2>&1
+
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to create diagnostic settings"
+        Write-Host $createOutput
+        exit 1
+      }
+
+      Write-Host "[VALIDATE] Verifying configuration..."
+      $settings = $createOutput | ConvertFrom-Json
+
+      Write-Host "[INFO] Diagnostic Setting ID: $($settings.id)"
+      Write-Host "[INFO] Enabled Logs:"
+      foreach ($log in $settings.logs) {
+        if ($log.enabled) {
+          Write-Host "[INFO]   - $($log.category): enabled"
+        }
+      }
+
+      Write-Host "[SUCCESS] Diagnostic settings configured successfully"
+      Write-Host "[INFO] Logs will now be sent to Log Analytics workspace: $workspaceName"
+      exit 0

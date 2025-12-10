@@ -6,17 +6,14 @@ operation:
   id: "public-ip-create"
   name: "Create Public IP Address"
   description: "Create Azure public IP address resource for VM network interfaces, load balancers, or application gateways with configurable SKU and allocation method"
-
   capability: "networking"
   operation_mode: "create"
   resource_type: "Microsoft.Network/publicIPAddresses"
-
   # Duration expectations
   duration:
-    expected: 20    # 20 seconds
-    timeout: 60     # 1 minute
+    expected: 20 # 20 seconds
+    timeout: 60 # 1 minute
     type: "FAST"
-
   # Parameters for public IP creation
   parameters:
     required:
@@ -60,7 +57,6 @@ operation:
         type: "object"
         description: "Azure resource tags"
         default: "{}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -69,11 +65,9 @@ operation:
         resource_type: "Microsoft.Network/publicIPAddresses"
         resource_name: "{{NETWORKING_PUBLIC_IP_NAME}}"
         description: "Public IP created successfully"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "Public IP provisioned successfully"
-
   # Idempotency: Check for existing public IP
   idempotency:
     enabled: true
@@ -83,12 +77,25 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --query "id" -o tsv 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-publicip-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Public IP Address"
+        description: "Remove the public IP address resource"
+        command: |
+          az network public-ip delete \
+            --name "{{NETWORKING_PUBLIC_IP_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Creating public IP address: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -248,22 +255,3 @@ operation:
       Write-Host "[INFO]   - Associate with LB: az network lb frontend-ip create --name '<frontend-name>' --lb-name '<lb-name>' --public-ip-address $publicIpName"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-publicip-create-wrapper.ps1
-      rm -f /tmp/networking-publicip-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Public IP Address"
-        description: "Remove the public IP address resource"
-        command: |
-          az network public-ip delete \
-            --name "{{NETWORKING_PUBLIC_IP_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --yes
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

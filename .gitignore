@@ -44,6 +44,17 @@ Thumbs.db
 *.sublime-workspace
 
 # ============================================================================
+# Claude Code Configuration (Allow skills to be committed)
+# ============================================================================
+# Global gitignore blocks .claude/, but we want skills shared with team
+!.claude/
+!.claude/skills/
+!.claude/skills/**/*.md
+!.claude/hooks/
+!.claude/hooks/*.sh
+!.claude/CLAUDE.md
+
+# ============================================================================
 # Temporary & Log Files
 # ============================================================================
 *.tmp
@@ -136,6 +147,7 @@ artifacts/logs/*
 artifacts/temp/*
 artifacts/workflow-logs/*
 artifacts/workflow-state/*
+artifacts/certs/*
 artifacts/*.jsonl
 artifacts/*.json
 

@@ -1,0 +1,29 @@
+operation:
+  id: "test-vars"
+  name: "Test Variable Substitution"
+  capability: "networking"
+
+  parameters:
+    required:
+      - name: "resource_group"
+        type: "string"
+        default: "{{AZURE_RESOURCE_GROUP}}"
+      - name: "location"
+        type: "string"
+        default: "{{AZURE_LOCATION}}"
+      - name: "vnet_name"
+        type: "string"
+        default: "{{NETWORKING_VNET_NAME}}"
+
+  template:
+    type: "powershell-direct"
+
+  powershell:
+    content: |
+      $rg = "{{AZURE_RESOURCE_GROUP}}"
+      $loc = "{{AZURE_LOCATION}}"
+      $vnet = "{{NETWORKING_VNET_NAME}}"
+
+      Write-Host "Resource Group: $rg"
+      Write-Host "Location: $loc"
+      Write-Host "VNet: $vnet"

@@ -7,17 +7,28 @@ operation:
   id: "private-endpoint-create"
   name: "Create Private Endpoint for Storage"
   description: "Create private endpoint for secure, non-internet-routable access to FSLogix storage"
-
   capability: "storage"
   operation_mode: "create"
   resource_type: "Microsoft.Network/privateEndpoints"
-
   # Duration expectations
   duration:
-    expected: 120      # 120 seconds (2 minutes)
-    timeout: 240       # 4 minutes
+    expected: 120 # 120 seconds (2 minutes)
+    timeout: 240 # 4 minutes
     type: "NORMAL"
-
+  # Dependencies: Prerequisites that must be completed before this operation
+  dependencies:
+    operations:
+      - id: "storage-account-create"
+        status: "completed"
+        description: "Storage account must exist for private endpoint"
+      - id: "subnet-create"
+        status: "completed"
+        optional: true
+        description: "Private endpoint subnet should exist"
+    resources:
+      - type: "Microsoft.Storage/storageAccounts"
+        name: "{{STORAGE_ACCOUNT_NAME}}"
+        must_exist: true
   # Parameters extracted from old operation
   parameters:
     required:
@@ -46,7 +57,6 @@ operation:
         type: "string"
         description: "Name of the private endpoint (auto-generated if not provided)"
         default: "{{STORAGE_ACCOUNT_NAME}}-file-pe"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -55,12 +65,10 @@ operation:
         resource_type: "Microsoft.Network/privateEndpoints"
         resource_name: "{{STORAGE_ACCOUNT_NAME}}-file-pe"
         description: "Private endpoint exists"
-
       - type: "property_equals"
         property: "privateLinkServiceConnections[0].privateLinkServiceConnectionState.status"
         expected: "Approved"
         description: "Private endpoint connection approved"
-
   # Idempotency: Check for existing private endpoint
   idempotency:
     enabled: true
@@ -70,12 +78,25 @@ operation:
         --name "{{STORAGE_ACCOUNT_NAME}}-file-pe" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/storage-private-endpoint-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Private Endpoint"
+        description: "Remove the private endpoint"
+        command: |
+          az network private-endpoint delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{STORAGE_ACCOUNT_NAME}}-file-pe" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       # Get storage account name (from previous operation or config)
       if (Test-Path /tmp/storage-account-name.txt) {
         $storageName = Get-Content /tmp/storage-account-name.txt
@@ -239,22 +260,3 @@ operation:
         Write-Host "[ERROR] Private endpoint connection state is not 'Approved': $connectionState"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/storage-private-endpoint-create-wrapper.ps1
-      rm -f /tmp/storage-private-endpoint-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Private Endpoint"
-        description: "Remove the private endpoint"
-        command: |
-          az network private-endpoint delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{STORAGE_ACCOUNT_NAME}}-file-pe" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

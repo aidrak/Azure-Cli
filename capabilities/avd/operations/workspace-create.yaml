@@ -7,17 +7,14 @@ operation:
   id: "workspace-create"
   name: "Create AVD Workspace"
   description: "Create the AVD workspace and register the application group to it"
-
   capability: "avd"
   operation_mode: "create"
   resource_type: "Microsoft.DesktopVirtualization/workspaces"
-
   # Duration expectations
   duration:
     expected: 90
     timeout: 180
     type: "FAST"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -50,7 +47,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -59,12 +55,10 @@ operation:
         resource_type: "Microsoft.DesktopVirtualization/workspaces"
         resource_name: "{{WORKSPACE_NAME}}"
         description: "Workspace exists"
-
       - type: "property_contains"
         property: "applicationGroupReferences"
         expected: "{{APP_GROUP_NAME}}"
         description: "Application group is registered to workspace"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -74,12 +68,25 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/avd-workspace-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete AVD Workspace"
+        description: "Remove the workspace and associated resources"
+        command: |
+          az desktopvirtualization workspace delete \
+            --name "{{WORKSPACE_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $resourceGroup = "{{AZURE_RESOURCE_GROUP}}"
@@ -121,22 +128,3 @@ operation:
 
       Write-Host "[SUCCESS] Application group '$appGroupName' is registered to workspace '$workspaceName'."
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/avd-workspace-create-wrapper.ps1
-      rm -f /tmp/avd-workspace-create-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete AVD Workspace"
-        description: "Remove the workspace and associated resources"
-        command: |
-          az desktopvirtualization workspace delete \
-            --name "{{WORKSPACE_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

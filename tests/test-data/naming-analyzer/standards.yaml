@@ -1,0 +1,16 @@
+naming:
+  prefixes:
+    storage_account: "fslogix"
+    session_host: "avd-sh"
+    golden_image: "gm"
+    vnet: "vnet"
+    subnet: "snet"
+    nsg: "nsg"
+    host_pool: "hp"
+    workspace: "ws"
+    app_group: "dag"
+
+  patterns:
+    session_host: "{prefix}-{number}"
+    storage_account: "{prefix}{random}"
+    vnet: "{prefix}-{purpose}-{env}"

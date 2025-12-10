@@ -1,0 +1,67 @@
+# Pre-commit hooks for Azure VDI Deployment Engine
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Local validation hooks
+  - repo: local
+    hooks:
+      - id: yaml-syntax
+        name: Validate YAML Syntax
+        entry: scripts/validate-yaml-syntax.sh
+        language: script
+        files: \.yaml$
+        pass_filenames: false
+        description: "Validates YAML syntax for all .yaml files"
+
+      - id: operation-schema
+        name: Validate Operation Schema
+        entry: scripts/validate-operations.sh
+        language: script
+        files: capabilities/.*/operations/.*\.yaml$
+        pass_filenames: false
+        description: "Validates operation YAML files against schema"
+
+      - id: variable-references
+        name: Validate Variable References
+        entry: scripts/validate-variables.sh
+        language: script
+        files: capabilities/.*\.yaml$
+        pass_filenames: false
+        description: "Checks for undefined variable references"
+
+  # Shell script linting
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.9.0
+    hooks:
+      - id: shellcheck
+        args: ["-S", "warning", "-x"]
+        files: \.sh$
+        exclude: ^(tests/|examples/)
+
+  # YAML formatting (optional - can be strict)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint.yaml", "-s"]
+        files: \.(yaml|yml)$
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+# CI configuration
+ci:
+  autofix_commit_msg: "style: auto-fix from pre-commit hooks"
+  autoupdate_commit_msg: "chore: update pre-commit hooks"

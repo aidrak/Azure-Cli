@@ -7,17 +7,14 @@ operation:
   id: "application-add"
   name: "Add Application to AVD Application Group"
   description: "Add RemoteApp application to AVD application group for user access"
-
   capability: "avd"
   operation_mode: "create"
   resource_type: "Microsoft.DesktopVirtualization/applicationGroups/applications"
-
   # Duration expectations
   duration:
     expected: 45
     timeout: 120
     type: "FAST"
-
   # Parameters extracted from configuration
   parameters:
     required:
@@ -58,7 +55,6 @@ operation:
         type: "string"
         description: "Environment tag"
         default: "{{AZURE_ENVIRONMENT}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -67,7 +63,6 @@ operation:
         resource_type: "Microsoft.DesktopVirtualization/applicationGroups/applications"
         resource_name: "{{AVD_APPLICATION_NAME}}"
         description: "Application exists in application group"
-
   # Idempotency: Check for existing resource
   idempotency:
     enabled: true
@@ -78,12 +73,26 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/avd-application-add-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Reverse of creation
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove Application from Application Group"
+        description: "Remove the application from the application group"
+        command: |
+          az desktopvirtualization applicationgroup application delete \
+            --name "{{AVD_APPLICATION_NAME}}" \
+            --application-group-name "{{APP_GROUP_NAME}}" \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] AVD application add operation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $applicationName = "{{AVD_APPLICATION_NAME}}"
@@ -182,23 +191,3 @@ operation:
       Write-Host "[SUCCESS]   App Group: $appGroupName"
       Write-Host "[SUCCESS]   Show in portal: $showInPortal"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/avd-application-add-wrapper.ps1
-      rm -f /tmp/avd-application-add-wrapper.ps1
-
-  # Rollback: Reverse of creation
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove Application from Application Group"
-        description: "Remove the application from the application group"
-        command: |
-          az desktopvirtualization applicationgroup application delete \
-            --name "{{AVD_APPLICATION_NAME}}" \
-            --application-group-name "{{APP_GROUP_NAME}}" \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

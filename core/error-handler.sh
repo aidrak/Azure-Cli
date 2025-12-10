@@ -77,6 +77,68 @@ extract_error_info() {
 }
 
 # ==============================================================================
+# Match Error Pattern and Get Error Code
+# ==============================================================================
+match_error_pattern() {
+    local error_output="$1"
+    local patterns_file="${PROJECT_ROOT}/error-patterns.yaml"
+
+    if [[ ! -f "$patterns_file" ]]; then
+        echo "ERROR: Error patterns file not found: $patterns_file"
+        return 1
+    fi
+
+    # Get number of patterns
+    local pattern_count
+    pattern_count=$(yq e '.patterns | length' "$patterns_file")
+
+    # Try to match each pattern
+    for ((i=0; i<pattern_count; i++)); do
+        local regex
+        regex=$(yq e ".patterns[$i].regex" "$patterns_file")
+
+        # Test if error output matches this pattern
+        if echo "$error_output" | grep -qE "$regex"; then
+            # Return the full pattern as JSON
+            yq e ".patterns[$i]" "$patterns_file" -o json
+            return 0
+        fi
+    done
+
+    # No match found
+    return 1
+}
+
+# ==============================================================================
+# Get Error Pattern Details
+# ==============================================================================
+get_error_details() {
+    local error_output="$1"
+    local pattern_json
+
+    pattern_json=$(match_error_pattern "$error_output")
+
+    if [[ $? -eq 0 ]]; then
+        echo "$pattern_json"
+        return 0
+    else
+        # Return unknown error pattern
+        cat <<EOF
+{
+  "code": "ERR-UNK-000",
+  "id": "unknown-error",
+  "category": "unknown",
+  "description": "Unknown error pattern",
+  "severity": "ERROR",
+  "auto_fix": false,
+  "fix_action": "Manual analysis required. No matching error pattern found."
+}
+EOF
+        return 1
+    fi
+}
+
+# ==============================================================================
 # Analyze Error and Generate Fix Prompt
 # ==============================================================================
 generate_fix_prompt() {
@@ -87,6 +149,24 @@ generate_fix_prompt() {
 
     local error_info
     error_info=$(extract_error_info "$log_file")
+
+    # Get error pattern details
+    local error_details
+    error_details=$(get_error_details "$error_info")
+
+    local error_code
+    local error_description
+    local error_category
+    local error_severity
+    local auto_fix
+    local fix_action
+
+    error_code=$(echo "$error_details" | jq -r '.code // "ERR-UNK-000"')
+    error_description=$(echo "$error_details" | jq -r '.description // "Unknown error"')
+    error_category=$(echo "$error_details" | jq -r '.category // "unknown"')
+    error_severity=$(echo "$error_details" | jq -r '.severity // "ERROR"')
+    auto_fix=$(echo "$error_details" | jq -r '.auto_fix // false')
+    fix_action=$(echo "$error_details" | jq -r '.fix_action // "No fix action available"')
 
     cat <<EOF
 
@@ -99,8 +179,21 @@ YAML File: $yaml_file
 Log File: $log_file
 Exit Code: $exit_code
 
+Error Code: $error_code
+Category: $error_category
+Severity: $error_severity
+Auto-Fix: $auto_fix
+
+Description: $error_description
+
 Error Information:
 $error_info
+
+================================================================================
+  RECOMMENDED FIX ACTION
+================================================================================
+
+$fix_action
 
 ================================================================================
   ANALYSIS NEEDED
@@ -243,14 +336,35 @@ handle_operation_error() {
     local error_info
     error_info=$(extract_error_info "$log_file")
 
-    # Log the error (operation_id, error_message, error_code, elapsed)
-    log_operation_error "$operation_id" "$error_info" "$exit_code" "0"
+    # Get error pattern details with code
+    local error_details
+    error_details=$(get_error_details "$error_info")
+
+    local error_code
+    local error_description
+    local error_category
+    local error_severity
+    local auto_fix
+
+    error_code=$(echo "$error_details" | jq -r '.code // "ERR-UNK-000"')
+    error_description=$(echo "$error_details" | jq -r '.description // "Unknown error"')
+    error_category=$(echo "$error_details" | jq -r '.category // "unknown"')
+    error_severity=$(echo "$error_details" | jq -r '.severity // "ERROR"')
+    auto_fix=$(echo "$error_details" | jq -r '.auto_fix // false')
+
+    # Log the error with error code
+    log_operation_error "$operation_id" "$error_code: $error_description" "$exit_code" "0"
 
     echo ""
     echo "========================================================================"
     echo "  Operation Failed: $operation_id"
     echo "========================================================================"
     echo "Exit Code: $exit_code"
+    echo "Error Code: $error_code"
+    echo "Category: $error_category"
+    echo "Severity: $error_severity"
+    echo "Description: $error_description"
+    echo "Auto-Fixable: $auto_fix"
     echo "Log File: $log_file"
     echo ""
 
@@ -367,10 +481,69 @@ get_fix_history() {
 }
 
 # ==============================================================================
+# List All Error Codes (for documentation/debugging)
+# ==============================================================================
+list_error_codes() {
+    local patterns_file="${PROJECT_ROOT}/error-patterns.yaml"
+
+    if [[ ! -f "$patterns_file" ]]; then
+        echo "ERROR: Error patterns file not found: $patterns_file"
+        return 1
+    fi
+
+    echo "Available Error Codes:"
+    echo "===================================================================================="
+    printf "%-15s %-20s %-12s %-40s\n" "CODE" "CATEGORY" "AUTO-FIX" "DESCRIPTION"
+    echo "===================================================================================="
+
+    local pattern_count
+    pattern_count=$(yq e '.patterns | length' "$patterns_file")
+
+    for ((i=0; i<pattern_count; i++)); do
+        local code category auto_fix description
+        code=$(yq e ".patterns[$i].code" "$patterns_file")
+        category=$(yq e ".patterns[$i].category" "$patterns_file")
+        auto_fix=$(yq e ".patterns[$i].auto_fix" "$patterns_file")
+        description=$(yq e ".patterns[$i].description" "$patterns_file")
+
+        printf "%-15s %-20s %-12s %-40s\n" "$code" "$category" "$auto_fix" "$description"
+    done
+
+    echo "===================================================================================="
+    echo "Total patterns: $pattern_count"
+}
+
+# ==============================================================================
+# Get Error Code by Pattern ID
+# ==============================================================================
+get_error_code_by_id() {
+    local pattern_id="$1"
+    local patterns_file="${PROJECT_ROOT}/error-patterns.yaml"
+
+    if [[ ! -f "$patterns_file" ]]; then
+        echo "ERR-UNK-000"
+        return 1
+    fi
+
+    local code
+    code=$(yq e ".patterns[] | select(.id == \"$pattern_id\") | .code" "$patterns_file")
+
+    if [[ -n "$code" ]]; then
+        echo "$code"
+        return 0
+    else
+        echo "ERR-UNK-000"
+        return 1
+    fi
+}
+
+# ==============================================================================
 # Export functions
 # ==============================================================================
 export -f check_destructive_action
 export -f extract_error_info
+export -f match_error_pattern
+export -f get_error_details
 export -f generate_fix_prompt
 export -f apply_fix_to_template
 export -f update_powershell_content
@@ -380,3 +553,5 @@ export -f handle_operation_error
 export -f validate_fix
 export -f get_error_history
 export -f get_fix_history
+export -f list_error_codes
+export -f get_error_code_by_id

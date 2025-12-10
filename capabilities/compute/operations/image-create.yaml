@@ -7,17 +7,14 @@ operation:
   id: "image-create"
   name: "Create Virtual Machine Image"
   description: "Capture golden image from configured VM and store in Azure"
-
   capability: "compute"
   operation_mode: "create"
   resource_type: "Microsoft.Compute/images"
-
   # Duration expectations
   duration:
-    expected: 300   # 5 minutes
-    timeout: 900    # 15 minutes (image capture can take time)
+    expected: 300 # 5 minutes
+    timeout: 900 # 15 minutes (image capture can take time)
     type: "WAIT"
-
   # Parameters extracted from old operation
   parameters:
     required:
@@ -50,7 +47,6 @@ operation:
         type: "string"
         description: "Optional disk encryption set ID"
         default: ""
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -59,12 +55,10 @@ operation:
         resource_type: "Microsoft.Compute/images"
         resource_name: "{{GOLDEN_IMAGE_NAME}}"
         description: "Image created successfully"
-
       - type: "property_equals"
         property: "hyperVGeneration"
         expected: "V2"
         description: "Hyper-V generation V2 configured"
-
   # Idempotency: Check for existing image
   idempotency:
     enabled: true
@@ -74,12 +68,25 @@ operation:
         --name "{{GOLDEN_IMAGE_NAME}}" \
         --output none 2>/dev/null
     skip_if_exists: true
-
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/compute-image-create-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Delete created image
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete Created Image"
+        description: "Remove the created golden image"
+        command: |
+          az image delete \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --name "{{GOLDEN_IMAGE_NAME}}" \
+            --yes
+        continue_on_error: false
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       Write-Host "[START] Golden Image Creation: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
@@ -205,22 +212,3 @@ operation:
       Write-Host "[INFO]   3. Consider creating image versions for versioning"
 
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/compute-image-create-wrapper.ps1
-      rm -f /tmp/compute-image-create-wrapper.ps1
-
-  # Rollback: Delete created image
-  rollback:
-    enabled: true
-    steps:
-      - name: "Delete Created Image"
-        description: "Remove the created golden image"
-        command: |
-          az image delete \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --name "{{GOLDEN_IMAGE_NAME}}" \
-            --yes
-        continue_on_error: false
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

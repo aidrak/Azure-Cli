@@ -1,0 +1,16 @@
+operation:
+  id: "test-parse-basic"
+  name: "Test Parse Basic"
+  description: "Basic parsing test"
+  duration:
+    expected: 120
+    timeout: 300
+    type: "NORMAL"
+
+  template:
+    type: "bash"
+    command: "echo 'test'"
+
+  powershell:
+    content: |
+      Write-Host "Test PowerShell"

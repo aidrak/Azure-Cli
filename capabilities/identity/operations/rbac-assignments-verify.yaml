@@ -7,17 +7,14 @@ operation:
   id: "rbac-assignments-verify"
   name: "Verify RBAC Assignments"
   description: "Verify all RBAC role assignments are correctly configured"
-
   capability: "identity"
   operation_mode: "verify"
   resource_type: "Microsoft.Authorization/roleAssignments"
-
   # Duration expectations
   duration:
-    expected: 60    # 1 minute
-    timeout: 180    # 3 minutes (fail-fast if exceeds)
-    type: "FAST"    # FAST (<5min) or WAIT (10+min)
-
+    expected: 60 # 1 minute
+    timeout: 180 # 3 minutes (fail-fast if exceeds)
+    type: "FAST" # FAST (<5min) or WAIT (10+min)
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,12 +39,10 @@ operation:
         type: "string"
         description: "FSLogix file share name"
         default: "{{STORAGE_FILE_SHARE_NAME}}"
-
   # Prerequisites (check state.json)
   requires:
     - operation: "appgroup-rbac-assign"
       status: "completed"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -63,12 +58,13 @@ operation:
             exit 1
           }
         description: "Verify RBAC verification completed"
-
   # Template command (executed via PowerShell)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/rbac-verify-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] RBAC Verification: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       # Configuration from config.yaml
@@ -351,9 +347,3 @@ operation:
       }
 
       exit $exitCode
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/rbac-verify-wrapper.ps1
-      rm -f /tmp/rbac-verify-wrapper.ps1
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []

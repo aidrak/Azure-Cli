@@ -1,0 +1,39 @@
+operation:
+  id: "test-load"
+  name: "Test Operation Loading"
+  description: "Verify operation YAML can be loaded and parsed"
+  capability: "networking"
+  operation_mode: "create"
+  resource_type: "Microsoft.Network/virtualNetworks"
+  duration:
+    expected: 60
+    timeout: 120
+    type: "FAST"
+
+  parameters:
+    required:
+      - name: "vnet_name"
+        type: "string"
+        default: "{{NETWORKING_VNET_NAME}}"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks"
+        description: "VNet exists"
+
+  template:
+    type: "powershell-direct"
+
+  powershell:
+    content: |
+      Write-Host "[START] Test operation"
+      exit 0
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Cleanup"
+        command: "echo Cleaning up"
+        continue_on_error: false

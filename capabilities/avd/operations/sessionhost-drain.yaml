@@ -7,17 +7,14 @@ operation:
   id: "sessionhost-drain"
   name: "Drain AVD Session Host for Maintenance"
   description: "Set session host to drain mode, preventing new sessions while allowing existing sessions to complete"
-
   capability: "avd"
   operation_mode: "modify"
   resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
-
   # Duration expectations
   duration:
     expected: 30
     timeout: 120
     type: "WAIT"
-
   # Parameters
   parameters:
     required:
@@ -41,7 +38,6 @@ operation:
         type: "integer"
         description: "Maximum time in seconds to wait for sessions to drain"
         default: "3600"
-
   # Validation checks
   validation:
     pre_checks:
@@ -49,12 +45,10 @@ operation:
         resource_type: "Microsoft.DesktopVirtualization/hostPools/sessionHosts"
         resource_name: "{{host_pool_name}}/{{session_host_name}}"
         error_message: "Session host '{{session_host_name}}' not found in host pool '{{host_pool_name}}'"
-
     post_checks:
       - type: "provisioning_state"
         expected: "Succeeded"
         timeout: 120
-
   # Idempotency
   idempotency:
     enabled: true
@@ -66,12 +60,26 @@ operation:
         --resource-group "{{resource_group}}" \
         --query "allowNewSession" \
         --output tsv 2>/dev/null
-
   # Template command
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/avd-sessionhost-drain-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback
+  rollback:
+    enabled: true
+    steps:
+      - name: "Restore Session Host to Accept New Sessions"
+        description: "Re-enable new session connections on session host"
+        command: |
+          az desktopvirtualization hostpool sessionhost update \
+            --host-pool-name "{{host_pool_name}}" \
+            --name "{{session_host_name}}" \
+            --resource-group "{{resource_group}}" \
+            --allow-new-session true
+        continue_on_error: true
+  # Self-healing
+  fixes: []
+  powershell:
+    content: |
       $ErrorActionPreference = 'Stop'
 
       $hostPoolName = "{{host_pool_name}}"
@@ -138,23 +146,3 @@ operation:
         Write-Host "[ERROR] Failed to drain session host"
         exit 1
       }
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/avd-sessionhost-drain-wrapper.ps1
-      rm -f /tmp/avd-sessionhost-drain-wrapper.ps1
-
-  # Rollback
-  rollback:
-    enabled: true
-    steps:
-      - name: "Restore Session Host to Accept New Sessions"
-        description: "Re-enable new session connections on session host"
-        command: |
-          az desktopvirtualization hostpool sessionhost update \
-            --host-pool-name "{{host_pool_name}}" \
-            --name "{{session_host_name}}" \
-            --resource-group "{{resource_group}}" \
-            --allow-new-session true
-        continue_on_error: true
-
-  # Self-healing
-  fixes: []

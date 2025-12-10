@@ -7,21 +7,17 @@ operation:
   id: "dns-zone-link"
   name: "Link Private DNS Zones to VNet"
   description: "Create VNet links for private DNS zones"
-
   capability: "networking"
   operation_mode: "update"
   resource_type: "Microsoft.Network/privateDnsZones/virtualNetworkLinks"
-
   # Duration expectations
   duration:
-    expected: 90    # 1.5 minutes
-    timeout: 180    # 3 minutes
+    expected: 90 # 1.5 minutes
+    timeout: 180 # 3 minutes
     type: "FAST"
-
   # Prerequisites
   requires:
-    - "dns-zone-create"  # DNS zones must be created first
-
+    - "dns-zone-create" # DNS zones must be created first
   # Parameters extracted from old operation
   parameters:
     required:
@@ -42,7 +38,6 @@ operation:
         type: "boolean"
         description: "Whether private DNS is enabled"
         default: "{{NETWORKING_PRIVATE_DNS_ENABLED|false}}"
-
   # Validation checks (run after operation completes)
   validation:
     enabled: true
@@ -50,11 +45,9 @@ operation:
       - type: "resource_exists"
         resource_type: "Microsoft.Network/privateDnsZones/virtualNetworkLinks"
         description: "VNet links exist for DNS zones"
-
       - type: "provisioning_state"
         expected: "Succeeded"
         description: "VNet link updates completed successfully"
-
   # Idempotency: Check for existing VNet links
   idempotency:
     enabled: true
@@ -63,13 +56,36 @@ operation:
         --resource-group "{{AZURE_RESOURCE_GROUP}}" \
         --zone-name "test" \
         --query "length(@)" -o tsv 2>/dev/null || echo "0"
-    skip_if_exists: false  # Check but continue with unlinked zones
-
+    skip_if_exists: false # Check but continue with unlinked zones
   # Template command (variables substituted at runtime)
   template:
-    type: "powershell-local"
-    command: |
-      cat > /tmp/networking-dns-zone-link-wrapper.ps1 << 'PSWRAPPER'
+    type: "powershell-direct"
+  # Rollback: Remove VNet links from DNS zones
+  rollback:
+    enabled: true
+    steps:
+      - name: "Remove VNet Links from DNS Zones"
+        description: "Delete VNet links from private DNS zones"
+        command: |
+          for zone in $(az network private-dns zone list \
+            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+            --query "[].name" -o tsv); do
+            for link in $(az network private-dns link vnet list \
+              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+              --zone-name "$zone" \
+              --query "[].name" -o tsv); do
+              az network private-dns link vnet delete \
+                --resource-group "{{AZURE_RESOURCE_GROUP}}" \
+                --zone-name "$zone" \
+                --name "$link" \
+                --yes 2>/dev/null || true
+            done
+          done
+        continue_on_error: true
+  # Self-healing: Previous fixes applied to this template
+  fixes: []
+  powershell:
+    content: |
       Write-Host "[START] DNS zone linking: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
 
       $vnetName = "{{NETWORKING_VNET_NAME}}"
@@ -127,32 +143,3 @@ operation:
 
       Write-Host "[SUCCESS] All DNS zones linked to VNet"
       exit 0
-      PSWRAPPER
-      pwsh -NoProfile -NonInteractive -File /tmp/networking-dns-zone-link-wrapper.ps1
-      rm -f /tmp/networking-dns-zone-link-wrapper.ps1
-
-  # Rollback: Remove VNet links from DNS zones
-  rollback:
-    enabled: true
-    steps:
-      - name: "Remove VNet Links from DNS Zones"
-        description: "Delete VNet links from private DNS zones"
-        command: |
-          for zone in $(az network private-dns zone list \
-            --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-            --query "[].name" -o tsv); do
-            for link in $(az network private-dns link vnet list \
-              --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-              --zone-name "$zone" \
-              --query "[].name" -o tsv); do
-              az network private-dns link vnet delete \
-                --resource-group "{{AZURE_RESOURCE_GROUP}}" \
-                --zone-name "$zone" \
-                --name "$link" \
-                --yes 2>/dev/null || true
-            done
-          done
-        continue_on_error: true
-
-  # Self-healing: Previous fixes applied to this template
-  fixes: []
