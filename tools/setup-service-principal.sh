@@ -245,7 +245,7 @@ generate_certificate() {
 
             # Get thumbprint from existing cert
             THUMBPRINT=$(openssl x509 -in "$CERT_CRT" -noout -fingerprint -sha1 2>/dev/null | \
-                         sed 's/SHA1 Fingerprint=//g' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+                         sed 's/.*=//g' | tr -d ':' | tr '[:upper:]' '[:lower:]')
 
             return 0
         fi
@@ -274,9 +274,9 @@ generate_certificate() {
 
     log_success "PFX bundle created"
 
-    # Get certificate thumbprint
+    # Get certificate thumbprint (strip any prefix like "sha1 Fingerprint=" and colons)
     THUMBPRINT=$(openssl x509 -in "$CERT_CRT" -noout -fingerprint -sha1 2>/dev/null | \
-                 sed 's/SHA1 Fingerprint=//g' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+                 sed 's/.*=//g' | tr -d ':' | tr '[:upper:]' '[:lower:]')
 
     echo "  Certificate: $CERT_CRT"
     echo "  Private Key: $CERT_KEY"
@@ -308,23 +308,67 @@ upload_certificate() {
 
 install_certificate_local() {
     echo ""
-    log_info "Installing certificate to local PowerShell certificate store..."
+    log_info "Configuring certificate for Microsoft Graph authentication..."
 
-    # Check if certificate is already installed
-    CERT_CHECK=$(pwsh -Command "
-        \$cert = Get-ChildItem -Path 'Cert:\CurrentUser\My' | Where-Object { \$_.Thumbprint -eq '$THUMBPRINT' }
-        if (\$cert) { Write-Output 'exists' } else { Write-Output 'missing' }
-    " 2>/dev/null)
+    # On Linux, we can't use the Windows certificate store
+    # Instead, Connect-MgGraph can use -CertificateName with a PFX file path
+    # But the preferred method is to use the certificate thumbprint with the cert in a known location
 
-    if [[ "$CERT_CHECK" == "exists" ]]; then
-        log_success "Certificate already installed in CurrentUser store"
-    else
-        pwsh -Command "
-            Import-PfxCertificate -FilePath '$CERT_PFX' -CertStoreLocation 'Cert:\CurrentUser\My' | Out-Null
-            Write-Output 'Certificate imported successfully'
-        "
-        log_success "Certificate installed to Cert:\\CurrentUser\\My"
-    fi
+    # Create PowerShell script to handle certificate setup
+    local PS_SCRIPT="${CERTS_DIR}/install-cert.ps1"
+
+    cat > "$PS_SCRIPT" << 'PWSH_EOF'
+param(
+    [string]$PfxPath,
+    [string]$Thumbprint
+)
+
+$ErrorActionPreference = "Stop"
+
+# On Linux, the certificate store works differently
+# We'll verify the PFX can be loaded and extract cert info
+
+try {
+    Write-Host "[*] Validating certificate file..."
+
+    # Load the PFX to verify it's valid
+    $pfxBytes = [System.IO.File]::ReadAllBytes($PfxPath)
+    $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+        $pfxBytes,
+        "",
+        [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+    )
+
+    Write-Host "[v] Certificate loaded successfully"
+    Write-Host "    Subject: $($cert.Subject)"
+    Write-Host "    Thumbprint: $($cert.Thumbprint)"
+    Write-Host "    Expires: $($cert.NotAfter)"
+
+    # Verify thumbprint matches
+    if ($cert.Thumbprint.ToLower() -ne $Thumbprint.ToLower()) {
+        Write-Host "[!] WARNING: Thumbprint mismatch!"
+        Write-Host "    Expected: $Thumbprint"
+        Write-Host "    Got: $($cert.Thumbprint)"
+    }
+
+    # On Linux, we need to use the PFX file directly with Connect-MgGraph
+    # The -Certificate parameter accepts an X509Certificate2 object
+    Write-Host ""
+    Write-Host "[v] Certificate ready for MS Graph authentication"
+    Write-Host "[i] On Linux, use -Certificate parameter with loaded cert object"
+    Write-Host "[i] Or use Azure CLI for service principal auth (recommended)"
+
+    exit 0
+}
+catch {
+    Write-Host "[x] ERROR: Failed to load certificate: $_"
+    exit 1
+}
+PWSH_EOF
+
+    pwsh -File "$PS_SCRIPT" -PfxPath "$CERT_PFX" -Thumbprint "$THUMBPRINT"
+
+    log_success "Certificate validated and ready"
 }
 
 # ==============================================================================
