@@ -1,0 +1,49 @@
+# YAMLlint configuration for Azure VDI Deployment Engine
+# Used by pre-commit hooks
+
+extends: default
+
+rules:
+  # Allow long lines (PowerShell content can be long)
+  line-length:
+    max: 300
+    level: warning
+
+  # Allow document start without explicit ---
+  document-start: disable
+
+  # Allow inline mappings (used in fixes arrays)
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Allow comments without space (for ASCII markers)
+  comments:
+    min-spaces-from-content: 1
+
+  # Don't require newline at end of file
+  new-line-at-end-of-file: disable
+
+  # Allow duplicate keys (sometimes used in complex operations)
+  key-duplicates: enable
+
+  # Relaxed indentation (2 spaces preferred but not strict)
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+
+  # Allow empty values
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Truthy values (allow various boolean representations)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+
+# Ignore certain files
+ignore: |
+  artifacts/
+  .git/
+  node_modules/
+  *.example

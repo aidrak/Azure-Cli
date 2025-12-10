@@ -1,0 +1,19 @@
+operation:
+  id: "test-rollback-gen"
+  name: "Test Rollback Generation"
+  capability: "networking"
+
+  powershell:
+    content: |
+      Write-Host "[START] Create VNet"
+      exit 0
+
+  rollback:
+    enabled: true
+    steps:
+      - name: "Delete VNet"
+        command: "az network vnet delete --resource-group {{AZURE_RESOURCE_GROUP}} --name {{NETWORKING_VNET_NAME}} --yes"
+        continue_on_error: false
+      - name: "Cleanup"
+        command: "echo Cleanup complete"
+        continue_on_error: true

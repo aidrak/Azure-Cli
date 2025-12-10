@@ -1,0 +1,13 @@
+operation:
+  id: "test-steps"
+  name: "Test Steps Extraction"
+  capability: "networking"
+
+  powershell:
+    content: |
+      Write-Host "[START] Multi-step operation"
+      Write-Host "[STEP 1] Validate network"
+      Write-Host "[STEP 2] Create subnets"
+      Write-Host "[STEP 3] Configure routing"
+      Write-Host "[SUCCESS] Complete"
+      exit 0

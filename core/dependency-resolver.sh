@@ -768,13 +768,17 @@ validate_dependencies() {
         return 1
     fi
 
+    # Escape resource_id for SQL
+    local escaped_resource_id
+    escaped_resource_id=$(echo "$resource_id" | sed "s/'/''/g")
+
     # Get dependencies from database or file
     local dependencies
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
         dependencies=$(sqlite3 "$STATE_DB" -json <<EOF
 SELECT depends_on_resource_id, dependency_type, relationship
 FROM dependencies
-WHERE resource_id = '$resource_id';
+WHERE resource_id = '$escaped_resource_id';
 EOF
 )
     else
@@ -977,6 +981,11 @@ get_dependency_path() {
         return 1
     fi
 
+    # Escape resource IDs for SQL
+    local escaped_from_id escaped_to_id
+    escaped_from_id=$(echo "$from_id" | sed "s/'/''/g")
+    escaped_to_id=$(echo "$to_id" | sed "s/'/''/g")
+
     # Use BFS to find shortest path
     # This is complex in bash/SQL, simplified implementation
     if [[ -n "${STATE_DB:-}" ]] && [[ -f "$STATE_DB" ]]; then
@@ -989,7 +998,7 @@ WITH RECURSIVE path AS (
         resource_id || ' -> ' || depends_on_resource_id as path_str,
         1 as depth
     FROM dependencies
-    WHERE resource_id = '$from_id'
+    WHERE resource_id = '$escaped_from_id'
 
     UNION ALL
 
@@ -1001,9 +1010,9 @@ WITH RECURSIVE path AS (
     FROM dependencies d
     JOIN path p ON d.resource_id = p.depends_on_resource_id
     WHERE p.depth < 20
-    AND d.depends_on_resource_id = '$to_id'
+    AND d.depends_on_resource_id = '$escaped_to_id'
 )
-SELECT * FROM path WHERE depends_on_resource_id = '$to_id' ORDER BY depth LIMIT 1;
+SELECT * FROM path WHERE depends_on_resource_id = '$escaped_to_id' ORDER BY depth LIMIT 1;
 EOF
     else
         echo "ERROR: Requires state database" >&2
@@ -1110,8 +1119,12 @@ validate_operation_dependencies() {
             continue
         fi
 
+        # Escape dep_op_id for SQL
+        local escaped_dep_op_id
+        escaped_dep_op_id=$(echo "$dep_op_id" | sed "s/'/''/g")
+
         # Query state.db to check if operation completed
-        local op_status=$(sqlite3 "$state_db" "SELECT status FROM operations WHERE operation_name = '$dep_op_id' OR operation_id LIKE '%$dep_op_id%' ORDER BY started_at DESC LIMIT 1;" 2>/dev/null || echo "")
+        local op_status=$(sqlite3 "$state_db" "SELECT status FROM operations WHERE operation_name = '$escaped_dep_op_id' OR operation_id LIKE '%$escaped_dep_op_id%' ORDER BY started_at DESC LIMIT 1;" 2>/dev/null || echo "")
 
         if [[ "$op_status" == "completed" ]]; then
             if command -v log_info &>/dev/null; then

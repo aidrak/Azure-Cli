@@ -140,17 +140,38 @@ INSERT INTO operations (
 }
 
 # ==============================================================================
-# Update State
+# Update State (SQLite-based)
 # ==============================================================================
+# Note: Global state fields (current_module, current_operation, status) are now
+# tracked via the operations table. Legacy update_state() is kept for compatibility
+# but now uses SQLite metadata table.
+
 update_state() {
     local field="$1"
     local value="$2"
 
-    jq --arg field "$field" --arg value "$value" \
-       '.[$field] = $value | .updated_at = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' \
-       "$STATE_FILE" > "${STATE_FILE}.tmp"
+    # Store in a metadata table for global state
+    local now=$(get_timestamp)
+    local sql="
+CREATE TABLE IF NOT EXISTS state_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at INTEGER
+);
 
-    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+INSERT INTO state_metadata (key, value, updated_at)
+VALUES ('$(sql_escape "$field")', '$(sql_escape "$value")', $now)
+ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    updated_at = excluded.updated_at;
+"
+
+    execute_sql "$sql" "Failed to update state: $field" >/dev/null 2>&1 || {
+        log_warn "Could not update state metadata: $field" "engine"
+        return 1
+    }
+
+    return 0
 }
 
 update_operation_state() {
@@ -158,34 +179,44 @@ update_operation_state() {
     local status="$2"
     local duration="${3:-0}"
 
-    jq --arg op_id "$operation_id" \
-       --arg status "$status" \
-       --arg duration "$duration" \
-       --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-       '.operations[$op_id] = {
-          "status": $status,
-          "duration": ($duration | tonumber),
-          "timestamp": $timestamp
-        }' \
-       "$STATE_FILE" > "${STATE_FILE}.tmp"
+    # Check if operation exists, create if not
+    local exists
+    exists=$(execute_sql "SELECT COUNT(*) FROM operations WHERE operation_id = '$(sql_escape "$operation_id")';" 2>/dev/null || echo "0")
 
-    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+    if [[ "$exists" -eq 0 ]]; then
+        # Create new operation record
+        create_operation "$operation_id" "engine" "$operation_id" "operation" "" >/dev/null 2>&1 || true
+    fi
+
+    # Update operation status using state-manager function
+    update_operation_status "$operation_id" "$status" "" || {
+        log_warn "Could not update operation state: $operation_id" "engine"
+        return 1
+    }
+
+    return 0
 }
 
 update_module_state() {
     local module_id="$1"
     local status="$2"
 
-    jq --arg mod_id "$module_id" \
-       --arg status "$status" \
-       --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-       '.modules[$mod_id] = {
-          "status": $status,
-          "timestamp": $timestamp
-        }' \
-       "$STATE_FILE" > "${STATE_FILE}.tmp"
+    # Modules are stored as operations with type 'module'
+    local exists
+    exists=$(execute_sql "SELECT COUNT(*) FROM operations WHERE operation_id = '$(sql_escape "$module_id")';" 2>/dev/null || echo "0")
 
-    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+    if [[ "$exists" -eq 0 ]]; then
+        # Create module operation record
+        create_operation "$module_id" "module" "$module_id" "module" "" >/dev/null 2>&1 || true
+    fi
+
+    # Update module status
+    update_operation_status "$module_id" "$status" "" || {
+        log_warn "Could not update module state: $module_id" "engine"
+        return 1
+    }
+
+    return 0
 }
 
 # ==============================================================================
@@ -584,75 +615,154 @@ execute_module() {
 }
 
 # ==============================================================================
-# Resume from Failure
+# Resume from Failure (SQLite-based)
 # ==============================================================================
 resume_execution() {
     log_info "Resuming from previous state" "engine"
 
-    if [[ ! -f "$STATE_FILE" ]]; then
-        log_error "No state file found - nothing to resume" "engine"
-        return 1
-    fi
+    # Check for failed operations in SQLite
+    local failed_ops
+    failed_ops=$(execute_sql "
+SELECT operation_id, capability, operation_name, status, retry_count, max_retries
+FROM operations
+WHERE status = 'failed'
+AND retry_count < max_retries
+ORDER BY started_at DESC
+LIMIT 1;
+" 2>/dev/null)
 
-    local current_module
-    current_module=$(jq -r '.current_module // "null"' "$STATE_FILE")
-    local current_status
-    current_status=$(jq -r '.status // "unknown"' "$STATE_FILE")
-
-    if [[ "$current_module" == "null" ]]; then
-        log_info "No module in progress" "engine"
+    if [[ -z "$failed_ops" ]]; then
+        log_info "No failed operations to resume" "engine"
         return 0
     fi
 
-    if [[ "$current_status" != "failed" ]]; then
-        log_info "Last execution completed successfully" "engine"
-        return 0
-    fi
-
-    log_info "Resuming module: $current_module" "engine"
-
-    # Find the failed operation
+    # Parse the failed operation
     local failed_operation
-    failed_operation=$(jq -r '.operations | to_entries[] | select(.value.status == "failed") | .key' "$STATE_FILE" | head -1)
+    failed_operation=$(echo "$failed_ops" | awk -F'|' '{print $1}')
 
-    if [[ -n "$failed_operation" ]]; then
-        echo ""
-        echo "Resume failed operation: $failed_operation?"
-        read -p "Retry? (y/n): " -n 1 -r
-        echo ""
+    if [[ -z "$failed_operation" ]]; then
+        log_info "No failed operations found" "engine"
+        return 0
+    fi
 
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            execute_single_operation "${MODULES_DIR}/${current_module}" "$failed_operation"
-            return $?
-        else
-            log_info "Resume cancelled by user" "engine"
-            return 1
+    log_info "Found failed operation: $failed_operation" "engine"
+
+    # Get current module from state metadata (if exists)
+    local current_module
+    current_module=$(execute_sql "SELECT value FROM state_metadata WHERE key = 'current_module';" 2>/dev/null || echo "")
+
+    echo ""
+    echo "Resume failed operation: $failed_operation?"
+    read -p "Retry? (y/n): " -n 1 -r
+    echo ""
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Increment retry counter
+        execute_sql "
+UPDATE operations
+SET retry_count = retry_count + 1
+WHERE operation_id = '$(sql_escape "$failed_operation")';
+" >/dev/null 2>&1
+
+        # Determine module directory (if module-based)
+        local module_dir=""
+        if [[ -n "$current_module" && "$current_module" != "null" ]]; then
+            module_dir="${MODULES_DIR}/${current_module}"
         fi
+
+        execute_single_operation "$module_dir" "$failed_operation"
+        return $?
     else
-        log_error "Could not determine failed operation" "engine"
+        log_info "Resume cancelled by user" "engine"
         return 1
     fi
 }
 
 # ==============================================================================
-# Show Current Status
+# Show Current Status (SQLite-based)
 # ==============================================================================
 show_status() {
-    if [[ ! -f "$STATE_FILE" ]]; then
-        echo "No deployment in progress"
+    if [[ ! -f "$STATE_DB" ]]; then
+        echo "No state database found"
+        echo "Run an operation first to initialize state tracking"
         return 0
     fi
 
+    # Get global status from metadata
     local status
-    status=$(jq -r '.status // "unknown"' "$STATE_FILE")
-    local current_module
-    current_module=$(jq -r '.current_module // "none"' "$STATE_FILE")
+    status=$(execute_sql "SELECT value FROM state_metadata WHERE key = 'status';" 2>/dev/null || echo "unknown")
 
+    local current_module
+    current_module=$(execute_sql "SELECT value FROM state_metadata WHERE key = 'current_module';" 2>/dev/null || echo "none")
+
+    local current_operation
+    current_operation=$(execute_sql "SELECT value FROM state_metadata WHERE key = 'current_operation';" 2>/dev/null || echo "none")
+
+    echo "=========================================="
+    echo "  Deployment State"
+    echo "=========================================="
     echo "Status: $status"
     echo "Current Module: $current_module"
-    
-    echo "Operations:"
-    jq -r '.operations | to_entries[] | "  - " + .key + ": " + .value.status' "$STATE_FILE"
+    echo "Current Operation: $current_operation"
+    echo ""
+
+    # Show operation summary
+    echo "Operations Summary:"
+    echo "------------------------------------------"
+
+    local summary
+    summary=$(execute_sql "
+SELECT
+    status,
+    COUNT(*) as count
+FROM operations
+GROUP BY status
+ORDER BY
+    CASE status
+        WHEN 'running' THEN 1
+        WHEN 'failed' THEN 2
+        WHEN 'completed' THEN 3
+        WHEN 'pending' THEN 4
+        ELSE 5
+    END;
+" 2>/dev/null)
+
+    if [[ -n "$summary" ]]; then
+        echo "$summary" | while IFS='|' read -r op_status count; do
+            printf "  %-15s : %d\n" "$op_status" "$count"
+        done
+    else
+        echo "  No operations tracked yet"
+    fi
+
+    echo ""
+    echo "Recent Operations (last 10):"
+    echo "------------------------------------------"
+
+    local recent_ops
+    recent_ops=$(execute_sql "
+SELECT
+    operation_id,
+    status,
+    datetime(started_at, 'unixepoch', 'localtime') as started,
+    COALESCE(duration, 0) as duration
+FROM operations
+ORDER BY started_at DESC
+LIMIT 10;
+" 2>/dev/null)
+
+    if [[ -n "$recent_ops" ]]; then
+        echo "$recent_ops" | while IFS='|' read -r op_id op_status started dur; do
+            printf "  %-35s : %-10s [%s] (%ds)\n" "$op_id" "$op_status" "$started" "$dur"
+        done
+    else
+        echo "  No operations found"
+    fi
+
+    echo "=========================================="
+    echo ""
+    echo "Use 'sqlite3 $STATE_DB' to query state directly"
+    echo "Or run: ./core/engine.sh resume"
 }
 
 # ==============================================================================

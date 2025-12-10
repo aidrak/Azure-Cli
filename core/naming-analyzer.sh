@@ -202,11 +202,21 @@ cache_naming_pattern() {
     local now
     now=$(date +%s)
 
+    # Escape all values for SQL
+    local escaped_resource_type escaped_resource_group escaped_pattern_template
+    local escaped_prefix escaped_separator escaped_suffix_type
+    escaped_resource_type=$(echo "$resource_type" | sed "s/'/''/g")
+    escaped_resource_group=$(echo "$resource_group" | sed "s/'/''/g")
+    escaped_pattern_template=$(echo "$pattern_template" | sed "s/'/''/g")
+    escaped_prefix=$(echo "$prefix" | sed "s/'/''/g")
+    escaped_separator=$(echo "$separator" | sed "s/'/''/g")
+    escaped_suffix_type=$(echo "$suffix_type" | sed "s/'/''/g")
+
     sqlite3 "$STATE_DB" <<EOF
 INSERT OR REPLACE INTO naming_patterns
     (resource_type, resource_group, pattern, prefix, separator, suffix_type, sample_count, confidence, discovered_at)
 VALUES
-    ('$resource_type', '$resource_group', '$pattern_template', '$prefix', '$separator', '$suffix_type', $sample_count, $confidence, $now);
+    ('$escaped_resource_type', '$escaped_resource_group', '$escaped_pattern_template', '$escaped_prefix', '$escaped_separator', '$escaped_suffix_type', $sample_count, $confidence, $now);
 EOF
 
     echo "[v] Cached naming pattern for $resource_type" >&2
@@ -230,18 +240,23 @@ get_cached_pattern() {
     now=$(date +%s)
     local min_time=$((now - cache_ttl))
 
+    # Escape values for SQL
+    local escaped_resource_type escaped_resource_group
+    escaped_resource_type=$(echo "$resource_type" | sed "s/'/''/g")
+    escaped_resource_group=$(echo "$resource_group" | sed "s/'/''/g")
+
     local result
     if [[ -n "$resource_group" ]]; then
         result=$(sqlite3 -json "$STATE_DB" \
             "SELECT * FROM naming_patterns
-             WHERE resource_type = '$resource_type'
-             AND resource_group = '$resource_group'
+             WHERE resource_type = '$escaped_resource_type'
+             AND resource_group = '$escaped_resource_group'
              AND discovered_at > $min_time
              LIMIT 1;" 2>/dev/null) || result=""
     else
         result=$(sqlite3 -json "$STATE_DB" \
             "SELECT * FROM naming_patterns
-             WHERE resource_type = '$resource_type'
+             WHERE resource_type = '$escaped_resource_type'
              AND (resource_group IS NULL OR resource_group = '')
              AND discovered_at > $min_time
              LIMIT 1;" 2>/dev/null) || result=""

@@ -1,0 +1,20 @@
+operation:
+  id: "test-validation"
+  name: "Test Validation Config"
+  capability: "networking"
+
+  validation:
+    enabled: true
+    checks:
+      - type: "resource_exists"
+        resource_type: "Microsoft.Network/virtualNetworks"
+        resource_name: "vnet-test"
+        description: "VNet exists after creation"
+      - type: "provisioning_state"
+        expected: "Succeeded"
+        description: "Resource provisioning succeeded"
+
+  powershell:
+    content: |
+      Write-Host "[START] Create with validation"
+      exit 0
